@@ -7,15 +7,26 @@ const isAuthenticated = computed(() => !!user.value)
 
 export function useAuth() {
   const login = async (email, password) => {
-    const response = await authApi.login({ email, password })
-    const { accessToken, refreshToken, user: userData } = response.data
+    // Mock login for frontend development
+    const mockResponse = {
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      user: {
+        id: 1,
+        email: email,
+        name: '김철수',
+        role: 'admin'
+      }
+    }
+
+    const { accessToken, refreshToken, user: userData } = mockResponse
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(userData))
     user.value = userData
 
-    return response.data
+    return mockResponse
   }
 
   const signup = async (email, password, name) => {
