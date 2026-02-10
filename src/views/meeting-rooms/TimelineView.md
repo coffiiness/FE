@@ -15,3 +15,11 @@
 ## API 연동 예정 지점
 - 타임라인 조회: 날짜/필터 조건에 맞는 예약 로딩
 - 검색/필터 적용
+
+## 관련 API
+- [회의실 타임라인 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/timeline?date=YYYY-MM-DD
+- [회의실 예약 생성]
+  - 메서드: POST
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/{roomId}/bookings

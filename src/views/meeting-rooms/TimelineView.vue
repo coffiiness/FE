@@ -12,6 +12,11 @@ const props = defineProps({
 
 <template>
   <div class="space-y-6">
+    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <h2 class="text-xl font-semibold text-slate-900">회의실 타임라인</h2>
+      <p class="text-sm text-slate-700 mt-1">시간대별 예약을 확인하고 빈 슬롯을 빠르게 예약하세요.</p>
+    </div>
+
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
       <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div class="flex flex-wrap items-center gap-3">

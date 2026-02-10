@@ -17,3 +17,17 @@
 
 ## API 연동 예정 지점
 - 회의실 CRUD
+- 
+## 관련 API
+- [회의실 목록 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms
+- [회의실 생성]
+  - 메서드: POST
+  - 경로: http://localhost:8080/api/v1/meeting-rooms
+- [회의실 수정]
+  - 메서드: PATCH
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/{roomId}
+- [회의실 삭제]
+  - 메서드: DELETE
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/{roomId}
