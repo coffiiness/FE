@@ -25,6 +25,11 @@ const routes = [
     name: 'Signup',
     component: () => import('@/views/SignupView.vue')
   },
+  {
+    path: '/signup-success',
+    name: 'SignupSuccess',
+    component: () => import('@/views/SignupSuccessView.vue')
+  },
   // Authenticated Routes
   {
     path: '/',
@@ -144,12 +149,17 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
 
-  // 개발 중 편의를 위해 인증 체크 일단 통과 (나중에 주석 해제)
+  // 1. 인증이 필요한 페이지인데 토큰이 없는 경우
   if (to.meta.requiresAuth && !token) {
+    // 개발 중이라도 로그인을 봐야 한다면: next('/login')
+    // 무조건 통과시키려면: next()
     next()
-  } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-    next('/dashboard')
-  } else {
+  }
+  // 2. 이미 로그인했는데 로그인/회원가입 페이지로 가려는 경우
+  else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    next('/dashboard') // 다시 대시보드로 보내기 (주석 해제 추천)
+  }
+  else {
     next()
   }
 })
