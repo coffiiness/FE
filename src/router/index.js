@@ -86,6 +86,11 @@ const routes = [
         component: () => import('@/views/ApplicationTemplateDetailView.vue')
       },
       {
+        path: 'recruitment/jobs/:id/edit',
+        name: 'RecruitmentEdit',
+        component: () => import('@/views/RecruitmentEditView.vue')
+      },
+      {
         path: 'recruitment/templates/:id/edit',
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
