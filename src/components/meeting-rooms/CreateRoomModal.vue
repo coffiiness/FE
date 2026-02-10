@@ -87,8 +87,8 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-transparent flex items-center justify-center p-6 z-50">
-    <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
+  <div v-if="open" class="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
       <div class="p-6 border-b">
         <h3 class="text-lg font-semibold text-slate-900">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
       </div>
