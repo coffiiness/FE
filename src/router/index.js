@@ -56,6 +56,12 @@ const routes = [
         path: 'team',
         name: 'Team',
         component: () => import('@/views/DashboardView.vue') // 임시 연결
+      },
+      {
+        path: 'recruitments/:recruitmentId/schedule/create',
+        name: 'InterviewScheduleCreate',
+        component: () => import('@/views/interview/InterviewScheduleCreateView.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }
