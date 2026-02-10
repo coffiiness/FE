@@ -74,7 +74,16 @@ const routes = [
         name: 'ApplicationTemplateCreate',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
-
+      {
+        path: 'templates/:id',
+        name: 'ApplicationTemplateDetail',
+        component: () => import('@/views/ApplicationTemplateDetailView.vue')
+      },
+      {
+        path: 'templates/:id/edit',
+        name: 'ApplicationTemplateEdit',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      }
       // 👇 기타 메뉴들
       {
         path: 'schedule',
