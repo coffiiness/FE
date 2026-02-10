@@ -43,6 +43,16 @@ const routes = [
         component: () => import('@/views/ApplicantListView.vue')
       },
       {
+        path: 'recruitment/templates',
+        name: 'ApplicationTemplateList',
+        component: () => import('@/views/ApplicationTemplateListView.vue')
+      },
+      {
+        path: 'recruitment/templates/create',
+        name: 'ApplicationTemplateCreate',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      },
+      {
         path: 'meeting-rooms',
         name: 'MeetingRooms',
         component: () => import('@/views/DashboardView.vue') // 임시 연결
