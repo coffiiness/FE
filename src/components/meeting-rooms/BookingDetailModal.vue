@@ -100,7 +100,7 @@ const cancelDelete = () => {
         </div>
         <div class="flex justify-between">
           <button class="px-4 py-2 border rounded-lg text-red-600" @click="handleDelete">예약 삭제</button>
-          <button class="px-4 py-2 border rounded-lg" @click="emit('close')">닫기</button>
+        <button class="px-4 py-2 border border-slate-400 text-slate-800 rounded-lg hover:bg-slate-50" @click="emit('close')">닫기</button>
         </div>
       </div>
     </div>

@@ -30,11 +30,9 @@ const calendarDays = computed(() => {
   const firstDay = monthStart.value.getDay()
   const empties = Array(firstDay).fill(null)
   const days = [...empties, ...daysInMonth.value]
-  const total = 42
-  if (days.length < total) {
-    return [...days, ...Array(total - days.length).fill(null)]
-  }
-  return days
+  const remainder = days.length % 7
+  if (remainder === 0) return days
+  return [...days, ...Array(7 - remainder).fill(null)]
 })
 
 const getBookingsForDay = (day) => {
