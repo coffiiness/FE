@@ -18,7 +18,7 @@ const jobs = ref([
     totalApplicants: 42,
     funnel: [
       { step: '서류', count: 15, active: false },
-      { step: '과제', count: 8, active: false },
+      { step: '코딩테스트', count: 8, active: false },
       { step: '면접', count: 4, active: true },
       { step: '처우', count: 1, active: false },
     ],
@@ -34,7 +34,7 @@ const jobs = ref([
     totalApplicants: 28,
     funnel: [
       { step: '서류', count: 5, active: true },
-      { step: '포트폴리오', count: 2, active: false },
+      { step: '코딩테스트', count: 2, active: false },
       { step: '면접', count: 0, active: false },
       { step: '처우', count: 0, active: false },
     ],
