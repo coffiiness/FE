@@ -35,7 +35,7 @@ const routes = [
       {
         path: 'recruitment',
         name: 'Recruitment',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
+        component: () => import('@/views/RecruitmentView.vue')
       },
       {
         path: 'meeting-rooms',
