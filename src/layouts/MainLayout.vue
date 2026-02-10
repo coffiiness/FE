@@ -16,7 +16,8 @@ const navigation = [
     icon: 'users',
     hasSubmenu: true,
     submenu: [
-      { name: '지원자 관리', href: '/recruitment/applicants' }
+      { name: '지원자 관리', href: '/recruitment/applicants' },
+      { name: '지원서 템플릿', href: '/recruitment/templates' }
     ]
   },
   { name: '회의실', href: '/meeting-rooms', icon: 'office' },
@@ -36,6 +37,9 @@ const toggleRecruitment = () => {
 
 // 현재 페이지 제목 계산
 const currentPageTitle = computed(() => {
+  // 특수 경로 처리
+  if (route.path === '/recruitment/templates/create') return '지원서 템플릿 작성'
+
   // 서브메뉴에서 찾기
   for (const item of navigation) {
     if (item.submenu) {
