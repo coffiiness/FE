@@ -82,38 +82,38 @@ const handleSubmit = () => {
   <div v-if="open" class="fixed inset-0 bg-transparent flex items-center justify-center p-6 z-50">
     <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
       <div class="p-6 border-b">
-        <h3 class="text-lg font-semibold">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
+        <h3 class="text-lg font-semibold text-slate-900">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
       </div>
       <div class="p-6 space-y-4 overflow-y-auto pr-2">
         <div>
-          <label class="text-sm font-medium text-gray-900">회의실 이름 *</label>
-          <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" placeholder="회의실 이름" />
+          <label class="text-sm font-medium text-slate-800">회의실 이름 *</label>
+          <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="text-sm font-medium text-gray-900">수용 인원 *</label>
-            <input v-model="form.capacity" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-900" />
+            <label class="text-sm font-medium text-slate-800">수용 인원 *</label>
+            <input v-model="form.capacity" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
           <div>
-            <label class="text-sm font-medium text-gray-900">층수 *</label>
-            <input v-model="form.floor" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-900" />
+            <label class="text-sm font-medium text-slate-800">층수 *</label>
+            <input v-model="form.floor" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">설명</label>
-          <textarea v-model="form.description" class="w-full border rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" rows="3"></textarea>
+          <label class="text-sm font-medium text-slate-800">설명</label>
+          <textarea v-model="form.description" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" rows="3"></textarea>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">제공 시설 *</label>
+          <label class="text-sm font-medium text-slate-800">제공 시설 *</label>
           <div class="grid grid-cols-2 gap-3 p-4 border rounded-lg">
-            <label v-for="facility in facilityOptions" :key="facility" class="flex items-center gap-2 text-sm text-gray-800">
+            <label v-for="facility in facilityOptions" :key="facility" class="flex items-center gap-2 text-sm text-slate-800">
               <input type="checkbox" :value="facility" :checked="form.facilities.includes(facility)" @change="toggleFacility(facility)" />
               {{ facility }}
             </label>
           </div>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">색상 *</label>
+          <label class="text-sm font-medium text-slate-800">색상 *</label>
           <div class="flex gap-2 flex-wrap">
             <button
               v-for="color in colorOptions"

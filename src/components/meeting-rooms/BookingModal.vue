@@ -64,7 +64,7 @@ const handleSubmit = () => {
   <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
     <div class="bg-white rounded-2xl shadow-lg w-full max-w-lg max-h-[75vh] overflow-hidden flex flex-col">
       <div class="p-6 border-b">
-        <h3 class="text-lg font-semibold">회의실 예약</h3>
+        <h3 class="text-lg font-semibold text-slate-900">회의실 예약</h3>
       </div>
       <div class="p-6 space-y-4 overflow-y-auto text-slate-900">
         <div class="bg-gray-50 rounded-lg p-4 flex items-center gap-3">
