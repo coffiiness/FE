@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 검색 및 필터
 const searchQuery = ref('')
@@ -90,6 +93,11 @@ const pageNumbers = computed(() => {
   }
   return pages
 })
+
+// 지원자 상세보기
+const goToDetail = (applicantId) => {
+  router.push(`/recruitment/applicants/${applicantId}`)
+}
 
 // 엑셀 다운로드
 const exportToExcel = () => {
@@ -182,7 +190,12 @@ const exportToExcel = () => {
                   {{ getInitial(applicant.name) }}
                 </div>
                 <div>
-                  <p class="font-medium text-gray-900">{{ applicant.name }}</p>
+                  <button
+                    @click="goToDetail(applicant.id)"
+                    class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
+                  >
+                    {{ applicant.name }}
+                  </button>
                   <p class="text-sm text-gray-500">{{ applicant.email }}</p>
                 </div>
               </div>
@@ -211,10 +224,10 @@ const exportToExcel = () => {
             <!-- 액션 -->
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-3">
-                <button class="text-brand-600 hover:text-brand-700 text-sm font-medium">
-                  이력서
-                </button>
-                <button class="text-brand-600 hover:text-brand-700 text-sm font-medium">
+                <button
+                  @click="goToDetail(applicant.id)"
+                  class="text-brand-600 hover:text-brand-700 text-sm font-medium"
+                >
                   상세
                 </button>
               </div>

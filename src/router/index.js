@@ -62,6 +62,12 @@ const routes = [
         name: 'ApplicantList',
         component: () => import('@/views/ApplicantListView.vue')
       },
+      // 5. 지원자 상세
+      {
+        path: 'recruitment/applicants/:id',
+        name: 'ApplicantDetail',
+        component: () => import('@/views/ApplicantDetailView.vue')
+      },
       // 5. 지원서 템플릿 목록
       {
         path: 'recruitment/templates',
@@ -74,16 +80,18 @@ const routes = [
         name: 'ApplicationTemplateCreate',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
+      // 8. 지원서 템플릿 상세
       {
-        path: 'templates/:id',
+        path: 'recruitment/templates/:id',
         name: 'ApplicationTemplateDetail',
         component: () => import('@/views/ApplicationTemplateDetailView.vue')
       },
+      // 9. 지원서 템플릿 수정
       {
-        path: 'templates/:id/edit',
+        path: 'recruitment/templates/:id/edit',
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
-      }
+      },
       // 👇 기타 메뉴들
       {
         path: 'schedule',
