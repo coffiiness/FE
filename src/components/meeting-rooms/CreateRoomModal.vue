@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, reactive, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -8,6 +8,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
+const errorMessage = ref('')
 
 const facilityOptions = [
   '프로젝터',
@@ -66,15 +67,22 @@ const toggleFacility = (facility) => {
 }
 
 const handleSubmit = () => {
-  if (!form.name || !form.capacity || !form.floor) return
+  errorMessage.value = ''
+  const capacity = parseInt(form.capacity, 10)
+  const floor = parseInt(form.floor, 10)
+  if (!form.name || Number.isNaN(capacity) || Number.isNaN(floor)) {
+    errorMessage.value = '필수 항목을 입력해 주세요.'
+    return
+  }
   emit('confirm', {
     name: form.name,
-    capacity: parseInt(form.capacity, 10),
-    floor: parseInt(form.floor, 10),
+    capacity,
+    floor,
     facilities: form.facilities,
     description: form.description,
     color: form.color
   })
+  emit('close')
 }
 </script>
 
@@ -85,6 +93,9 @@ const handleSubmit = () => {
         <h3 class="text-lg font-semibold text-slate-900">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
       </div>
       <div class="p-6 space-y-4 overflow-y-auto pr-2">
+        <p v-if="errorMessage" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {{ errorMessage }}
+        </p>
         <div>
           <label class="text-sm font-medium text-slate-800">회의실 이름 *</label>
           <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
@@ -127,9 +138,9 @@ const handleSubmit = () => {
           </div>
         </div>
       </div>
-      <div class="p-6 border-t flex justify-end gap-2">
-        <button class="px-4 py-2 border rounded-lg" @click="emit('close')">취소</button>
-        <button class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
+      <div class="p-6 border-t flex justify-end gap-2 flex-shrink-0 bg-white">
+        <button type="button" class="px-4 py-2 border rounded-lg" @click="emit('close')">취소</button>
+        <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
           {{ mode === 'edit' ? '수정 저장' : '회의실 등록' }}
         </button>
       </div>
