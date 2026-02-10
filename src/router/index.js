@@ -36,18 +36,20 @@ const routes = [
         name: 'Dashboard',
         component: () => import('@/views/DashboardView.vue')
       },
-
+      {
+        path: 'schedule',
+        name: 'Schedule',
+        component: () => import('@/views/DashboardView.vue')
+      },
       {
         path: 'recruitment',
         redirect: '/recruitment/home'
       },
-      // 2. 채용 홈 (대시보드)
       {
         path: 'recruitment/home',
         name: 'RecruitmentHome',
         component: () => import('@/views/RecruitmentView.vue')
       },
-      // 3. 새 공고 만들기 (이제 작동합니다!)
       {
         path: 'recruitment/create',
         name: 'RecruitmentCreate',
@@ -58,52 +60,67 @@ const routes = [
         name: 'RecruitmentDetail',
         component: () => import('@/views/RecruitmentDetailView.vue')
       },
-      // 4. 지원자 목록
       {
         path: 'recruitment/applicants',
         name: 'ApplicantList',
         component: () => import('@/views/ApplicantListView.vue')
       },
-      // 5. 지원자 상세
       {
         path: 'recruitment/applicants/:id',
         name: 'ApplicantDetail',
         component: () => import('@/views/ApplicantDetailView.vue')
       },
-      // 5. 지원서 템플릿 목록
       {
         path: 'recruitment/templates',
         name: 'ApplicationTemplateList',
         component: () => import('@/views/ApplicationTemplateListView.vue')
       },
-      // 6. 지원서 템플릿 생성
       {
         path: 'recruitment/templates/create',
         name: 'ApplicationTemplateCreate',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
-      // 8. 지원서 템플릿 상세
       {
         path: 'recruitment/templates/:id',
         name: 'ApplicationTemplateDetail',
         component: () => import('@/views/ApplicationTemplateDetailView.vue')
       },
-      // 9. 지원서 템플릿 수정
       {
         path: 'recruitment/templates/:id/edit',
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
-      // 👇 기타 메뉴들
-      {
-        path: 'schedule',
-        name: 'Schedule',
-        component: () => import('@/views/DashboardView.vue')
-      },
       {
         path: 'meeting-rooms',
         name: 'MeetingRooms',
-        component: () => import('@/views/DashboardView.vue')
+        component: () => import('@/views/MeetingRoomsView.vue'),
+        redirect: '/meeting-rooms/timeline',
+        children: [
+          {
+            path: 'timeline',
+            name: 'MeetingRoomsTimeline',
+            component: () => import('@/views/meeting-rooms/TimelineView.vue'),
+            meta: { title: '회의실 타임라인' }
+          },
+          {
+            path: 'list',
+            name: 'MeetingRoomsList',
+            component: () => import('@/views/meeting-rooms/ListView.vue'),
+            meta: { title: '회의실 목록' }
+          },
+          {
+            path: 'calendar',
+            name: 'MeetingRoomsCalendar',
+            component: () => import('@/views/meeting-rooms/CalendarView.vue'),
+            meta: { title: '회의실 캘린더' }
+          },
+          {
+            path: 'manage',
+            name: 'MeetingRoomsManage',
+            component: () => import('@/views/meeting-rooms/ManageView.vue'),
+            meta: { title: '회의실 관리' }
+          }
+        ]
       },
       {
         path: 'reports',
@@ -124,18 +141,17 @@ const router = createRouter({
   routes
 })
 
-// Auth Guard 로직
-// router.beforeEach((to, from, next) => {
-//   const token = localStorage.getItem('accessToken')
-//   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('accessToken')
 
-//   if (requiresAuth && !token) {
-//     next('/login')
-//   } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-//     next('/dashboard')
-//   } else {
-//     next()
-//   }
-// })
+  // 개발 중 편의를 위해 인증 체크 일단 통과 (나중에 주석 해제)
+  if (to.meta.requiresAuth && !token) {
+    next()
+  } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    next('/dashboard')
+  } else {
+    next()
+  }
+})
 
 export default router
