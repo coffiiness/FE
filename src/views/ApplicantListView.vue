@@ -90,6 +90,18 @@ const pageNumbers = computed(() => {
   }
   return pages
 })
+
+// 엑셀 다운로드
+const exportToExcel = () => {
+  const params = new URLSearchParams()
+  if (searchQuery.value) params.append('search', searchQuery.value)
+  if (selectedJob.value) params.append('job', selectedJob.value)
+  if (selectedStatus.value) params.append('status', selectedStatus.value)
+
+  // 백엔드 API 호출하여 파일 다운로드
+  const queryString = params.toString()
+  window.location.href = `/api/applicants/export${queryString ? '?' + queryString : ''}`
+}
 </script>
 
 <template>
@@ -130,6 +142,17 @@ const pageNumbers = computed(() => {
           <option value="">모든 상태</option>
           <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
         </select>
+
+        <!-- 엑셀 다운로드 버튼 -->
+        <button
+          @click="exportToExcel"
+          class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          엑셀 다운로드
+        </button>
       </div>
     </div>
 
