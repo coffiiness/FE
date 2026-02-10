@@ -21,3 +21,11 @@
 ## API 연동 예정 지점
 - 월별 예약 로딩
 - 회의실 필터 적용
+
+## 관련 API
+- [회의실 캘린더 월 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/calendar?month=YYYY-MM
+- [예약 상세 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/bookings/{bookingId}

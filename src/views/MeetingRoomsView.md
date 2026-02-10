@@ -34,3 +34,14 @@
 - `rooms`, `bookings`를 API에서 로딩하도록 교체
 - `handleBookingConfirm` / `handleBookingDelete`
 - `handleCreateRoom` / `handleUpdateRoom` / `handleDeleteRoom`
+
+## 관련 API
+- [회의실 목록 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms
+- [회의실 상세 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/{roomId}
+- [예약 상세 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/bookings/{bookingId}
