@@ -37,34 +37,42 @@ const routes = [
         component: () => import('@/views/DashboardView.vue')
       },
 
-      // 👇 [수정됨] 채용 관리 라우팅 구조 변경
+      // 👇 [수정됨] 중첩 구조를 풀고, 모든 채용 관련 경로를 밖으로 꺼냈습니다.
+
+      // 1. /recruitment 접속 시 홈으로 보냄
       {
         path: 'recruitment',
-        // 1. 부모 메뉴 클릭 시 '채용 홈'으로 리다이렉트
-        redirect: '/recruitment/home',
-        children: [
-          {
-            // 2. '채용 홈' 메뉴가 실제 대시보드(RecruitmentView)를 보여줌
-            path: 'home',
-            name: 'RecruitmentHome',
-            component: () => import('@/views/RecruitmentView.vue')
-          },
-          {
-            path: 'applicants',
-            name: 'ApplicantList',
-            component: () => import('@/views/ApplicantListView.vue')
-          },
-          {
-            path: 'templates',
-            name: 'ApplicationTemplateList',
-            component: () => import('@/views/ApplicationTemplateListView.vue')
-          },
-          {
-            path: 'templates/create',
-            name: 'ApplicationTemplateCreate',
-            component: () => import('@/views/ApplicationTemplateCreateView.vue')
-          }
-        ]
+        redirect: '/recruitment/home'
+      },
+      // 2. 채용 홈 (대시보드)
+      {
+        path: 'recruitment/home',
+        name: 'RecruitmentHome',
+        component: () => import('@/views/RecruitmentView.vue')
+      },
+      // 3. 새 공고 만들기 (이제 작동합니다!)
+      {
+        path: 'recruitment/create',
+        name: 'RecruitmentCreate',
+        component: () => import('@/views/RecruitmentCreateView.vue')
+      },
+      // 4. 지원자 목록
+      {
+        path: 'recruitment/applicants',
+        name: 'ApplicantList',
+        component: () => import('@/views/ApplicantListView.vue')
+      },
+      // 5. 지원서 템플릿 목록
+      {
+        path: 'recruitment/templates',
+        name: 'ApplicationTemplateList',
+        component: () => import('@/views/ApplicationTemplateListView.vue')
+      },
+      // 6. 지원서 템플릿 생성
+      {
+        path: 'recruitment/templates/create',
+        name: 'ApplicationTemplateCreate',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
 
       // 👇 기타 메뉴들
@@ -97,6 +105,6 @@ const router = createRouter({
   routes
 })
 
-// ... (Auth Guard 로직은 그대로 유지)
+// ... (Auth Guard 로직 유지)
 
 export default router

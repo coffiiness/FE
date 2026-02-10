@@ -96,7 +96,7 @@ const toggleMenu = (id) => {
 }
 
 const goToDetail = (id) => {
-  // 실제 상세 페이지 라우터가 있다면 아래 주석 해제
+  // 상세 페이지(칸반보드 등)로 이동하는 로직
   // router.push(`/recruitment/jobs/${id}`)
   console.log(`공고 ${id} 상세 페이지로 이동`)
 }
@@ -111,7 +111,10 @@ const goToDetail = (id) => {
         <h2 class="text-3xl font-display font-bold text-slate-900 tracking-tight">채용 공고 관리</h2>
         <p class="text-slate-500 mt-1">현재 진행 중인 채용 프로세스를 한눈에 파악하고 병목 현상을 해결하세요.</p>
       </div>
-      <button class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20">
+      <button 
+        @click="router.push('/recruitment/create')"
+        class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
+      >
         <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
@@ -255,7 +258,10 @@ const goToDetail = (id) => {
         </div>
       </div>
       
-      <div class="border-2 border-dashed border-slate-300 hover:border-brand-400 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 transition-all cursor-pointer group min-h-[250px]">
+      <div 
+        @click="router.push('/recruitment/create')"
+        class="border-2 border-dashed border-slate-300 hover:border-brand-400 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 transition-all cursor-pointer group min-h-[250px]"
+      >
         <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-brand-100 group-hover:scale-110 transition-all">
           <svg class="w-6 h-6 text-slate-500 group-hover:text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
