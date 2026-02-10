@@ -6,36 +6,64 @@ const routes = [
     redirect: '/dashboard'
   },
   {
+    path: '/careers/:companySlug',
+    name: 'CompanyCareers',
+    component: () => import('@/views/CareersListView.vue')
+  },
+  {
+    path: '/careers/:companySlug/:jobId/apply',
+    name: 'Apply',
+    component: () => import('@/views/CareersApplyView.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/LoginView.vue') // 파일이 있어야 함
+    component: () => import('@/views/LoginView.vue')
   },
   {
     path: '/signup',
     name: 'Signup',
-    component: () => import('@/views/SignupView.vue') // 파일이 있어야 함
+    component: () => import('@/views/SignupView.vue')
+  },
+  {
+    path: '/signup-success',
+    name: 'SignupSuccess',
+    component: () => import('@/views/SignupSuccessView.vue')
   },
   // Authenticated Routes
   {
     path: '/',
-    component: () => import('@/layouts/MainLayout.vue'), // 파일이 있어야 함
+    component: () => import('@/layouts/MainLayout.vue'),
     meta: { requiresAuth: true },
     children: [
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: () => import('@/views/DashboardView.vue') // 파일이 있어야 함
+        component: () => import('@/views/DashboardView.vue')
       },
-      // 👇 아직 안 만든 페이지들은 일단 DashboardView나 ScheduleView로 연결
       {
         path: 'schedule',
         name: 'Schedule',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
+        component: () => import('@/views/DashboardView.vue')
       },
       {
         path: 'recruitment',
-        name: 'Recruitment',
-        redirect: '/recruitment/applicants'
+        redirect: '/recruitment/home'
+      },
+      {
+        path: 'recruitment/home',
+        name: 'RecruitmentHome',
+        component: () => import('@/views/RecruitmentView.vue')
+      },
+      {
+        path: 'recruitment/create',
+        name: 'RecruitmentCreate',
+        component: () => import('@/views/RecruitmentCreateView.vue')
+      },
+      {
+        path: 'recruitment/jobs/:id',
+        name: 'RecruitmentDetail',
+        component: () => import('@/views/RecruitmentDetailView.vue')
       },
       {
         path: 'recruitment/applicants',
@@ -43,25 +71,71 @@ const routes = [
         component: () => import('@/views/ApplicantListView.vue')
       },
       {
+        path: 'recruitment/applicants/:id',
+        name: 'ApplicantDetail',
+        component: () => import('@/views/ApplicantDetailView.vue')
+      },
+      {
+        path: 'recruitment/templates',
+        name: 'ApplicationTemplateList',
+        component: () => import('@/views/ApplicationTemplateListView.vue')
+      },
+      {
+        path: 'recruitment/templates/create',
+        name: 'ApplicationTemplateCreate',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      },
+      {
+        path: 'recruitment/templates/:id',
+        name: 'ApplicationTemplateDetail',
+        component: () => import('@/views/ApplicationTemplateDetailView.vue')
+      },
+      {
+        path: 'recruitment/templates/:id/edit',
+        name: 'ApplicationTemplateEdit',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      },
+      {
         path: 'meeting-rooms',
         name: 'MeetingRooms',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
+        component: () => import('@/views/MeetingRoomsView.vue'),
+        redirect: '/meeting-rooms/timeline',
+        children: [
+          {
+            path: 'timeline',
+            name: 'MeetingRoomsTimeline',
+            component: () => import('@/views/meeting-rooms/TimelineView.vue'),
+            meta: { title: '회의실 타임라인' }
+          },
+          {
+            path: 'list',
+            name: 'MeetingRoomsList',
+            component: () => import('@/views/meeting-rooms/ListView.vue'),
+            meta: { title: '회의실 목록' }
+          },
+          {
+            path: 'calendar',
+            name: 'MeetingRoomsCalendar',
+            component: () => import('@/views/meeting-rooms/CalendarView.vue'),
+            meta: { title: '회의실 캘린더' }
+          },
+          {
+            path: 'manage',
+            name: 'MeetingRoomsManage',
+            component: () => import('@/views/meeting-rooms/ManageView.vue'),
+            meta: { title: '회의실 관리' }
+          }
+        ]
       },
       {
         path: 'reports',
         name: 'Reports',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
+        component: () => import('@/views/DashboardView.vue')
       },
       {
         path: 'team',
         name: 'Team',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
-      },
-      {
-        path: 'recruitments/:recruitmentId/schedule/create',
-        name: 'InterviewScheduleCreate',
-        component: () => import('@/views/interview/InterviewScheduleCreateView.vue'),
-        meta: { requiresAuth: true }
+        component: () => import('@/views/DashboardView.vue')
       }
     ]
   }
@@ -75,12 +149,17 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
 
-  // 개발 중 편의를 위해 인증 체크 일단 통과 (나중에 주석 해제)
+  // 1. 인증이 필요한 페이지인데 토큰이 없는 경우
   if (to.meta.requiresAuth && !token) {
+    // 개발 중이라도 로그인을 봐야 한다면: next('/login')
+    // 무조건 통과시키려면: next()
     next()
-  } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-    next('/dashboard')
-  } else {
+  }
+  // 2. 이미 로그인했는데 로그인/회원가입 페이지로 가려는 경우
+  else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    next('/dashboard') // 다시 대시보드로 보내기 (주석 해제 추천)
+  }
+  else {
     next()
   }
 })

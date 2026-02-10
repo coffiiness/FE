@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 검색 및 필터
 const searchQuery = ref('')
@@ -90,6 +93,23 @@ const pageNumbers = computed(() => {
   }
   return pages
 })
+
+// 지원자 상세보기
+const goToDetail = (applicantId) => {
+  router.push(`/recruitment/applicants/${applicantId}`)
+}
+
+// 엑셀 다운로드
+const exportToExcel = () => {
+  const params = new URLSearchParams()
+  if (searchQuery.value) params.append('search', searchQuery.value)
+  if (selectedJob.value) params.append('job', selectedJob.value)
+  if (selectedStatus.value) params.append('status', selectedStatus.value)
+
+  // 백엔드 API 호출하여 파일 다운로드
+  const queryString = params.toString()
+  window.location.href = `/api/applicants/export${queryString ? '?' + queryString : ''}`
+}
 </script>
 
 <template>
@@ -130,6 +150,17 @@ const pageNumbers = computed(() => {
           <option value="">모든 상태</option>
           <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
         </select>
+
+        <!-- 엑셀 다운로드 버튼 -->
+        <button
+          @click="exportToExcel"
+          class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          엑셀 다운로드
+        </button>
       </div>
     </div>
 
@@ -159,7 +190,12 @@ const pageNumbers = computed(() => {
                   {{ getInitial(applicant.name) }}
                 </div>
                 <div>
-                  <p class="font-medium text-gray-900">{{ applicant.name }}</p>
+                  <button
+                    @click="goToDetail(applicant.id)"
+                    class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
+                  >
+                    {{ applicant.name }}
+                  </button>
                   <p class="text-sm text-gray-500">{{ applicant.email }}</p>
                 </div>
               </div>
@@ -188,10 +224,10 @@ const pageNumbers = computed(() => {
             <!-- 액션 -->
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-3">
-                <button class="text-brand-600 hover:text-brand-700 text-sm font-medium">
-                  이력서
-                </button>
-                <button class="text-brand-600 hover:text-brand-700 text-sm font-medium">
+                <button
+                  @click="goToDetail(applicant.id)"
+                  class="text-brand-600 hover:text-brand-700 text-sm font-medium"
+                >
                   상세
                 </button>
               </div>
