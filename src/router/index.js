@@ -6,6 +6,16 @@ const routes = [
     redirect: '/dashboard'
   },
   {
+    path: '/careers/:companySlug',
+    name: 'CompanyCareers',
+    component: () => import('@/views/CareersListView.vue')
+  },
+  {
+    path: '/careers/:companySlug/:jobId/apply',
+    name: 'Apply',
+    component: () => import('@/views/CareersApplyView.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue')
