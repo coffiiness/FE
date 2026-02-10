@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, watch } from 'vue'
+import { onBeforeUnmount, reactive, watch } from 'vue'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -33,6 +33,7 @@ const form = reactive({
 watch(
   () => props.open,
   (open) => {
+    document.body.style.overflow = open ? 'hidden' : ''
     if (!open) return
     if (props.room) {
       form.name = props.room.name
@@ -51,6 +52,10 @@ watch(
     }
   }
 )
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+})
 
 const toggleFacility = (facility) => {
   if (form.facilities.includes(facility)) {
@@ -74,12 +79,12 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
-    <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto">
+  <div v-if="open" class="fixed inset-0 bg-transparent flex items-center justify-center p-6 z-50">
+    <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
       <div class="p-6 border-b">
         <h3 class="text-lg font-semibold">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
       </div>
-      <div class="p-6 space-y-4">
+      <div class="p-6 space-y-4 overflow-y-auto pr-2">
         <div>
           <label class="text-sm font-medium text-gray-900">회의실 이름 *</label>
           <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" placeholder="회의실 이름" />

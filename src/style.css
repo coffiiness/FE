@@ -38,16 +38,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #6b7280;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #4b5563;
 }
 
 /* Utility Classes */
