@@ -77,7 +77,6 @@ const jobs = ref([
   },
 ])
 
-// --- Helper Functions ---
 const getStatusColor = (status) => {
   switch (status) {
     case 'active': return 'text-brand-700 bg-brand-50 border-brand-200'
@@ -96,9 +95,7 @@ const toggleMenu = (id) => {
 }
 
 const goToDetail = (id) => {
-  // 상세 페이지(칸반보드 등)로 이동하는 로직
-  // router.push(`/recruitment/jobs/${id}`)
-  console.log(`공고 ${id} 상세 페이지로 이동`)
+  router.push(`/recruitment/jobs/${id}`)
 }
 </script>
 

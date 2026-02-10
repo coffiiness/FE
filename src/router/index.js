@@ -37,9 +37,6 @@ const routes = [
         component: () => import('@/views/DashboardView.vue')
       },
 
-      // 👇 [수정됨] 중첩 구조를 풀고, 모든 채용 관련 경로를 밖으로 꺼냈습니다.
-
-      // 1. /recruitment 접속 시 홈으로 보냄
       {
         path: 'recruitment',
         redirect: '/recruitment/home'
@@ -55,6 +52,11 @@ const routes = [
         path: 'recruitment/create',
         name: 'RecruitmentCreate',
         component: () => import('@/views/RecruitmentCreateView.vue')
+      },
+      {
+        path: 'recruitment/jobs/:id',
+        name: 'RecruitmentDetail',
+        component: () => import('@/views/RecruitmentDetailView.vue')
       },
       // 4. 지원자 목록
       {
@@ -122,6 +124,18 @@ const router = createRouter({
   routes
 })
 
-// ... (Auth Guard 로직 유지)
+// Auth Guard 로직
+// router.beforeEach((to, from, next) => {
+//   const token = localStorage.getItem('accessToken')
+//   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+
+//   if (requiresAuth && !token) {
+//     next('/login')
+//   } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+//     next('/dashboard')
+//   } else {
+//     next()
+//   }
+// })
 
 export default router
