@@ -1,6 +1,13 @@
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
+
+// --- 상태 관리 ---
+const activeMenuId = ref(null) // 현재 열려있는 드롭다운 메뉴의 ID
+
+// --- 데이터 (Mock) ---
 const stats = ref([
   { label: '진행 중인 공고', value: 5, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
   { label: '이번 주 면접 예정', value: 12, unit: '명', color: 'text-brand-600', bg: 'bg-brand-50/50' },
@@ -70,25 +77,41 @@ const jobs = ref([
   },
 ])
 
-// 상태별 뱃지 스타일 (밝은 배경용)
+// --- Helper Functions ---
 const getStatusColor = (status) => {
   switch (status) {
-    case 'active': return 'text-brand-700 bg-brand-100 border-brand-200'
-    case 'urgent': return 'text-rose-700 bg-rose-100 border-rose-200 animate-pulse'
+    case 'active': return 'text-brand-700 bg-brand-50 border-brand-200'
+    case 'urgent': return 'text-rose-700 bg-rose-50 border-rose-200 animate-pulse'
     case 'closed': return 'text-slate-600 bg-slate-100 border-slate-200'
     default: return 'text-slate-600'
   }
 }
+
+const toggleMenu = (id) => {
+  if (activeMenuId.value === id) {
+    activeMenuId.value = null
+  } else {
+    activeMenuId.value = id
+  }
+}
+
+const goToDetail = (id) => {
+  // 실제 상세 페이지 라우터가 있다면 아래 주석 해제
+  // router.push(`/recruitment/jobs/${id}`)
+  console.log(`공고 ${id} 상세 페이지로 이동`)
+}
 </script>
 
 <template>
-  <div class="space-y-8 animate-fade-in-up p-2">
+  <div v-if="activeMenuId !== null" @click="activeMenuId = null" class="fixed inset-0 z-10 cursor-default"></div>
+
+  <div class="space-y-8 animate-fade-in-up p-2 relative z-0">
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 class="text-3xl font-display font-bold text-slate-900 tracking-tight">채용 공고 관리</h2>
         <p class="text-slate-500 mt-1">현재 진행 중인 채용 프로세스를 한눈에 파악하고 병목 현상을 해결하세요.</p>
       </div>
-      <button class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group">
+      <button class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20">
         <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
         </svg>
@@ -138,10 +161,10 @@ const getStatusColor = (status) => {
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       <div v-for="job in jobs" :key="job.id" 
-           class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer shadow-sm">
+           class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm">
         
-        <div class="flex justify-between items-start mb-4">
-          <div>
+        <div class="flex justify-between items-start mb-4 relative">
+          <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
             <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.status)]">
               {{ job.dday }}
             </span>
@@ -151,14 +174,44 @@ const getStatusColor = (status) => {
               {{ job.team }} · {{ job.position }}
             </p>
           </div>
-          <button class="text-slate-400 hover:text-slate-600 transition-colors">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-            </svg>
-          </button>
+
+          <div class="relative">
+            <button @click.stop="toggleMenu(job.id)" 
+                    class="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+
+            <div v-if="activeMenuId === job.id" 
+                 class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
+              
+              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                공고 수정
+              </button>
+              
+              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                링크 복사
+              </button>
+              
+              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                면접관 설정
+              </button>
+
+              <div class="border-t border-slate-100 my-1"></div>
+
+              <button class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                공고 삭제
+              </button>
+            </div>
+          </div>
         </div>
 
-<div class="mb-6 bg-slate-50 rounded-xl px-4 py-5 border border-slate-100">
+        <div class="mb-6 bg-slate-50 rounded-xl px-4 py-5 border border-slate-100" @click="goToDetail(job.id)">
           <div class="flex items-end space-x-2 h-14">
             <div v-for="(step, sIdx) in job.funnel" :key="sIdx" class="flex-1 flex flex-col items-center group/step relative">
               
@@ -192,9 +245,10 @@ const getStatusColor = (status) => {
             </div>
           </div>
           
-          <button class="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center transition-colors">
+          <button @click="goToDetail(job.id)" 
+                  class="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center transition-colors group/btn">
             관리하기
-            <svg class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg class="w-3 h-3 ml-1 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </button>
@@ -218,7 +272,17 @@ const getStatusColor = (status) => {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-10px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 </style>
