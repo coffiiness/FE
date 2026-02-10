@@ -39,41 +39,62 @@ const routes = [
 
       {
         path: 'recruitment',
-        redirect: '/recruitment/home',
-        children: [
-          {
-            path: 'home',
-            name: 'RecruitmentHome',
-            component: () => import('@/views/RecruitmentView.vue')
-          },
-          {
-            path: 'create',
-            name: 'RecruitmentCreate',
-            component: () => import('@/views/RecruitmentCreateView.vue')
-          },
-          {
-            path: 'jobs/:id',
-            name: 'RecruitmentDetail',
-            component: () => import('@/views/RecruitmentDetailView.vue')
-          },
-          {
-            path: 'applicants',
-            name: 'ApplicantList',
-            component: () => import('@/views/ApplicantListView.vue')
-          },
-          {
-            path: 'templates',
-            name: 'ApplicationTemplateList',
-            component: () => import('@/views/ApplicationTemplateListView.vue')
-          },
-          {
-            path: 'templates/create',
-            name: 'ApplicationTemplateCreate',
-            component: () => import('@/views/ApplicationTemplateCreateView.vue')
-          }
-        ]
+        redirect: '/recruitment/home'
       },
-
+      // 2. 채용 홈 (대시보드)
+      {
+        path: 'recruitment/home',
+        name: 'RecruitmentHome',
+        component: () => import('@/views/RecruitmentView.vue')
+      },
+      // 3. 새 공고 만들기 (이제 작동합니다!)
+      {
+        path: 'recruitment/create',
+        name: 'RecruitmentCreate',
+        component: () => import('@/views/RecruitmentCreateView.vue')
+      },
+      {
+        path: 'recruitment/jobs/:id',
+        name: 'RecruitmentDetail',
+        component: () => import('@/views/RecruitmentDetailView.vue')
+      },
+      // 4. 지원자 목록
+      {
+        path: 'recruitment/applicants',
+        name: 'ApplicantList',
+        component: () => import('@/views/ApplicantListView.vue')
+      },
+      // 5. 지원자 상세
+      {
+        path: 'recruitment/applicants/:id',
+        name: 'ApplicantDetail',
+        component: () => import('@/views/ApplicantDetailView.vue')
+      },
+      // 5. 지원서 템플릿 목록
+      {
+        path: 'recruitment/templates',
+        name: 'ApplicationTemplateList',
+        component: () => import('@/views/ApplicationTemplateListView.vue')
+      },
+      // 6. 지원서 템플릿 생성
+      {
+        path: 'recruitment/templates/create',
+        name: 'ApplicationTemplateCreate',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      },
+      // 8. 지원서 템플릿 상세
+      {
+        path: 'recruitment/templates/:id',
+        name: 'ApplicationTemplateDetail',
+        component: () => import('@/views/ApplicationTemplateDetailView.vue')
+      },
+      // 9. 지원서 템플릿 수정
+      {
+        path: 'recruitment/templates/:id/edit',
+        name: 'ApplicationTemplateEdit',
+        component: () => import('@/views/ApplicationTemplateCreateView.vue')
+      },
+      // 👇 기타 메뉴들
       {
         path: 'schedule',
         name: 'Schedule',

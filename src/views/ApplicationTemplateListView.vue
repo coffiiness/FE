@@ -1,11 +1,16 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const router = useRouter()
 
 // 검색
 const searchQuery = ref('')
+
+// 삭제 모달
+const showDeleteModal = ref(false)
+const deleteTarget = ref(null)
 
 // 페이지네이션
 const currentPage = ref(1)
@@ -77,6 +82,39 @@ const pageNumbers = computed(() => {
 const goToCreate = () => {
   router.push('/recruitment/templates/create')
 }
+
+// 템플릿 상세보기 페이지로 이동
+const goToDetail = (templateId) => {
+  router.push(`/recruitment/templates/${templateId}`)
+}
+
+// 템플릿 편집 페이지로 이동
+const goToEdit = (templateId) => {
+  router.push(`/recruitment/templates/${templateId}/edit`)
+}
+
+// 삭제 모달 열기
+const openDeleteModal = (template) => {
+  deleteTarget.value = template
+  showDeleteModal.value = true
+}
+
+// 삭제 확인
+const handleDeleteConfirm = () => {
+  if (deleteTarget.value) {
+    // TODO: API 연동 - DELETE /api/v1/recruitment/templates/{templateId}
+    templates.value = templates.value.filter(t => t.id !== deleteTarget.value.id)
+    console.log('Deleted:', deleteTarget.value.id)
+  }
+  showDeleteModal.value = false
+  deleteTarget.value = null
+}
+
+// 삭제 취소
+const handleDeleteCancel = () => {
+  showDeleteModal.value = false
+  deleteTarget.value = null
+}
 </script>
 
 <template>
@@ -132,7 +170,12 @@ const goToCreate = () => {
           >
             <!-- 템플릿명 -->
             <td class="px-6 py-4">
-              <p class="font-medium text-gray-900">{{ template.name }}</p>
+              <button
+                @click="goToDetail(template.id)"
+                class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
+              >
+                {{ template.name }}
+              </button>
             </td>
 
             <!-- 생성일 -->
@@ -153,13 +196,16 @@ const goToCreate = () => {
             <!-- 액션 -->
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-3">
-                <button class="text-brand-600 hover:text-brand-700 text-sm font-medium">
+                <button
+                  @click="goToEdit(template.id)"
+                  class="text-brand-600 hover:text-brand-700 text-sm font-medium"
+                >
                   편집
                 </button>
-                <button class="text-gray-500 hover:text-gray-700 text-sm font-medium">
-                  복제
-                </button>
-                <button class="text-red-500 hover:text-red-700 text-sm font-medium">
+                <button
+                  @click="openDeleteModal(template)"
+                  class="text-red-500 hover:text-red-700 text-sm font-medium"
+                >
                   삭제
                 </button>
               </div>
@@ -223,5 +269,17 @@ const goToCreate = () => {
         </div>
       </div>
     </div>
+
+    <!-- 삭제 확인 모달 -->
+    <ConfirmModal
+      :show="showDeleteModal"
+      title="템플릿 삭제"
+      :message="`'${deleteTarget?.name}' 템플릿을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`"
+      confirm-text="삭제"
+      cancel-text="취소"
+      type="danger"
+      @confirm="handleDeleteConfirm"
+      @cancel="handleDeleteCancel"
+    />
   </div>
 </template>
