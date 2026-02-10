@@ -29,48 +29,32 @@ const routes = [
       {
         path: 'schedule',
         name: 'Schedule',
-        component: () => import('@/views/VoteListView.vue') // Temporary placeholder
+        component: () => import('@/views/DashboardView.vue') // Temporary placeholder
       },
       {
         path: 'recruitment',
         name: 'Recruitment',
-        component: () => import('@/views/VoteListView.vue') // Temporary placeholder
+        redirect: '/recruitment/applicants'
+      },
+      {
+        path: 'recruitment/applicants',
+        name: 'ApplicantList',
+        component: () => import('@/views/ApplicantListView.vue')
       },
       {
         path: 'meeting-rooms',
         name: 'MeetingRooms',
-        component: () => import('@/views/VoteListView.vue') // Temporary placeholder
+        component: () => import('@/views/DashboardView.vue') // Temporary placeholder
       },
       {
         path: 'reports',
         name: 'Reports',
-        component: () => import('@/views/VoteListView.vue') // Temporary placeholder
+        component: () => import('@/views/DashboardView.vue') // Temporary placeholder
       },
       {
         path: 'team',
         name: 'Team',
-        component: () => import('@/views/VoteListView.vue') // Temporary placeholder
-      },
-      // Previous Vote routes mapped to sub-paths if needed, or repurposed
-      {
-        path: 'votes',
-        name: 'VoteList',
-        component: () => import('@/views/VoteListView.vue')
-      },
-      {
-        path: 'votes/create',
-        name: 'VoteCreate',
-        component: () => import('@/views/VoteCreateView.vue')
-      },
-      {
-        path: 'votes/:id',
-        name: 'VoteDetail',
-        component: () => import('@/views/VoteDetailView.vue')
-      },
-      {
-        path: 'votes/:id/result',
-        name: 'VoteResult',
-        component: () => import('@/views/VoteResultView.vue')
+        component: () => import('@/views/DashboardView.vue') // Temporary placeholder
       }
     ]
   }
