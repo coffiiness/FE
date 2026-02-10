@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# claude
+.claude/
+
+# ref
+ref/

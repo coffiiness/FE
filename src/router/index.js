@@ -35,7 +35,12 @@ const routes = [
       {
         path: 'recruitment',
         name: 'Recruitment',
-        component: () => import('@/views/DashboardView.vue') // 임시 연결
+        redirect: '/recruitment/applicants'
+      },
+      {
+        path: 'recruitment/applicants',
+        name: 'ApplicantList',
+        component: () => import('@/views/ApplicantListView.vue')
       },
       {
         path: 'meeting-rooms',
