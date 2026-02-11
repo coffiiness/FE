@@ -112,7 +112,12 @@ const routes = [
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
-
+      {
+        path: 'billing',
+        name: 'Billing',
+        component: () => import('@/views/billing/BillingView.vue'),
+        meta: { title: '요금제' }
+      },
       {
         path: 'meeting-rooms',
         name: 'MeetingRooms',

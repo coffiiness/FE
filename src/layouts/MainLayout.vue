@@ -35,7 +35,8 @@ const navigation = [
     ]
   },
   { name: '리포트', href: '/reports', icon: 'chart-bar' },
-  { name: '팀 관리', href: '/team', icon: 'user-group' }
+  { name: '팀 관리', href: '/team', icon: 'user-group' },
+  { name: '요금제', href: '/billing', icon: 'credit-card' }
 ]
 
 const isActive = (item) =>
@@ -101,6 +102,9 @@ watch(
             </svg>
             <svg v-else-if="item.icon === 'user-group'" class="w-6 h-6 mr-3 transition-colors" :class="isActive(item) ? 'text-brand-400' : 'group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <svg v-else-if="item.icon === 'credit-card'" class="w-6 h-6 mr-3 transition-colors" :class="isActive(item) ? 'text-brand-400' : 'group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
             </svg>
 
             <span v-if="sidebarOpen" class="font-medium whitespace-nowrap">{{ item.name }}</span>
