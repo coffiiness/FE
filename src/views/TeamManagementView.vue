@@ -48,8 +48,6 @@ const members = ref([
 
 const roles = ['Admin', 'Recruiter', 'Member', 'Viewer']
 
-// --- Computed ---
-
 const filteredMembers = computed(() => {
   return members.value.filter(member => {
     const matchesGroup = activeFilterGroup.value === 'All' || member.group === activeFilterGroup.value
@@ -65,8 +63,6 @@ const filteredMembersForGroup = computed(() => {
       m.name.includes(groupMemberSearchQuery.value) || m.email.includes(groupMemberSearchQuery.value)
   )
 })
-
-// --- Methods ---
 
 const openInviteModal = () => { isInviteModalOpen.value = true }
 const closeInviteModal = () => {
