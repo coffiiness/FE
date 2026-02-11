@@ -1,9 +1,30 @@
 <script setup>
+import { ref } from 'vue'
+
 const props = defineProps({
   rooms: { type: Array, required: true }
 })
 
 const emit = defineEmits(['editRoom', 'deleteRoom', 'createRoom'])
+
+const deleteModalOpen = ref(false)
+const deleteTarget = ref(null)
+
+const openDeleteModal = (room) => {
+  deleteTarget.value = room
+  deleteModalOpen.value = true
+}
+
+const closeDeleteModal = () => {
+  deleteModalOpen.value = false
+  deleteTarget.value = null
+}
+
+const confirmDelete = () => {
+  if (!deleteTarget.value) return
+  emit('deleteRoom', deleteTarget.value.id)
+  closeDeleteModal()
+}
 </script>
 
 <template>
@@ -56,11 +77,27 @@ const emit = defineEmits(['editRoom', 'deleteRoom', 'createRoom'])
               </td>
               <td class="px-6 py-4 text-right">
                 <button class="px-3 py-1 border rounded text-sm text-slate-800" @click="emit('editRoom', room)">수정</button>
-                <button class="ml-2 px-3 py-1 border rounded text-sm text-red-700" @click="emit('deleteRoom', room.id)">삭제</button>
+                <button class="ml-2 px-3 py-1 border rounded text-sm text-red-700" @click="openDeleteModal(room)">삭제</button>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-  </div>
+
+      <div v-if="deleteModalOpen" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div class="p-5 border-b">
+            <h3 class="text-lg font-semibold text-slate-900">회의실 삭제</h3>
+          </div>
+          <div class="p-5 text-sm text-slate-700">
+            <span class="text-slate-900 font-semibold">{{ deleteTarget?.name }}</span>을(를) 삭제하시겠습니까?
+            삭제하면 복구할 수 없습니다.
+          </div>
+          <div class="p-5 border-t flex justify-end gap-2">
+            <button class="px-3 py-2 border rounded-lg" @click="closeDeleteModal">취소</button>
+            <button class="px-3 py-2 bg-rose-600 text-white rounded-lg" @click="confirmDelete">삭제</button>
+          </div>
+        </div>
+      </div>
+    </div>
 </template>

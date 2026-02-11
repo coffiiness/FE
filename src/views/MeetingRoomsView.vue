@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
@@ -85,10 +85,6 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 
-const summary = computed(() => ({
-  roomCount: rooms.value.length,
-  bookingCount: bookings.value.length
-}))
 
 const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
@@ -168,26 +164,6 @@ const setDateValue = (value) => {
 
 <template>
   <div class="space-y-6">
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-      <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div>
-          <p class="text-sm text-slate-600">회의실 예약 현황</p>
-          <h1 class="text-2xl font-display font-bold text-slate-900">회의실 예약 & 일정 관리</h1>
-          <p class="text-base text-slate-700 mt-2 leading-relaxed">모든 회의실 예약 현황을 한 화면에서 확인하세요.</p>
-        </div>
-        <div class="flex flex-wrap gap-3">
-          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3">
-            <p class="text-sm text-slate-600">회의실 수</p>
-            <p class="text-2xl font-semibold text-teal-600">{{ summary.roomCount }}</p>
-          </div>
-          <div class="bg-white border border-slate-200 rounded-xl px-4 py-3">
-            <p class="text-sm text-slate-600">전체 예약</p>
-            <p class="text-2xl font-semibold text-slate-700">{{ summary.bookingCount }}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <router-view v-slot="{ Component }">
       <component
         :is="Component"
