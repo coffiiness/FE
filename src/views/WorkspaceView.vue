@@ -1,3 +1,17 @@
+<script setup lang="ts">
+import { useRouter } from 'vue-router';
+
+const router = useRouter();
+
+const handleCreateWorkspace = () => {
+  // TODO: 여기에 실제 워크스페이스 생성 API 호출 로직을 넣으세요.
+  console.log('워크스페이스 생성 요청');
+
+  // 로직 처리 후 이동 (예: 대시보드로)
+  router.push('/dashboard');
+};
+</script>
+
 <template>
   <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans selection:bg-brand-400/30">
 
@@ -7,7 +21,7 @@
     <div class="relative w-full max-w-md bg-white/70 backdrop-blur-xl border border-white/80 rounded-3xl p-8 shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all">
 
       <div class="flex items-center justify-between mb-8">
-        <button @click="$router.back()" class="flex items-center text-slate-400 hover:text-brand-600 transition-colors group">
+        <button @click="router.back()" class="flex items-center text-slate-400 hover:text-brand-600 transition-colors group">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1 group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>

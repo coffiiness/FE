@@ -48,7 +48,7 @@ const routes = [
       {
         path: 'schedule',
         name: 'Schedule',
-        component: () => import('@/views/DashboardView.vue')
+        component: () => import('@/views/MyScheduleView.vue')
       },
 
       {
@@ -157,7 +157,7 @@ const routes = [
       {
         path: 'team',
         name: 'Team',
-        component: () => import('@/views/DashboardView.vue')
+        component: () => import('@/views/TeamManagementView.vue')
       },
 
       {
@@ -182,7 +182,7 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
 
   if (to.meta.requiresAuth && !token) {
-    next()
+    next('login')
   }
 
   else if (

@@ -1,8 +1,4 @@
 <script setup>
-/**
- * 알림 페이지 스크립트
- * 추후 백엔드 API 연결 시 여기서 데이터를 fetch 합니다.
- */
 import { ref } from 'vue'
 
 const notificationCount = ref(3)
