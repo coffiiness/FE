@@ -114,6 +114,8 @@ const routes = [
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
+
+      // 면접 일정 생성 (팀원 작업)
       {
         path: 'recruitments/:recruitmentId/schedule/create',
         name: 'InterviewScheduleCreate',
@@ -154,6 +156,7 @@ const routes = [
           }
         ]
       },
+
       {
         path: 'reports',
         name: 'Reports',
@@ -174,14 +177,15 @@ const router = createRouter({
   routes
 })
 
-// Auth Guard (팀원 최신 로직 적용)
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
 
+  // 1. 인증이 필요한 페이지인데 토큰이 없는 경우
   if (to.meta.requiresAuth && !token) {
-    // 개발 편의상 통과 (나중에 next('/login')으로 변경 권장)
+    // 개발 편의상 통과 (나중에 next('/login')으로 변경 필요)
     next()
   }
+  // 2. 이미 로그인했는데 로그인/회원가입 페이지로 가려는 경우
   else if ((to.name === 'Login' || to.name === 'Signup') && token) {
     next('/dashboard')
   }
