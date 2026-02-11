@@ -30,7 +30,12 @@ const routes = [
     name: 'SignupSuccess',
     component: () => import('@/views/SignupSuccessView.vue')
   },
-
+  {
+    path: '/workspace',
+    name: 'Workspace',
+    component: () => import('@/views/WorkspaceView.vue')
+  },
+  // Authenticated Routes
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
@@ -42,12 +47,19 @@ const routes = [
         component: () => import('@/views/DashboardView.vue')
       },
       {
+        path: 'notification',
+        name: 'Notification',
+        component: () => import('@/views/NotificationView.vue'),
+        meta: { title: '알림 센터' }
+      },
+      {
         path: 'schedule',
         name: 'Schedule',
-        component: () => import('@/views/DashboardView.vue')
+        component: () => import('@/views/MyScheduleView.vue'),
+        meta: { title: '내 일정 캘린더' }
       },
 
-      // --- 채용 관리 (평탄화된 구조) ---
+      // --- 채용 관리 ---
       {
         path: 'recruitment',
         redirect: '/recruitment/home'
@@ -102,6 +114,12 @@ const routes = [
         name: 'ApplicationTemplateEdit',
         component: () => import('@/views/ApplicationTemplateCreateView.vue')
       },
+      {
+        path: 'recruitments/:recruitmentId/schedule/create',
+        name: 'InterviewScheduleCreate',
+        component: () => import('@/views/interview/InterviewScheduleCreateView.vue'),
+        meta: { requiresAuth: true }
+      },
 
       // --- 회의실 관리 ---
       {
@@ -113,26 +131,29 @@ const routes = [
           {
             path: 'timeline',
             name: 'MeetingRoomsTimeline',
-            component: () => import('@/views/meeting-rooms/TimelineView.vue')
+            component: () => import('@/views/meeting-rooms/TimelineView.vue'),
+            meta: { title: '회의실 타임라인' }
           },
           {
             path: 'list',
             name: 'MeetingRoomsList',
-            component: () => import('@/views/meeting-rooms/ListView.vue')
+            component: () => import('@/views/meeting-rooms/ListView.vue'),
+            meta: { title: '회의실 목록' }
           },
           {
             path: 'calendar',
             name: 'MeetingRoomsCalendar',
-            component: () => import('@/views/meeting-rooms/CalendarView.vue')
+            component: () => import('@/views/meeting-rooms/CalendarView.vue'),
+            meta: { title: '회의실 캘린더' }
           },
           {
             path: 'manage',
             name: 'MeetingRoomsManage',
-            component: () => import('@/views/meeting-rooms/ManageView.vue')
+            component: () => import('@/views/meeting-rooms/ManageView.vue'),
+            meta: { title: '회의실 관리' }
           }
         ]
       },
-
       {
         path: 'reports',
         name: 'Reports',
@@ -141,15 +162,8 @@ const routes = [
       {
         path: 'team',
         name: 'Team',
-        component: () => import('@/views/DashboardView.vue')
-      },
-
-      // 👇 [dev 브랜치] 팀원이 추가한 면접 일정 생성 페이지
-      {
-        path: 'recruitments/:recruitmentId/schedule/create',
-        name: 'InterviewScheduleCreate',
-        component: () => import('@/views/interview/InterviewScheduleCreateView.vue'),
-        meta: { requiresAuth: true }
+        component: () => import('@/views/TeamManagementView.vue'),
+        meta: { title: '팀 멤버 관리' }
       }
     ]
   }
@@ -160,18 +174,19 @@ const router = createRouter({
   routes
 })
 
-// // Auth Guard (보안 강화)
-// router.beforeEach((to, from, next) => {
-//   const token = localStorage.getItem('accessToken')
-//   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+// Auth Guard
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('accessToken')
 
-//   if (requiresAuth && !token) {
-//     next('/login')
-//   } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-//     next('/dashboard')
-//   } else {
-//     next()
-//   }
-// })
+  if (to.meta.requiresAuth && !token) {
+    next()
+  }
+  else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    next('/dashboard')
+  }
+  else {
+    next()
+  }
+})
 
 export default router
