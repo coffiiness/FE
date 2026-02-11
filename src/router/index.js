@@ -174,11 +174,12 @@ const router = createRouter({
   routes
 })
 
-// Auth Guard
+// Auth Guard (팀원 최신 로직 적용)
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
 
   if (to.meta.requiresAuth && !token) {
+    // 개발 편의상 통과 (나중에 next('/login')으로 변경 권장)
     next()
   }
   else if ((to.name === 'Login' || to.name === 'Signup') && token) {
