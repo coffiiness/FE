@@ -5,7 +5,6 @@ const routes = [
         path: '/',
         redirect: '/dashboard'
     },
-
     {
         path: '/careers/:companySlug',
         name: 'CompanyCareers',
@@ -31,140 +30,134 @@ const routes = [
         name: 'SignupSuccess',
         component: () => import('@/views/SignupSuccessView.vue')
     },
-
+    {
+        path: '/workspace',
+        name: 'Workspace',
+        component: () => import('@/views/WorkspaceView.vue')
+    },
+    // Authenticated Routes
     {
         path: '/',
         component: () => import('@/layouts/MainLayout.vue'),
         meta: { requiresAuth: true },
-
         children: [
-
             {
                 path: 'dashboard',
                 name: 'Dashboard',
                 component: () => import('@/views/DashboardView.vue')
             },
-
+            {
+                path: 'notification',
+                name: 'Notification',
+                component: () => import('@/views/NotificationView.vue'),
+                meta: { title: '알림 센터' }
+            },
             {
                 path: 'schedule',
                 name: 'Schedule',
-                component: () => import('@/views/DashboardView.vue')
+                component: () => import('@/views/MyScheduleView.vue'), // Local: 실제 뷰 유지
+                meta: { title: '내 일정 캘린더' }
             },
-
             {
                 path: 'recruitment',
                 redirect: '/recruitment/home'
             },
-
             {
                 path: 'recruitment/home',
                 name: 'RecruitmentHome',
                 component: () => import('@/views/RecruitmentView.vue')
             },
-
             {
                 path: 'recruitment/create',
                 name: 'RecruitmentCreate',
                 component: () => import('@/views/RecruitmentCreateView.vue')
             },
-
             {
                 path: 'recruitment/jobs/:id',
                 name: 'RecruitmentDetail',
                 component: () => import('@/views/RecruitmentDetailView.vue')
             },
-
             {
                 path: 'recruitment/applicants',
                 name: 'ApplicantList',
                 component: () => import('@/views/ApplicantListView.vue')
             },
-
             {
                 path: 'recruitment/applicants/:id',
                 name: 'ApplicantDetail',
                 component: () => import('@/views/ApplicantDetailView.vue')
             },
-
             {
                 path: 'recruitment/templates',
                 name: 'ApplicationTemplateList',
                 component: () => import('@/views/ApplicationTemplateListView.vue')
             },
-
             {
                 path: 'recruitment/templates/create',
                 name: 'ApplicationTemplateCreate',
                 component: () => import('@/views/ApplicationTemplateCreateView.vue')
             },
-
             {
                 path: 'recruitment/templates/:id',
                 name: 'ApplicationTemplateDetail',
                 component: () => import('@/views/ApplicationTemplateDetailView.vue')
             },
-
             {
                 path: 'recruitment/templates/:id/edit',
                 name: 'ApplicationTemplateEdit',
                 component: () => import('@/views/ApplicationTemplateCreateView.vue')
             },
-
+            // ▼▼ 서버(Incoming)에서 추가된 부분 반영 ▼▼
+            {
+                path: 'recruitments/:recruitmentId/schedule/create',
+                name: 'InterviewScheduleCreate',
+                component: () => import('@/views/interview/InterviewScheduleCreateView.vue'),
+                meta: { requiresAuth: true }
+            },
+            // ▲▲ 추가된 부분 끝 ▲▲
             {
                 path: 'meeting-rooms',
                 name: 'MeetingRooms',
                 component: () => import('@/views/MeetingRoomsView.vue'),
                 redirect: '/meeting-rooms/timeline',
-
                 children: [
-
                     {
                         path: 'timeline',
                         name: 'MeetingRoomsTimeline',
-                        component: () => import('@/views/meeting-rooms/TimelineView.vue')
+                        component: () => import('@/views/meeting-rooms/TimelineView.vue'),
+                        meta: { title: '회의실 타임라인' }
                     },
-
                     {
                         path: 'list',
                         name: 'MeetingRoomsList',
-                        component: () => import('@/views/meeting-rooms/ListView.vue')
+                        component: () => import('@/views/meeting-rooms/ListView.vue'),
+                        meta: { title: '회의실 목록' }
                     },
-
                     {
                         path: 'calendar',
                         name: 'MeetingRoomsCalendar',
-                        component: () => import('@/views/meeting-rooms/CalendarView.vue')
+                        component: () => import('@/views/meeting-rooms/CalendarView.vue'),
+                        meta: { title: '회의실 캘린더' }
                     },
-
                     {
                         path: 'manage',
                         name: 'MeetingRoomsManage',
-                        component: () => import('@/views/meeting-rooms/ManageView.vue')
+                        component: () => import('@/views/meeting-rooms/ManageView.vue'),
+                        meta: { title: '회의실 관리' }
                     }
-
                 ]
             },
-
             {
                 path: 'reports',
                 name: 'Reports',
                 component: () => import('@/views/DashboardView.vue')
             },
-
             {
                 path: 'team',
                 name: 'Team',
-                component: () => import('@/views/DashboardView.vue')
+                component: () => import('@/views/TeamManagementView.vue'), // Local: 실제 뷰 유지
+                meta: { title: '팀 멤버 관리' }
             },
-
-            {
-                path: 'recruitments/:recruitmentId/schedule/create',
-                name: 'InterviewScheduleCreate',
-                component: () =>
-                    import('@/views/interview/InterviewScheduleCreateView.vue'),
-                meta: { requiresAuth: true }
-            }
-
         ]
     }
 ]
@@ -175,24 +168,19 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-
     const token = localStorage.getItem('accessToken')
 
+    // 1. 인증이 필요한 페이지인데 토큰이 없는 경우
     if (to.meta.requiresAuth && !token) {
         next()
     }
-
-    else if (
-        (to.name === 'Login' || to.name === 'Signup') &&
-        token
-    ) {
+    // 2. 이미 로그인했는데 로그인/회원가입 페이지로 가려는 경우
+    else if ((to.name === 'Login' || to.name === 'Signup') && token) {
         next('/dashboard')
     }
-
     else {
         next()
     }
-
 })
 
 export default router
