@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, watch } from 'vue'
+import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -8,6 +8,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
+const errorMessage = ref('')
 
 const facilityOptions = [
   '프로젝터',
@@ -33,6 +34,7 @@ const form = reactive({
 watch(
   () => props.open,
   (open) => {
+    document.body.style.overflow = open ? 'hidden' : ''
     if (!open) return
     if (props.room) {
       form.name = props.room.name
@@ -52,6 +54,10 @@ watch(
   }
 )
 
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+})
+
 const toggleFacility = (facility) => {
   if (form.facilities.includes(facility)) {
     form.facilities = form.facilities.filter((f) => f !== facility)
@@ -61,54 +67,64 @@ const toggleFacility = (facility) => {
 }
 
 const handleSubmit = () => {
-  if (!form.name || !form.capacity || !form.floor) return
+  errorMessage.value = ''
+  const capacity = parseInt(form.capacity, 10)
+  const floor = parseInt(form.floor, 10)
+  if (!form.name || Number.isNaN(capacity) || Number.isNaN(floor)) {
+    errorMessage.value = '필수 항목을 입력해 주세요.'
+    return
+  }
   emit('confirm', {
     name: form.name,
-    capacity: parseInt(form.capacity, 10),
-    floor: parseInt(form.floor, 10),
+    capacity,
+    floor,
     facilities: form.facilities,
     description: form.description,
     color: form.color
   })
+  emit('close')
 }
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
-    <div class="bg-white rounded-2xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto">
+  <div v-if="open" class="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
+    <div class="bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
       <div class="p-6 border-b">
-        <h3 class="text-lg font-semibold">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
+        <h3 class="text-lg font-semibold text-slate-900">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
       </div>
-      <div class="p-6 space-y-4">
+      <div class="p-6 space-y-4 overflow-y-auto pr-2">
+        <p v-if="errorMessage" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {{ errorMessage }}
+        </p>
         <div>
-          <label class="text-sm font-medium text-gray-900">회의실 이름 *</label>
-          <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" placeholder="회의실 이름" />
+          <label class="text-sm font-medium text-slate-800">회의실 이름 *</label>
+          <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="text-sm font-medium text-gray-900">수용 인원 *</label>
-            <input v-model="form.capacity" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-900" />
+            <label class="text-sm font-medium text-slate-800">수용 인원 *</label>
+            <input v-model="form.capacity" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
           <div>
-            <label class="text-sm font-medium text-gray-900">층수 *</label>
-            <input v-model="form.floor" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-900" />
+            <label class="text-sm font-medium text-slate-800">층수 *</label>
+            <input v-model="form.floor" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">설명</label>
-          <textarea v-model="form.description" class="w-full border rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" rows="3"></textarea>
+          <label class="text-sm font-medium text-slate-800">설명</label>
+          <textarea v-model="form.description" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" rows="3"></textarea>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">제공 시설 *</label>
+          <label class="text-sm font-medium text-slate-800">제공 시설 *</label>
           <div class="grid grid-cols-2 gap-3 p-4 border rounded-lg">
-            <label v-for="facility in facilityOptions" :key="facility" class="flex items-center gap-2 text-sm text-gray-800">
+            <label v-for="facility in facilityOptions" :key="facility" class="flex items-center gap-2 text-sm text-slate-800">
               <input type="checkbox" :value="facility" :checked="form.facilities.includes(facility)" @change="toggleFacility(facility)" />
               {{ facility }}
             </label>
           </div>
         </div>
         <div>
-          <label class="text-sm font-medium text-gray-900">색상 *</label>
+          <label class="text-sm font-medium text-slate-800">색상 *</label>
           <div class="flex gap-2 flex-wrap">
             <button
               v-for="color in colorOptions"
@@ -122,9 +138,9 @@ const handleSubmit = () => {
           </div>
         </div>
       </div>
-      <div class="p-6 border-t flex justify-end gap-2">
-        <button class="px-4 py-2 border rounded-lg" @click="emit('close')">취소</button>
-        <button class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
+      <div class="p-6 border-t flex justify-end gap-2 flex-shrink-0 bg-white">
+        <button type="button" class="px-4 py-2 border rounded-lg" @click="emit('close')">취소</button>
+        <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
           {{ mode === 'edit' ? '수정 저장' : '회의실 등록' }}
         </button>
       </div>

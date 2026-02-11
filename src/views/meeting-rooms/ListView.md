@@ -19,3 +19,11 @@
 
 ## 표시 규칙
 - “현재/오늘/다음” 예약은 `status === 'confirmed'`만 표시 (pending 제외)
+
+## 관련 API
+- [회의실 목록 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms
+- [회의실 예약 요약 조회]
+  - 메서드: GET
+  - 경로: http://localhost:8080/api/v1/meeting-rooms/summary?date=YYYY-MM-DD

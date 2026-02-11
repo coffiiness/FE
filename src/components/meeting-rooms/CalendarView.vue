@@ -30,11 +30,9 @@ const calendarDays = computed(() => {
   const firstDay = monthStart.value.getDay()
   const empties = Array(firstDay).fill(null)
   const days = [...empties, ...daysInMonth.value]
-  const total = 42
-  if (days.length < total) {
-    return [...days, ...Array(total - days.length).fill(null)]
-  }
-  return days
+  const remainder = days.length % 7
+  if (remainder === 0) return days
+  return [...days, ...Array(7 - remainder).fill(null)]
 })
 
 const getBookingsForDay = (day) => {
@@ -88,7 +86,7 @@ const handleDayBookingClick = (booking) => {
   <div class="bg-white rounded-2xl border shadow-sm p-6">
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-4">
-        <h2 class="text-2xl font-bold text-slate-900">캘린더</h2>
+        <h2 class="text-2xl font-bold text-slate-900">회의실 캘린더</h2>
         <select v-model="state.selectedRoom" class="px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white">
           <option value="all">전체 회의실</option>
           <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option>
