@@ -5,7 +5,9 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 
 // --- 상태 관리 ---
-const activeMenuId = ref(null) // 현재 열려있는 드롭다운 메뉴의 ID
+const activeMenuId = ref(null) // 드롭다운 메뉴 상태
+const showDeleteModal = ref(false) // 삭제 모달 상태
+const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 
 // --- 데이터 (Mock) ---
 const stats = ref([
@@ -25,7 +27,7 @@ const jobs = ref([
     totalApplicants: 42,
     funnel: [
       { step: '서류', count: 15, active: false },
-      { step: '코딩테스트', count: 8, active: false },
+      { step: '과제', count: 8, active: false },
       { step: '면접', count: 4, active: true },
       { step: '처우', count: 1, active: false },
     ],
@@ -41,7 +43,7 @@ const jobs = ref([
     totalApplicants: 28,
     funnel: [
       { step: '서류', count: 5, active: true },
-      { step: '코딩테스트', count: 2, active: false },
+      { step: '포트폴리오', count: 2, active: false },
       { step: '면접', count: 0, active: false },
       { step: '처우', count: 0, active: false },
     ],
@@ -77,6 +79,7 @@ const jobs = ref([
   },
 ])
 
+// --- Helper Functions ---
 const getStatusColor = (status) => {
   switch (status) {
     case 'active': return 'text-brand-700 bg-brand-50 border-brand-200'
@@ -97,13 +100,39 @@ const toggleMenu = (id) => {
 const goToDetail = (id) => {
   router.push(`/recruitment/jobs/${id}`)
 }
+
+// 1. 삭제 버튼 클릭 시 모달 열기
+const openDeleteModal = (id) => {
+  deleteTargetId.value = id
+  showDeleteModal.value = true
+  activeMenuId.value = null // 열려있는 메뉴 닫기
+}
+
+// 2. 모달 닫기
+const closeDeleteModal = () => {
+  showDeleteModal.value = false
+  deleteTargetId.value = null
+}
+
+// 3. 실제 삭제 수행
+const confirmDelete = () => {
+  if (deleteTargetId.value) {
+    // API 호출 로직...
+    jobs.value = jobs.value.filter(job => job.id !== deleteTargetId.value)
+  }
+  closeDeleteModal()
+}
 </script>
 
 <template>
-  <div v-if="activeMenuId !== null" @click="activeMenuId = null" class="fixed inset-0 z-10 cursor-default"></div>
+  <div class="space-y-8 animate-fade-in-up p-2 relative">
+    
+    <div v-if="activeMenuId !== null" 
+         @click="activeMenuId = null" 
+         class="fixed inset-0 z-10 cursor-default">
+    </div>
 
-  <div class="space-y-8 animate-fade-in-up p-2 relative z-0">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-0">
       <div>
         <h2 class="text-3xl font-display font-bold text-slate-900 tracking-tight">채용 공고 관리</h2>
         <p class="text-slate-500 mt-1">현재 진행 중인 채용 프로세스를 한눈에 파악하고 병목 현상을 해결하세요.</p>
@@ -119,7 +148,7 @@ const goToDetail = (id) => {
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-0">
       <div v-for="(stat, idx) in stats" :key="idx" 
            :class="['relative overflow-hidden border rounded-2xl p-6 transition-all hover:shadow-md', stat.bg, 'border-slate-200 shadow-sm']">
         <div v-if="stat.glow" class="absolute -right-4 -top-4 w-24 h-24 bg-rose-100 rounded-full blur-2xl pointer-events-none"></div>
@@ -133,7 +162,7 @@ const goToDetail = (id) => {
       </div>
     </div>
 
-    <div class="flex flex-col sm:flex-row gap-4">
+    <div class="flex flex-col sm:flex-row gap-4 relative z-0">
       <div class="relative flex-1">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -161,7 +190,8 @@ const goToDetail = (id) => {
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       <div v-for="job in jobs" :key="job.id" 
-           class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm">
+           class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm"
+           :class="{'relative z-20 border-brand-300 ring-2 ring-brand-100': activeMenuId === job.id}">
         
         <div class="flex justify-between items-start mb-4 relative">
           <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
@@ -186,7 +216,10 @@ const goToDetail = (id) => {
             <div v-if="activeMenuId === job.id" 
                  class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
               
-              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+              <button 
+                @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
+                class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
+              >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 공고 수정
               </button>
@@ -203,7 +236,10 @@ const goToDetail = (id) => {
 
               <div class="border-t border-slate-100 my-1"></div>
 
-              <button class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium">
+              <button 
+                @click.stop="openDeleteModal(job.id)"
+                class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium"
+              >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 공고 삭제
               </button>
@@ -214,23 +250,16 @@ const goToDetail = (id) => {
         <div class="mb-6 bg-slate-50 rounded-xl px-4 py-5 border border-slate-100" @click="goToDetail(job.id)">
           <div class="flex items-end space-x-2 h-14">
             <div v-for="(step, sIdx) in job.funnel" :key="sIdx" class="flex-1 flex flex-col items-center group/step relative">
-              
               <div v-if="step.count > 0" 
                    :class="['mb-2 px-2 py-0.5 rounded text-xs font-bold shadow-sm transition-all duration-300', 
-                            step.active 
-                              ? 'bg-brand-500 text-white translate-y-0 opacity-100' 
-                              : 'bg-white border border-slate-200 text-slate-600 -translate-y-1 opacity-0 group-hover/step:opacity-100 group-hover/step:translate-y-0']">
+                            step.active ? 'bg-brand-500 text-white translate-y-0 opacity-100' : 'bg-white border border-slate-200 text-slate-600 -translate-y-1 opacity-0 group-hover/step:opacity-100 group-hover/step:translate-y-0']">
                 {{ step.count }}
               </div>
               <div v-else class="h-[26px]"></div>
-
               <div class="w-full h-2 rounded-full mb-2 overflow-hidden bg-slate-200">
-                <div :class="['h-full rounded-full transition-all duration-500', 
-                              step.active ? 'bg-brand-500 w-full' : 'bg-slate-300 w-full']"></div>
+                <div :class="['h-full rounded-full transition-all duration-500', step.active ? 'bg-brand-500 w-full' : 'bg-slate-300 w-full']"></div>
               </div>
-              
-              <span :class="['text-sm font-bold text-center truncate w-full transition-colors', 
-                             step.active ? 'text-brand-600' : 'text-slate-600']">
+              <span :class="['text-sm font-bold text-center truncate w-full transition-colors', step.active ? 'text-brand-600' : 'text-slate-600']">
                 {{ step.step }}
               </span>
             </div>
@@ -244,7 +273,6 @@ const goToDetail = (id) => {
               {{ intr }}
             </div>
           </div>
-          
           <button @click="goToDetail(job.id)" 
                   class="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center transition-colors group/btn">
             관리하기
@@ -268,6 +296,44 @@ const goToDetail = (id) => {
       </div>
     </div>
   </div>
+
+  <Transition name="fade">
+    <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
+      <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeDeleteModal"></div>
+      
+      <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+        
+        <div class="flex flex-col items-center text-center">
+          <div class="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mb-4">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+
+          <h3 class="text-xl font-bold text-slate-900 mb-2">공고 삭제</h3>
+          <p class="text-slate-500 text-sm mb-6 leading-relaxed">
+            정말로 이 공고를 삭제하시겠습니까?<br>
+            삭제된 데이터는 <span class="text-rose-500 font-bold">복구할 수 없습니다.</span>
+          </p>
+
+          <div class="flex gap-3 w-full">
+            <button 
+              @click="closeDeleteModal"
+              class="flex-1 py-2.5 px-4 bg-white border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+            >
+              취소
+            </button>
+            <button 
+              @click="confirmDelete"
+              class="flex-1 py-2.5 px-4 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md hover:shadow-lg transition-all"
+            >
+              삭제하기
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -287,5 +353,16 @@ const goToDetail = (id) => {
 
 .animate-fade-in-down {
   animation: fadeInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Modal Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
