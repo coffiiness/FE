@@ -126,15 +126,9 @@ const routes = [
         path: 'meeting-rooms',
         name: 'MeetingRooms',
         component: () => import('@/views/MeetingRoomsView.vue'),
-        redirect: '/meeting-rooms/timeline',
+        redirect: '/meeting-rooms/calendar',
 
         children: [
-
-          {
-            path: 'timeline',
-            name: 'MeetingRoomsTimeline',
-            component: () => import('@/views/meeting-rooms/TimelineView.vue')
-          },
 
           {
             path: 'list',
