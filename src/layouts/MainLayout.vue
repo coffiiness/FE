@@ -35,13 +35,12 @@ const navigation = [
 
   { section: 'FACILITY' },
   {
-    name: '회의실 관리',
+    name: '회의실',
     icon: 'office',
     children: [
-      { name: '타임라인', href: '/meeting-rooms/timeline' },
-      { name: '회의실 목록', href: '/meeting-rooms/list' },
-      { name: '캘린더', href: '/meeting-rooms/calendar' },
-      { name: '관리', href: '/meeting-rooms/manage' }
+      { name: '회의실 스케줄', href: '/meeting-rooms/calendar' },
+      { name: '회의실 예약', href: '/meeting-rooms/list' },
+      { name: '회의실 관리', href: '/meeting-rooms/manage' }
     ]
   },
 
