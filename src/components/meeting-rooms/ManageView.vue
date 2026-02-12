@@ -28,16 +28,15 @@ const confirmDelete = () => {
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl border shadow-sm p-6">
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h2 class="text-2xl font-bold text-slate-900">회의실 관리</h2>
-        <p class="text-slate-800 mt-1 leading-relaxed">회의실을 추가, 수정, 삭제할 수 있습니다</p>
+  <div class="space-y-4">
+      <div class="flex items-center justify-end">
+        <button
+          class="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium"
+          @click="emit('createRoom')"
+        >
+          회의실 추가
+        </button>
       </div>
-      <button class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm" @click="emit('createRoom')">
-        회의실 추가
-      </button>
-    </div>
 
       <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
         <table class="w-full">

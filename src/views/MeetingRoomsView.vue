@@ -32,6 +32,33 @@ const rooms = ref([
     facilities: ['프로젝터', '마이크', 'WiFi'],
     description: '대형 회의 및 발표 공간',
     color: '#6366f1'
+  },
+  {
+    id: 'r4',
+    name: 'Nova-5',
+    capacity: 12,
+    floor: 5,
+    facilities: ['프로젝터', '마이크', 'WiFi'],
+    description: '대형 회의 및 발표 공간',
+    color: '#f59e0b'
+  },
+  {
+    id: 'r5',
+    name: 'Cosmo-1',
+    capacity: 4,
+    floor: 2,
+    facilities: ['프로젝터', '마이크', 'WiFi'],
+    description: '대형 회의 및 발표 공간',
+    color: '#06b6d4'
+  },
+  {
+    id: 'r6',
+    name: 'Pulse-7',
+    capacity: 16,
+    floor: 9,
+    facilities: ['프로젝터', '마이크', 'WiFi'],
+    description: '대형 회의 및 발표 공간',
+    color: '#ec4899'
   }
 ])
 
