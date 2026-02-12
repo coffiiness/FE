@@ -83,10 +83,9 @@ const handleDayBookingClick = (booking) => {
 </script>
 
 <template>
-  <div class="bg-white rounded-2xl border shadow-sm p-6">
-    <div class="flex items-center justify-between mb-6">
+  <div class="bg-white rounded-2xl border shadow-sm p-6 space-y-4">
+    <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <h2 class="text-2xl font-bold text-slate-900">회의실 캘린더</h2>
         <select v-model="state.selectedRoom" class="px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white">
           <option value="all">전체 회의실</option>
           <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option>
@@ -110,20 +109,20 @@ const handleDayBookingClick = (booking) => {
           {{ day }}
         </div>
       </div>
-      <div class="grid grid-cols-7 auto-rows-[130px]">
+      <div class="grid grid-cols-7 auto-rows-[112px]">
         <div
           v-for="(day, index) in calendarDays"
           :key="day ? day.toISOString() : `empty-${index}`"
           class="border-b border-r p-2 cursor-pointer hover:bg-gray-50 transition-colors"
           :class="day && !isSameMonth(day, state.currentMonth) ? 'bg-gray-50/50 text-slate-600' : ''"
-          @click="day && emit('dateClick', day)"
+          @click="day && openDayModal(day)"
         >
           <div v-if="day" class="text-sm font-semibold mb-1 text-slate-900">
             <span :class="isSameDay(day, today) ? 'w-6 h-6 bg-emerald-500 text-white rounded-full flex items-center justify-center' : ''">
               {{ day.getDate() }}
             </span>
           </div>
-          <div class="space-y-1 overflow-hidden max-h-[88px]" v-if="day">
+          <div class="space-y-1 max-h-[76px]" v-if="day">
             <div
               v-for="booking in getBookingsForDay(day).slice(0, 3)"
               :key="booking.id"

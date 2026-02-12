@@ -11,7 +11,7 @@
 ## 전달 Props (to child views)
 - `rooms`: 회의실 목록
 - `bookings`: 예약 목록
-- `hours`: 타임라인 시간 슬롯(08:00~20:00)
+- `hours`: 타임라인 시간 슬롯(08:00~20:00) - 캘린더 화면 내 토글 뷰에서 사용
 - `dateValue`: 선택 날짜 (`YYYY-MM-DD`)
 - `handlers`: 공통 핸들러 묶음
   - `handleTimeSlotClick(roomId, hour)`

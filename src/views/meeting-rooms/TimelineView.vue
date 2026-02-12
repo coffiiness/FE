@@ -12,39 +12,32 @@ const props = defineProps({
 
 <template>
   <div class="space-y-6">
-    <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <h2 class="text-xl font-semibold text-slate-900">회의실 타임라인</h2>
-      <p class="text-sm text-slate-700 mt-1">시간대별 예약을 확인하고 빈 슬롯을 빠르게 예약하세요.</p>
-    </div>
-
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-      <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <input
-              type="date"
-              class="bg-transparent text-slate-700 text-sm outline-none"
-              :value="dateValue"
-              @change="handlers.setDateValue($event.target.value)"
-            />
-            <button class="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200">오늘</button>
-          </div>
-          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <span class="text-xs text-slate-500">시간 범위</span>
-            <span class="text-sm text-slate-700">08:00 ~ 20:00</span>
-          </div>
+    <div class="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
+          <input
+            type="date"
+            class="bg-transparent text-slate-700 text-sm outline-none"
+            :value="dateValue"
+            @change="handlers.setDateValue($event.target.value)"
+          />
+          <button class="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200">오늘</button>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
-          <div class="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            <input class="bg-transparent text-sm text-slate-700 outline-none w-48" placeholder="회의실명/위치 검색" />
-          </div>
-          <button class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-sm">
-            필터
-          </button>
-          <button class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm shadow-sm">
-            조회
-          </button>
+        <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
+          <span class="text-xs text-slate-500">시간 범위</span>
+          <span class="text-sm text-slate-700">08:00 ~ 20:00</span>
         </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
+          <input class="bg-transparent text-sm text-slate-700 outline-none w-48" placeholder="회의실명/위치 검색" />
+        </div>
+        <button class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2 rounded-xl text-sm">
+          필터
+        </button>
+        <button class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm shadow-sm">
+          조회
+        </button>
       </div>
     </div>
 

@@ -1,4 +1,6 @@
 <script setup>
+import { computed, ref } from 'vue'
+
 const props = defineProps({
   rooms: { type: Array, required: true },
   bookings: { type: Array, required: true },
@@ -32,19 +34,25 @@ const formatTime = (date) => {
   const m = `${date.getMinutes()}`.padStart(2, '0')
   return `${h}:${m}`
 }
+
+const itemsPerPage = 5
+const currentPage = ref(1)
+const totalPages = computed(() => Math.ceil(props.rooms.length / itemsPerPage))
+const pagedRooms = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage
+  return props.rooms.slice(start, start + itemsPerPage)
+})
+
+const goToPage = (page) => {
+  if (page < 1 || page > totalPages.value) return
+  currentPage.value = page
+}
 </script>
 
 <template>
   <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <div class="flex items-center justify-between px-6 h-14 border-b border-slate-200">
-          <div class="flex items-center gap-3">
-            <span class="w-2 h-2 rounded-full bg-teal-500"></span>
-            <h2 class="text-lg font-display font-semibold text-slate-900">회의실 타임라인</h2>
-          </div>
-          <div class="text-sm text-slate-600">업데이트: 1분 전</div>
-        </div>
 
-    <div class="flex flex-col h-[560px]">
+    <div class="flex flex-col">
         <div class="flex border-b bg-white sticky top-0 z-10">
           <div class="w-48 p-4 font-semibold border-r flex items-center gap-2 text-slate-800">
             <span class="w-2 h-2 rounded-full bg-slate-400"></span>
@@ -62,7 +70,7 @@ const formatTime = (date) => {
         </div>
 
       <div class="flex-1 overflow-auto">
-        <div v-for="room in rooms" :key="room.id" class="flex border-b hover:bg-slate-50/60 transition-colors">
+        <div v-for="room in pagedRooms" :key="room.id" class="flex border-b hover:bg-slate-50/60 transition-colors">
           <div class="w-48 p-4 border-r bg-white sticky left-0 z-[5]">
             <div class="flex items-start gap-3">
               <div class="w-3 h-3 rounded-full mt-1 flex-shrink-0" :style="{ backgroundColor: room.color }" />
@@ -107,6 +115,25 @@ const formatTime = (date) => {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+    <div v-if="totalPages > 1" class="flex items-center justify-between px-6 py-4 border-t bg-white">
+      <p class="text-sm text-slate-600">페이지 {{ currentPage }} / {{ totalPages }}</p>
+      <div class="flex items-center gap-2">
+        <button
+          class="px-3 py-2 border rounded-lg text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          :disabled="currentPage === 1"
+          @click="goToPage(currentPage - 1)"
+        >
+          이전
+        </button>
+        <button
+          class="px-3 py-2 border rounded-lg text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          :disabled="currentPage === totalPages"
+          @click="goToPage(currentPage + 1)"
+        >
+          다음
+        </button>
       </div>
     </div>
   </div>
