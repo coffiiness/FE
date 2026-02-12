@@ -17,8 +17,12 @@ const formattedDateTitle = computed(() => {
 
 const getEventStyle = (type) => {
   switch (type) {
-    case 'interview': return { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-white border-indigo-200 text-indigo-700' }
+    case 'INTERVIEW':
+    case 'interview': return { bg: 'bg-brand-50', border: 'border-brand-100', text: 'text-brand-700', badge: 'bg-white border-brand-200 text-brand-700' }
+    case 'MEETING':
     case 'meeting': return { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700', badge: 'bg-white border-amber-200 text-amber-700' }
+    case 'BUSINESS_TRIP':
+    case 'business_trip': return { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', badge: 'bg-white border-emerald-200 text-emerald-700' }
     case 'off': return { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-white border-rose-200 text-rose-700' }
     default: return { bg: 'bg-slate-50', border: 'border-slate-100', text: 'text-slate-700', badge: 'bg-white border-slate-200 text-slate-700' }
   }
@@ -57,20 +61,20 @@ const typeLabel = (type) => {
 
           <div v-for="evt in events" :key="evt.id"
                @click="$emit('edit', evt)"
-               class="p-4 rounded-xl border flex items-center space-x-4 hover:shadow-md hover:translate-x-1 transition-all bg-white group cursor-pointer relative pr-12"
+               class="p-4 rounded-xl border flex items-start space-x-4 hover:shadow-md hover:translate-x-1 transition-all bg-white group cursor-pointer relative pr-12"
                :class="[getEventStyle(evt.type).bg, getEventStyle(evt.type).border]"
           >
-            <div class="flex-none flex flex-col items-center justify-center w-14 h-12 rounded-lg border shadow-sm"
+            <div class="flex-none flex flex-col items-center justify-center w-24 py-3 rounded-lg border shadow-sm"
                  :class="getEventStyle(evt.type).badge">
-              <span class="text-sm font-black tracking-tight">{{ evt.time }}</span>
+              <span class="text-xs font-black tracking-tight text-center leading-relaxed whitespace-pre-line break-words">{{ evt.time.replace(' - ', '\n~ ') }}</span>
             </div>
 
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-0 py-1">
               <h4 class="text-sm font-bold text-slate-900 truncate group-hover:text-brand-700 transition-colors">
                 {{ evt.title }}
               </h4>
-              <div class="flex items-center mt-1 gap-2">
-                 <span class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-white/60 border border-black/5" :class="getEventStyle(evt.type).text">
+              <div class="flex items-center mt-2 gap-2 flex-wrap">
+                 <span class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-white/60 border border-black/5 shrink-0" :class="getEventStyle(evt.type).text">
                    {{ typeLabel(evt.type) }}
                  </span>
                 <span class="text-xs text-slate-500 font-medium truncate" v-if="evt.description">{{ evt.description }}</span>
@@ -79,7 +83,7 @@ const typeLabel = (type) => {
 
             <button
                 @click.stop="$emit('delete', evt.id)"
-                class="absolute right-3 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all opacity-0 group-hover:opacity-100 z-10"
+                class="absolute right-3 top-3 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all opacity-0 group-hover:opacity-100 z-10"
                 title="삭제"
             >
               <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
