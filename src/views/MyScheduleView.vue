@@ -380,7 +380,15 @@ const confirmDelete = () => {
                  class="border-r border-b border-slate-300 p-4 transition-all hover:bg-slate-50/50 relative group cursor-pointer"
                  :class="{'bg-slate-50/20': !cell.isCurrentMonth, 'border-r-0': (index + 1) % 7 === 0}"
                  @click="cell.isCurrentMonth && handleDateClick(cell.date)">
-              <span :class="['text-sm font-bold', !cell.isCurrentMonth && 'opacity-0', cell.dayOfWeek === 0 ? 'text-rose-500' : cell.dayOfWeek === 6 ? 'text-blue-500' : 'text-slate-500']">{{ cell.dayDisplay }}</span>
+              <div class="flex items-center justify-between">
+                 <span :class="[
+                     'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
+                     !cell.isCurrentMonth && 'opacity-0',
+                     cell.date === getToday() ? 'bg-brand-600 text-white shadow-md' : (cell.dayOfWeek === 0 ? 'text-rose-500' : cell.dayOfWeek === 6 ? 'text-blue-500' : 'text-slate-500')
+                 ]">
+                   {{ cell.dayDisplay }}
+                 </span>
+              </div>
               <div v-if="cell.events.length" class="mt-2 space-y-1.5">
                 <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="evt.type === 'INTERVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'">
                   {{ evt.startTime }} {{ evt.title }}
@@ -415,7 +423,14 @@ const confirmDelete = () => {
                      class="py-3 text-center border-r border-slate-300 last:border-0 flex flex-col items-center gap-1 group cursor-pointer hover:bg-slate-100 transition-colors"
                      @click="handleDateClick(day.fullDate)">
                   <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ day.dayName }}</span>
-                  <span class="text-xl font-display font-bold text-slate-700 leading-none group-hover:text-indigo-600" :class="{'text-white bg-indigo-600 px-2 py-0.5 rounded-md shadow-md': day.fullDate === selectedDate}">{{ day.dateNum }}</span>
+                  <span class="text-xl font-display font-bold leading-none w-8 h-8 flex items-center justify-center rounded-lg transition-all"
+                        :class="{
+                          'bg-brand-600 text-white shadow-md': day.fullDate === getToday(),
+                          'ring-1 ring-brand-600 text-brand-600': day.fullDate === selectedDate && day.fullDate !== getToday(),
+                          'text-slate-700 group-hover:text-brand-600': day.fullDate !== getToday() && day.fullDate !== selectedDate
+                        }">
+                    {{ day.dateNum }}
+                  </span>
                 </div>
               </div>
             </div>
