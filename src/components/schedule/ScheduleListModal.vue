@@ -92,7 +92,7 @@ const typeLabel = (type) => {
         <div class="p-4 border-t border-slate-100 bg-slate-50 text-right flex-none">
           <button
               @click="$emit('add')"
-              class="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center w-full sm:w-auto ml-auto"
+              class="text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center w-full sm:w-auto ml-auto"
           >
             + 일정 추가하기
           </button>
