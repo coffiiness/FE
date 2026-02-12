@@ -1,238 +1,320 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 
-const todaySchedule = ref([
+const router = useRouter()
+
+// --- Data: User & Stats ---
+const userName = '김철수'
+const userRole = '관리자'
+const stats = [
+  { label: '오늘의 일정', value: 3, icon: 'calendar', color: 'text-orange-500 bg-orange-50' },
+  { label: '진행 중 공고', value: 5, icon: 'briefcase', color: 'text-brand-600 bg-brand-50' },
+  { label: '신규 지원자', value: 12, icon: 'user-add', color: 'text-emerald-600 bg-emerald-50' },
+]
+
+// --- Data: Schedule ---
+const currentDate = ref(new Date())
+const selectedDate = ref(new Date())
+
+// Dummy Schedule Data
+const schedules = ref([
   {
     id: 1,
     title: '직무 화상 인터뷰',
-    position: '퍼포먼스 마케터 채용 모집',
-    candidate: '최나루 지원자',
+    position: '퍼포먼스 마케터',
+    candidate: '최나루',
     time: '09:00 - 10:00',
-    interviewers: ['박', '이', '김'],
-    remainingMembers: 5,
-    status: 'scheduled',
-    color: 'bg-orange-500' 
+    date: new Date().toISOString().split('T')[0], // Today
+    type: 'interview',
+    status: 'scheduled'
   },
   {
     id: 2,
     title: '컬쳐핏 인터뷰',
-    position: 'FE 주니어 채용 모집',
-    candidate: '김유리 지원자',
+    position: 'FE 주니어',
+    candidate: '김유리',
     time: '13:00 - 14:00',
-    interviewers: ['이', '박', '정'],
-    remainingMembers: 3,
-    status: 'scheduled',
-    color: 'bg-teal-500' 
+    date: new Date().toISOString().split('T')[0],
+    type: 'interview',
+    status: 'scheduled'
   },
   {
     id: 3,
-    title: '컬쳐핏 인터뷰',
-    position: 'FE 주니어 채용 모집',
-    candidate: '박상혁 지원자',
-    time: '15:00 - 16:00',
-    interviewers: ['최', '박', '민'],
-    remainingMembers: 4,
-    status: 'scheduled',
-    color: 'bg-purple-500' 
+    title: '팀 회식',
+    position: '전체',
+    candidate: '-',
+    time: '18:00 - 20:00',
+    date: new Date().toISOString().split('T')[0],
+    type: 'meeting',
+    status: 'scheduled'
   }
 ])
 
+// --- Data: Announcements ---
 const announcements = ref([
-  { id: 1, title: '프로덕트 디자이너 면접 평가표 작성 안내', date: '2025. 11. 15.', isNew: true },
-  { id: 2, title: '프로덕트 디자이너 면접 평가표 작성 기준', date: '2025. 11. 16.', isNew: false },
-  { id: 3, title: '면접 질문 샘플 목록', date: '2025. 11. 18.', isNew: false },
-  { id: 4, title: '면접관 역할 안내', date: '2025. 11. 19.', isNew: false },
-  { id: 5, title: '피드백 제출 방법 안내', date: '2025. 11. 20.', isNew: false },
+  { id: 1, title: '탕비실 비품 도난 사건', tag: '새 공지', date: '2026. 01. 26' },
+  { id: 2, title: '설 연휴 대체 휴무 안내', tag: '필독', date: '2026. 01. 20' },
+  { id: 3, title: '2026년 상반기 채용 계획 취합', tag: '', date: '2026. 01. 15' },
 ])
 
-const notifications = ref([
-  { id: 1, type: 'calendar', title: '인터뷰 일정이 확정되었습니다', desc: '직무 화상 인터뷰 - 최나루 지원자 (09:00~10:00)', time: '3분 전', read: false },
-  { id: 2, type: 'check', title: '평가표가 제출되었습니다', desc: '그래픽 디자이너 컬쳐핏 평가 - 김나인 지원자', time: '15분 전', read: false },
-  { id: 3, type: 'bell', title: '새로운 공지사항이 등록되었습니다', desc: '프로덕트 디자이너 면접 평가표 작성 안내', time: '1시간 전', read: true },
-  { id: 4, type: 'user-add', title: '추천 지원자가 등록되었습니다', desc: 'UX 디자이너 - 이민수 지원자가 추천되었습니다', time: '2시간 전', read: true },
+// --- Data: Meeting Rooms (Replacement for Work Status) ---
+const meetingRooms = ref([
+  { id: 1, name: '1층 미팅룸 A', status: 'available', info: '오후 2시까지 예약 없음' },
+  { id: 2, name: '1층 미팅룸 B', status: 'occupied', info: '주간 회의 진행 중 (~12:00)' },
+  { id: 3, name: '2층 대회의실', status: 'available', info: '종일 예약 가능' },
+  { id: 4, name: '화상 면접실 1', status: 'occupied', info: 'FE 개발자 면접 (~13:30)' },
+  { id: 5, name: '화상 면접실 2', status: 'available', info: '다음 일정: 15:00 임원 면접' },
 ])
 
-const currentMonth = '2025년 11월'
-const calendarDays = [
-  { day: 14, label: '일' }, { day: 15, label: '월' }, { day: 16, label: '화' },
-  { day: 17, label: '수', active: true }, { day: 18, label: '목' }, { day: 19, label: '금' }, { day: 20, label: '토' }
-]
+// --- Calendar Logic ---
+const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토']
+
+const currentYearMonth = computed(() => {
+  const y = currentDate.value.getFullYear()
+  const m = currentDate.value.getMonth() + 1
+  return `${y}년 ${m}월`
+})
+
+const currentWeek = computed(() => {
+  const curr = new Date(currentDate.value)
+  const day = curr.getDay()
+  const diff = curr.getDate() - day
+  const startOfWeek = new Date(curr.setDate(diff))
+
+  const week = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(startOfWeek)
+    d.setDate(startOfWeek.getDate() + i)
+    week.push({
+      dateObj: d,
+      dateNum: d.getDate(),
+      dayName: daysOfWeek[i],
+      fullDate: d.toISOString().split('T')[0],
+      isToday: d.toDateString() === new Date().toDateString(),
+      isSelected: d.toDateString() === selectedDate.value.toDateString()
+    })
+  }
+  return week
+})
+
+const selectedDateDisplay = computed(() => {
+  const d = selectedDate.value
+  const m = d.getMonth() + 1
+  const date = d.getDate()
+  const day = daysOfWeek[d.getDay()]
+  return `${m}월 ${date}일 ${day}요일`
+})
+
+const selectedSchedules = computed(() => {
+  const target = selectedDate.value.toISOString().split('T')[0]
+  return schedules.value.filter(s => s.date === target)
+})
+
+const prevWeek = () => { currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 7)) }
+const nextWeek = () => { currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() + 7)) }
+const goToday = () => {
+  const now = new Date()
+  currentDate.value = now
+  selectedDate.value = now
+}
+const selectDate = (dateObj) => { selectedDate.value = dateObj }
+
+// --- Modal Logic ---
+const isDetailModalOpen = ref(false)
+const modalEvent = ref(null)
+
+const openScheduleDetail = (schedule) => {
+  modalEvent.value = { ...schedule, description: `${schedule.position} / ${schedule.candidate}` }
+  isDetailModalOpen.value = true
+}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="bg-white border border-slate-200 p-8 rounded-2xl flex flex-col xl:flex-row items-center justify-between relative overflow-hidden shadow-sm">
-      
-      <div class="absolute -right-20 -top-20 w-64 h-64 bg-teal-50 rounded-full blur-3xl opacity-60 pointer-events-none"></div>
-      
-      <div class="relative z-10 text-center md:text-left mb-6 xl:mb-0">
-        <h2 class="text-3xl font-display font-bold text-slate-900 flex flex-col md:flex-row items-center justify-center md:justify-start tracking-tight">
-          반갑습니다, 김철수 님
-          <span class="mt-2 md:mt-0 md:ml-4 text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">관리자</span>
-        </h2>
-        <div class="mt-3 flex items-center justify-center md:justify-start space-x-6 text-sm text-slate-500">
-          <span class="flex items-center">
-            <span class="w-2 h-2 rounded-full bg-teal-500 mr-2 animate-pulse"></span>
-            방금 전 업데이트
-          </span>
-        </div>
-      </div>
-      
-      <div class="flex flex-wrap justify-center gap-12 relative z-10 w-full xl:w-auto">
-        <div class="text-center xl:text-right min-w-[100px]">
-          <p class="text-xs text-teal-600 font-bold tracking-widest uppercase mb-1">오늘의 일정</p>
-          <p class="text-4xl font-display font-bold text-slate-900">{{ todaySchedule.length }}<span class="text-lg font-normal text-slate-400 ml-1">개</span></p>
-        </div>
-        <div class="text-center xl:text-right min-w-[100px]">
-          <p class="text-xs text-slate-400 font-bold tracking-widest uppercase mb-1">평가 대기</p>
-          <p class="text-4xl font-display font-bold text-slate-900">12<span class="text-lg font-normal text-slate-400 ml-1">개</span></p>
-        </div>
-        <div class="text-center xl:text-right min-w-[100px]">
-          <p class="text-xs text-slate-400 font-bold tracking-widest uppercase mb-1">자동화 승인</p>
-          <p class="text-4xl font-display font-bold text-slate-900">2<span class="text-lg font-normal text-slate-400 ml-1">개</span></p>
-        </div>
-      </div>
-    </div>
+  <div class="min-h-full space-y-6">
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-1 space-y-6">
-        <div class="bg-white border border-slate-200 rounded-xl p-6 h-full flex flex-col shadow-sm hover:shadow-md transition-shadow">
-          <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-            <h3 class="text-xl font-display font-bold text-slate-900">내 일정</h3>
-            <span class="text-xs text-teal-700 bg-teal-50 px-2 py-1 rounded border border-teal-100 font-medium">Fast View</span>
+    <!-- Header Section -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div>
+        <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          안녕하세요, {{ userName }}님
+          <span class="px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 text-xs font-bold border border-brand-200">{{ userRole }}</span>
+        </h1>
+        <p class="text-slate-400 text-xs mt-1.5 font-medium flex items-center">
+          <svg class="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          방금 전 업데이트
+        </p>
+      </div>
+
+      <div class="flex gap-3 overflow-x-auto pb-1">
+        <div v-for="(stat, idx) in stats" :key="idx" class="flex items-center gap-3 bg-white px-5 py-3 rounded-xl shadow-sm border border-slate-100 min-w-[160px]">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg" :class="stat.color">
+             <svg v-if="stat.icon === 'calendar'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+             <svg v-if="stat.icon === 'briefcase'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+             <svg v-if="stat.icon === 'user-add'" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+          </div>
+          <div>
+            <p class="text-xs text-slate-400 font-bold mb-0.5">{{ stat.label }}</p>
+            <p class="text-xl font-bold text-slate-800">{{ stat.value }}<span class="text-sm font-normal text-slate-400 ml-1">개</span></p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+      <!-- Left Column: My Schedule -->
+      <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col h-[600px]">
+        <!-- Calendar Header -->
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-lg font-bold text-slate-800">내 일정</h2>
+            <p class="text-2xl font-bold text-slate-900 mt-1">{{ currentYearMonth }}</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="goToday" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all">오늘</button>
+            <div class="flex bg-slate-100 rounded-lg p-0.5">
+              <button @click="prevWeek" class="p-1.5 hover:bg-white rounded-md text-slate-500 transition-all shadow-sm hover:shadow">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button @click="nextWeek" class="p-1.5 hover:bg-white rounded-md text-slate-500 transition-all shadow-sm hover:shadow">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weekly Calendar Strip -->
+        <div class="grid grid-cols-7 text-center mb-6 border-b border-slate-100 pb-6">
+          <div v-for="(day, idx) in currentWeek" :key="idx" class="flex flex-col items-center gap-2 cursor-pointer group" @click="selectDate(day.dateObj)">
+            <span class="text-xs font-bold text-slate-400 group-hover:text-slate-600 transition-colors">{{ day.dayName }}</span>
+            <span class="w-9 h-9 flex items-center justify-center rounded-full text-sm font-bold transition-all"
+                  :class="{
+                    'bg-brand-600 text-white shadow-md': day.isSelected,
+                    'bg-slate-50 text-slate-700 group-hover:bg-slate-100': !day.isSelected && !day.isToday,
+                    'ring-1 ring-brand-600 text-brand-600 bg-white': day.isToday && !day.isSelected
+                  }">
+              {{ day.dateNum }}
+            </span>
+            <span v-if="day.isToday && !day.isSelected" class="w-1 h-1 rounded-full bg-brand-500 mt-1"></span>
+          </div>
+        </div>
+
+        <!-- Schedule List for Selected Date -->
+        <div class="flex-1 flex flex-col">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-sm font-bold text-slate-500">{{ selectedDateDisplay }}</span>
+            <span class="text-xs font-medium text-slate-400">{{ selectedSchedules.length }}개의 일정</span>
           </div>
 
-          <div class="mb-8">
-             <div class="flex justify-between items-center mb-4">
-               <span class="font-bold text-slate-800 text-lg tracking-wide">{{ currentMonth }}</span>
-               <div class="flex space-x-1">
-                 <button class="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors">
-                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                 </button>
-                 <button class="px-3 py-1 text-xs font-bold text-white bg-teal-500 rounded hover:bg-teal-600 transition-colors shadow-sm">오늘</button>
-                 <button class="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors">
-                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                 </button>
-               </div>
-             </div>
-             <div class="grid grid-cols-7 gap-2 text-center">
-                <div v-for="day in calendarDays" :key="day.day" 
-                     :class="['py-3 rounded-lg cursor-pointer flex flex-col items-center justify-center transition-all duration-300 border', 
-                              day.active ? 'bg-teal-50 border-teal-200 text-teal-700 shadow-sm' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700']">
-                  <span class="text-[10px] mb-1 opacity-60 uppercase tracking-widest font-semibold">{{ day.label }}</span>
-                  <span class="font-bold font-mono text-lg">{{ day.day }}</span>
+          <div class="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-2">
+            <div v-if="selectedSchedules.length === 0" class="h-full flex flex-col items-center justify-center text-slate-300 min-h-[200px]">
+               <svg class="w-12 h-12 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+               <p class="text-sm font-medium">등록된 일정이 없습니다.</p>
+            </div>
+
+            <div v-for="schedule in selectedSchedules" :key="schedule.id"
+                 @click="openScheduleDetail(schedule)"
+                 class="group bg-white border border-slate-200 rounded-xl p-4 hover:border-brand-300 hover:shadow-md transition-all cursor-pointer flex items-center gap-4">
+              <div class="w-1.5 h-10 rounded-full bg-brand-200 group-hover:bg-brand-500 transition-colors"></div>
+              <div class="flex-1">
+                <div class="flex justify-between items-start">
+                   <h4 class="text-sm font-bold text-slate-800 group-hover:text-brand-700">{{ schedule.title }}</h4>
+                   <span class="text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{{ schedule.time }}</span>
                 </div>
-             </div>
+                <p class="text-xs text-slate-500 mt-1">{{ schedule.position }} <span v-if="schedule.candidate" class="text-slate-300 mx-1">|</span> {{ schedule.candidate }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column -->
+      <div class="space-y-6 flex flex-col h-[600px]">
+
+        <!-- Announcements -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+              사내 공지사항
+              <span class="text-slate-300 font-light text-sm px-2 border-l border-slate-200">&lt; 1 / 1 &gt;</span>
+            </h2>
+            <div class="flex items-center gap-2">
+              <button class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </button>
+              <button class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                공지사항 만들기
+              </button>
+            </div>
           </div>
 
-          <div class="space-y-4 flex-1">
-             <div class="flex justify-between items-end mb-2">
-               <span class="text-sm font-bold text-slate-500">9월 17일 수요일</span>
-               <span class="text-xs font-medium text-teal-600">{{ todaySchedule.length }}개의 일정</span>
-             </div>
-             
-             <div v-for="schedule in todaySchedule" :key="schedule.id" 
-                  class="group relative bg-white border border-slate-200 rounded-xl p-4 transition-all duration-300 hover:border-teal-400 hover:shadow-md">
-                <div class="absolute left-0 top-3 bottom-3 w-1.5 rounded-r-lg" :class="schedule.color"></div>
-                <div class="pl-4">
-                  <p class="text-xs text-teal-600 font-bold mb-1 flex items-center">
-                    <svg class="w-3 h-3 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    {{ schedule.time }}
-                  </p>
-                  <h4 class="text-lg font-bold text-slate-900 group-hover:text-teal-700 transition-colors">{{ schedule.title }}</h4>
-                  <div class="mt-2 flex items-center text-xs text-slate-500">
-                    <span class="truncate bg-slate-100 px-2 py-1 rounded text-slate-600 font-medium">{{ schedule.position }}</span>
+          <div class="flex-1 overflow-y-auto">
+             <ul class="space-y-1">
+               <li v-for="item in announcements" :key="item.id" class="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors">
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm font-bold text-slate-700 group-hover:text-brand-700 transition-colors">{{ item.title }}</span>
+                    <span v-if="item.tag" class="px-2 py-0.5 rounded bg-brand-100 text-brand-600 text-[10px] font-bold">{{ item.tag }}</span>
                   </div>
-                  <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                      <span class="flex items-center text-xs text-slate-600 font-medium">
-                        <span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-2"></span>
-                        {{ schedule.candidate }}
-                      </span>
-                      <div class="flex -space-x-2">
-                         <div v-for="(initial, idx) in schedule.interviewers" :key="idx" 
-                              class="w-7 h-7 rounded-full bg-white border border-slate-300 flex items-center justify-center text-[10px] font-bold text-slate-700 shadow-sm transition-transform group-hover:scale-110 z-10">
-                           {{ initial }}
-                         </div>
-                         <div v-if="schedule.remainingMembers" class="w-7 h-7 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-[10px] text-slate-600 z-20 shadow-sm font-medium">
-                           +{{ schedule.remainingMembers }}
-                         </div>
-                      </div>
-                  </div>
-                </div>
-             </div>
+                  <span class="text-xs text-slate-400 font-mono">{{ item.date }}</span>
+               </li>
+             </ul>
           </div>
         </div>
-      </div>
 
-      <div class="lg:col-span-2 space-y-6">
-        
-        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <div class="flex items-center justify-between mb-6">
-             <h3 class="text-xl font-display font-bold text-slate-900 flex items-center">
-               <span class="w-1.5 h-6 bg-teal-500 mr-3 rounded-full"></span>
-               사내 공지사항
-             </h3>
-             <div class="flex items-center space-x-3">
-               <span class="text-slate-400 text-xs font-mono">&lt; 1 / 10 &gt;</span>
-               <button class="bg-slate-900 text-white text-xs px-4 py-2 rounded-lg hover:bg-slate-800 transition-all flex items-center font-medium shadow-sm">
-                 <svg class="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                 공지사항 만들기
-               </button>
-             </div>
+        <!-- Meeting Room Status (Replacement) -->
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <span class="w-1.5 h-5 bg-orange-500 rounded-full"></span>
+              실시간 회의실 현황
+            </h2>
+            <button @click="router.push('/meeting-rooms')" class="text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors">예약하기</button>
           </div>
-          <ul class="space-y-1">
-            <li v-for="announcement in announcements" :key="announcement.id" class="p-3 flex items-center justify-between hover:bg-slate-50 rounded-lg transition-colors cursor-pointer group border border-transparent hover:border-slate-100">
-               <div class="flex items-center">
-                 <span class="text-sm text-slate-700 font-medium group-hover:text-teal-700 transition-colors">{{ announcement.title }}</span>
-                 <span v-if="announcement.isNew" class="ml-3 text-[10px] font-bold text-white bg-teal-500 px-2 py-0.5 rounded-full shadow-sm">NEW</span>
-               </div>
-               <span class="text-xs text-slate-400 font-mono">{{ announcement.date }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-          <div class="flex items-center justify-between mb-6">
-             <div>
-               <h3 class="text-xl font-display font-bold text-slate-900 flex items-center">
-                 <span class="w-1.5 h-6 bg-purple-500 mr-3 rounded-full"></span>
-                 최근 수신 알림
-               </h3>
-               <div class="flex space-x-6 mt-4 border-b border-slate-100 pl-4">
-                 <button class="text-sm font-bold text-slate-900 border-b-2 border-slate-900 pb-3">전체 알림</button>
-                 <button class="text-sm font-medium text-slate-400 pb-3 hover:text-slate-600 transition-colors">읽지 않은 알림</button>
-               </div>
-             </div>
-             <span class="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">정렬: 발송일자 최신순</span>
-          </div>
-
-          <div class="space-y-4">
-             <div v-for="noti in notifications" :key="noti.id" class="flex items-start group p-3 rounded-xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100">
-                <div class="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center mr-5 transition-all duration-300 shadow-sm border border-slate-200"
-                     :class="{'bg-teal-50 text-teal-600': noti.type === 'calendar', 
-                              'bg-emerald-50 text-emerald-600': noti.type === 'check', 
-                              'bg-orange-50 text-orange-600': noti.type === 'bell', 
-                              'bg-purple-50 text-purple-600': noti.type === 'user-add'}">
-                   
-                   <svg v-if="noti.type === 'calendar'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                   <svg v-else-if="noti.type === 'check'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                   <svg v-else-if="noti.type === 'bell'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                   <svg v-else-if="noti.type === 'user-add'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-                </div>
-                <div class="flex-1 pt-1">
-                   <div class="flex justify-between">
-                     <h4 class="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition-colors">
-                       {{ noti.title }}
-                       <span v-if="!noti.read" class="ml-2 inline-flex w-2 h-2 bg-teal-500 rounded-full align-middle animate-pulse"></span>
-                     </h4>
-                     <span class="text-xs text-slate-400 font-mono">{{ noti.time }}</span>
+          
+          <div class="flex-1 overflow-hidden">
+             <div class="overflow-y-auto h-full custom-scrollbar pr-2 space-y-3">
+                <div v-for="room in meetingRooms" :key="room.id" 
+                     class="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all cursor-pointer">
+                   <div class="flex items-center gap-3">
+                     <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg bg-white border border-slate-100 shadow-sm"
+                          :class="room.status === 'available' ? 'text-emerald-500' : 'text-slate-400'">
+                       <!-- Room Icon -->
+                       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                     </div>
+                     <div>
+                       <p class="text-sm font-bold text-slate-800">{{ room.name }}</p>
+                       <p class="text-xs text-slate-500 truncate max-w-[150px]">{{ room.info }}</p>
+                     </div>
                    </div>
-                   <p class="text-sm text-slate-500 mt-1">{{ noti.desc }}</p>
+                   <span class="px-2.5 py-1 rounded-lg text-xs font-bold border"
+                         :class="room.status === 'available' 
+                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                           : 'bg-rose-50 text-rose-600 border-rose-100'">
+                     {{ room.status === 'available' ? '예약 가능' : '사용 중' }}
+                   </span>
                 </div>
              </div>
           </div>
         </div>
+
       </div>
     </div>
+
+    <ScheduleDetailModal
+      :isOpen="isDetailModalOpen"
+      :event="modalEvent || {}"
+      @close="isDetailModalOpen = false"
+    />
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+</style>
