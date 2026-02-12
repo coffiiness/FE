@@ -31,7 +31,11 @@ const routes = [
     name: 'SignupSuccess',
     component: () => import('@/views/SignupSuccessView.vue')
   },
-
+  {
+    path: '/workspace/create',
+    name: 'WorkspaceCreate',
+    component: () => import('@/views/WorkspaceView.vue')
+  },
   {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
