@@ -1,145 +1,158 @@
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, defineProps, defineEmits, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: Boolean,
   initialDate: String,
-  initialData: Object
+  initialData: { type: Object, default: null }
 })
 
-const emit = defineEmits(['close', 'save', 'delete'])
-
-const isEditMode = computed(() => !!props.initialData)
+const emit = defineEmits(['close', 'save'])
 
 const form = ref({
-  id: null,
   title: '',
   date: '',
-  type: 'MEETING',
-  startTime: '09:00',
-  endTime: '10:00',
-  description: ''
+  startTime: '13:00',
+  endTime: '14:00',
+  type: 'INTERVIEW',
+  description: '',
+  attendees: []
 })
 
-const typeOptions = [
-  { label: '일반 회의', value: 'MEETING', class: 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100' },
-  { label: '집중 근무', value: 'FOCUS', class: 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100' },
-  { label: '외근/출장', value: 'EXTERNAL', class: 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100' },
-  { label: '휴가/부재', value: 'OFF', class: 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100' }
+const attendeeInput = ref('')
+
+const scheduleTypes = [
+  { value: 'INTERVIEW', label: '면접', activeClass: 'bg-brand-50 border-brand-200 text-brand-600' }, // [수정]
+  { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
+  { value: 'BUSINESS_TRIP', label: '외근/출장', activeClass: 'bg-emerald-50 border-emerald-200 text-emerald-600' },
+  { value: 'OTHERS', label: '기타', activeClass: 'bg-slate-100 border-slate-300 text-slate-700' }
 ]
 
-watch(() => props.isOpen, (isOpen) => {
-  if (isOpen) {
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
     if (props.initialData) {
-      form.value = { ...props.initialData }
+      form.value = { ...props.initialData, attendees: props.initialData.attendees || [] }
     } else {
-      resetForm()
-      form.value.date = props.initialDate
+      form.value = {
+        title: '',
+        date: props.initialDate || new Date().toISOString().split('T')[0],
+        startTime: '13:00',
+        endTime: '14:00',
+        type: 'INTERVIEW',
+        description: '',
+        attendees: []
+      }
     }
+    attendeeInput.value = ''
   }
 })
 
+const addAttendee = () => {
+  const name = attendeeInput.value.trim()
+  if (name && !form.value.attendees.includes(name)) { form.value.attendees.push(name) }
+  attendeeInput.value = ''
+}
+
+const removeAttendee = (index) => { form.value.attendees.splice(index, 1) }
+
 const save = () => {
+  if (!form.value.title) return alert('일정 제목을 입력해주세요.')
   emit('save', { ...form.value })
 }
 
-const remove = () => {
-  if (confirm('정말 이 일정을 삭제하시겠습니까? 복구할 수 없습니다.')) {
-    emit('delete', form.value.id)
-  }
-}
-
-const close = () => {
-  emit('close')
-}
-
-const resetForm = () => {
-  form.value = { id: null, title: '', date: '', type: 'MEETING', startTime: '09:00', endTime: '10:00', description: '' }
-}
+const handleKeydown = (e) => { if (e.key === 'Escape' && props.isOpen) emit('close') }
+onMounted(() => window.addEventListener('keydown', handleKeydown))
+onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
-  <Transition name="modal">
-    <div v-if="isOpen" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+  <Transition name="fade">
+    <div v-if="isOpen" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="$emit('close')"></div>
 
-      <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" @click="close"></div>
+      <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
-
-        <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 class="text-lg font-bold text-slate-800">
-            {{ isEditMode ? '일정 수정' : '새 일정 만들기' }}
+            {{ initialData ? '일정 수정' : '새 일정 생성' }}
           </h3>
-          <button @click="close" class="text-slate-400 hover:text-slate-600">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button @click="$emit('close')" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
-        <div class="p-6 space-y-5">
+        <div class="p-6 space-y-6">
+
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-2">일정 유형</label>
-            <div class="grid grid-cols-2 gap-2">
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">제목</label>
+            <input v-model="form.title" type="text" placeholder="예: 2차 기술 면접"
+                   class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-slate-700 font-bold placeholder-slate-400 transition-all text-base" autofocus> </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">일정 타입</label>
+            <div class="grid grid-cols-4 gap-2">
               <button
-                  v-for="opt in typeOptions"
-                  :key="opt.value"
-                  @click="form.type = opt.value"
-                  class="px-3 py-2 rounded-lg text-sm font-medium border transition-all text-center"
-                  :class="form.type === opt.value ? 'ring-2 ring-indigo-500 ' + opt.class : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'"
+                  v-for="item in scheduleTypes"
+                  :key="item.value"
+                  @click="form.type = item.value"
+                  class="py-2.5 rounded-lg text-xs font-bold border transition-all shadow-sm hover:shadow-md"
+                  :class="form.type === item.value
+                  ? item.activeClass
+                  : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50'"
               >
-                {{ opt.label }}
+                {{ item.label }}
               </button>
             </div>
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">제목</label>
-            <input v-model="form.title" type="text" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">날짜</label>
-            <input v-model="form.date" type="date" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">시작</label>
-              <input v-model="form.startTime" type="time" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:outline-none">
+              <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">날짜</label>
+              <div class="relative">
+                <input v-model="form.date" type="date" class="w-full pl-4 pr-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none font-medium text-sm shadow-sm"> </div>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-1">종료</label>
-              <input v-model="form.endTime" type="time" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:outline-none">
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">시작 시간</label>
+                <input v-model="form.startTime" type="time" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium text-center shadow-sm"> </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">종료 시간</label>
+                <input v-model="form.endTime" type="time" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium text-center shadow-sm"> </div>
             </div>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">메모</label>
-            <textarea v-model="form.description" rows="2" class="w-full px-4 py-2 rounded-xl border border-slate-200 focus:border-indigo-500 focus:outline-none resize-none"></textarea>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">참석자 (Enter로 추가)</label>
+            <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm"> <span v-for="(person, index) in form.attendees" :key="index"
+                                                                                                                                                                                                                                                   class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up"> {{ person }}
+                <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
+                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </span>
+
+              <input
+                  v-model="attendeeInput"
+                  @keydown.enter.prevent="addAttendee"
+                  @keydown.backspace="attendeeInput === '' && form.attendees.pop()"
+                  type="text"
+                  placeholder="이름 입력"
+                  class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
+              >
+            </div>
           </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">메모 / 장소</label>
+            <textarea v-model="form.description" rows="3" placeholder="장소나 상세 내용을 입력하세요."
+                      class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-slate-700 resize-none shadow-inner"></textarea> </div>
+
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 flex justify-between items-center">
-          <div>
-            <button
-                v-if="isEditMode"
-                @click="remove"
-                class="flex items-center text-rose-500 text-sm font-bold hover:text-rose-700 px-2 py-1 transition-colors"
-            >
-              <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-              삭제하기
-            </button>
-          </div>
-
-          <div class="flex gap-3">
-            <button @click="close" class="px-5 py-2.5 rounded-xl text-slate-600 font-medium hover:bg-slate-200 transition-colors">취소</button>
-            <button @click="save" class="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-md transition-colors">
-              {{ isEditMode ? '수정완료' : '일정생성' }}
-            </button>
-          </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+          <button @click="$emit('close')" class="px-5 py-2.5 text-sm font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700 rounded-lg transition-all">취소</button>
+          <button @click="save" class="px-6 py-2.5 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all transform active:scale-95"> {{ initialData ? '수정 완료' : '일정 생성' }}
+          </button>
         </div>
 
       </div>
@@ -148,6 +161,8 @@ const resetForm = () => {
 </template>
 
 <style scoped>
-.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
-.modal-enter-from, .modal-leave-to { opacity: 0; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
 </style>

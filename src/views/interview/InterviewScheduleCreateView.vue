@@ -79,7 +79,7 @@
 
     <div class="actions">
       <button
-          class="btn"
+          class="px-6 py-3 bg-brand-600 text-white font-medium rounded-lg hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="selectedCount === 0"
           @click="openModal"
       >
