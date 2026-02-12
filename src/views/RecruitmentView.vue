@@ -126,20 +126,16 @@ const confirmDelete = () => {
 
 <template>
   <div class="space-y-8 animate-fade-in-up p-2 relative">
-    
-    <div v-if="activeMenuId !== null" 
-         @click="activeMenuId = null" 
+
+    <div v-if="activeMenuId !== null"
+         @click="activeMenuId = null"
          class="fixed inset-0 z-10 cursor-default">
     </div>
 
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-0">
-      <div>
-        <h2 class="text-3xl font-display font-bold text-slate-900 tracking-tight">채용 공고 관리</h2>
-        <p class="text-slate-500 mt-1">현재 진행 중인 채용 프로세스를 한눈에 파악하고 병목 현상을 해결하세요.</p>
-      </div>
-      <button 
-        @click="router.push('/recruitment/create')"
-        class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
+    <div class="flex flex-col md:flex-row md:items-center justify-end gap-4 relative z-0">
+      <button
+          @click="router.push('/recruitment/create')"
+          class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
       >
         <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -149,7 +145,7 @@ const confirmDelete = () => {
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-0">
-      <div v-for="(stat, idx) in stats" :key="idx" 
+      <div v-for="(stat, idx) in stats" :key="idx"
            :class="['relative overflow-hidden border rounded-2xl p-6 transition-all hover:shadow-md', stat.bg, 'border-slate-200 shadow-sm']">
         <div v-if="stat.glow" class="absolute -right-4 -top-4 w-24 h-24 bg-rose-100 rounded-full blur-2xl pointer-events-none"></div>
         <p class="text-sm text-slate-500 font-medium mb-1">{{ stat.label }}</p>
@@ -167,10 +163,10 @@ const confirmDelete = () => {
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <input 
-          type="text" 
-          placeholder="공고명, 부서명 또는 담당자 검색..." 
-          class="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm"
+        <input
+            type="text"
+            placeholder="공고명, 부서명 또는 담당자 검색..."
+            class="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm"
         >
       </div>
       <div class="flex gap-2">
@@ -189,10 +185,10 @@ const confirmDelete = () => {
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      <div v-for="job in jobs" :key="job.id" 
+      <div v-for="job in jobs" :key="job.id"
            class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm"
            :class="{'relative z-20 border-brand-300 ring-2 ring-brand-100': activeMenuId === job.id}">
-        
+
         <div class="flex justify-between items-start mb-4 relative">
           <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
             <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.status)]">
@@ -206,39 +202,39 @@ const confirmDelete = () => {
           </div>
 
           <div class="relative">
-            <button @click.stop="toggleMenu(job.id)" 
+            <button @click.stop="toggleMenu(job.id)"
                     class="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
               </svg>
             </button>
 
-            <div v-if="activeMenuId === job.id" 
+            <div v-if="activeMenuId === job.id"
                  class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
-              
-              <button 
-                @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
-                class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
+
+              <button
+                  @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
+                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
               >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                 공고 수정
               </button>
-              
+
               <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                 링크 복사
               </button>
-              
+
               <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
-                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 면접관 설정
               </button>
 
               <div class="border-t border-slate-100 my-1"></div>
 
-              <button 
-                @click.stop="openDeleteModal(job.id)"
-                class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium"
+              <button
+                  @click.stop="openDeleteModal(job.id)"
+                  class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium"
               >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 공고 삭제
@@ -250,8 +246,8 @@ const confirmDelete = () => {
         <div class="mb-6 bg-slate-50 rounded-xl px-4 py-5 border border-slate-100" @click="goToDetail(job.id)">
           <div class="flex items-end space-x-2 h-14">
             <div v-for="(step, sIdx) in job.funnel" :key="sIdx" class="flex-1 flex flex-col items-center group/step relative">
-              <div v-if="step.count > 0" 
-                   :class="['mb-2 px-2 py-0.5 rounded text-xs font-bold shadow-sm transition-all duration-300', 
+              <div v-if="step.count > 0"
+                   :class="['mb-2 px-2 py-0.5 rounded text-xs font-bold shadow-sm transition-all duration-300',
                             step.active ? 'bg-brand-500 text-white translate-y-0 opacity-100' : 'bg-white border border-slate-200 text-slate-600 -translate-y-1 opacity-0 group-hover/step:opacity-100 group-hover/step:translate-y-0']">
                 {{ step.count }}
               </div>
@@ -268,12 +264,12 @@ const confirmDelete = () => {
 
         <div class="flex justify-between items-center border-t border-slate-100 pt-4">
           <div class="flex -space-x-2">
-            <div v-for="(intr, iIdx) in job.interviewers" :key="iIdx" 
+            <div v-for="(intr, iIdx) in job.interviewers" :key="iIdx"
                  class="w-8 h-8 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold text-slate-600 ring-2 ring-white shadow-sm">
               {{ intr }}
             </div>
           </div>
-          <button @click="goToDetail(job.id)" 
+          <button @click="goToDetail(job.id)"
                   class="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center transition-colors group/btn">
             관리하기
             <svg class="w-3 h-3 ml-1 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -282,27 +278,16 @@ const confirmDelete = () => {
           </button>
         </div>
       </div>
-      
-      <div 
-        @click="router.push('/recruitment/create')"
-        class="border-2 border-dashed border-slate-300 hover:border-brand-400 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 transition-all cursor-pointer group min-h-[250px]"
-      >
-        <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3 group-hover:bg-brand-100 group-hover:scale-110 transition-all">
-          <svg class="w-6 h-6 text-slate-500 group-hover:text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-        </div>
-        <span class="font-bold">새 공고 추가하기</span>
-      </div>
+
     </div>
   </div>
 
   <Transition name="fade">
     <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeDeleteModal"></div>
-      
+
       <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
-        
+
         <div class="flex flex-col items-center text-center">
           <div class="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mb-4">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -317,15 +302,15 @@ const confirmDelete = () => {
           </p>
 
           <div class="flex gap-3 w-full">
-            <button 
-              @click="closeDeleteModal"
-              class="flex-1 py-2.5 px-4 bg-white border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+            <button
+                @click="closeDeleteModal"
+                class="flex-1 py-2.5 px-4 bg-white border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors"
             >
               취소
             </button>
-            <button 
-              @click="confirmDelete"
-              class="flex-1 py-2.5 px-4 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md hover:shadow-lg transition-all"
+            <button
+                @click="confirmDelete"
+                class="flex-1 py-2.5 px-4 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md hover:shadow-lg transition-all"
             >
               삭제하기
             </button>
