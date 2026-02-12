@@ -174,6 +174,47 @@ const routes = [
       }
 
     ]
+  },
+
+  // ── Admin Console ──
+  {
+    path: '/admin',
+    component: () => import('@/layouts/AdminLayout.vue'),
+    meta: { requiresAuth: true },
+    redirect: '/admin/dashboard',
+
+    children: [
+      {
+        path: 'dashboard',
+        name: 'AdminDashboard',
+        component: () => import('@/views/admin/AdminDashboardView.vue'),
+        meta: { title: '대시보드' }
+      },
+      {
+        path: 'subscriptions',
+        name: 'AdminSubscriptions',
+        component: () => import('@/views/admin/AdminSubscriptionView.vue'),
+        meta: { title: '구독 관리' }
+      },
+      {
+        path: 'invoices',
+        name: 'AdminInvoices',
+        component: () => import('@/views/admin/AdminInvoiceView.vue'),
+        meta: { title: '매출 / 인보이스' }
+      },
+      {
+        path: 'costs',
+        name: 'AdminCosts',
+        component: () => import('@/views/admin/AdminCostView.vue'),
+        meta: { title: '비용 관리' }
+      },
+      {
+        path: 'pnl',
+        name: 'AdminPnl',
+        component: () => import('@/views/admin/AdminPnlView.vue'),
+        meta: { title: '손익 리포트' }
+      }
+    ]
   }
 ]
 

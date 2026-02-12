@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { authApi } from '@/api'
+import { authApi } from '@/api/auth'
 import router from '@/router'
 
 const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
