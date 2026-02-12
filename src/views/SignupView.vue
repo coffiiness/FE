@@ -26,18 +26,14 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    // 2. 서버에 회원가입 요청 (useAuth 활용)
-    // 만약 아직 백엔드 연결 전이라면 이 줄을 주석 처리하고 테스트하세요.
-    await signup(email.value, password.value, nickname.value)
+    // await signup(email.value, password.value, nickname.value)
 
     // 3.  가입 성공 시 축하 화면으로 이동
-    // router/index.js에 설정한 name: 'SignupSuccess'와 일치해야 합니다.
     router.push({
       name: 'SignupSuccess',
-      query: { name: nickname.value } // 축하 페이지에 이름 전달
+      query: { name: nickname.value }
     })
   } catch (e) {
-    // 에러 발생 시 메시지 표시
     error.value = e.response?.data?.message || '회원가입에 실패했습니다. 다시 시도해주세요.'
   } finally {
     loading.value = false
