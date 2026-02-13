@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, onMounted } from 'vue'
+
 import { useRouter } from 'vue-router'
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'update:count'])
 const router = useRouter()
 
 const isModalOpen = ref(false)
@@ -33,6 +34,17 @@ const notificationRequests = ref([
   }
 ])
 
+watch(
+    () => notificationRequests.value.length,
+    (newCount) => {
+      emit('update:count', newCount)
+    }
+)
+
+onMounted(() => {
+  emit('update:count', notificationRequests.value.length)
+})
+
 const openNotificationModal = (notificationData) => {
   selectedNotification.value = notificationData
   isModalOpen.value = true
@@ -47,6 +59,16 @@ const goToAllNotifications = () => {
   router.push('/notifications')
   emit('close')
 }
+
+const handleDecision = (type) => {
+  if (!selectedNotification.value) return
+
+  notificationRequests.value = notificationRequests.value.filter(
+      (item) => item.id !== selectedNotification.value.id
+  )
+
+  closeModal()
+}
 </script>
 
 <template>
@@ -57,7 +79,7 @@ const goToAllNotifications = () => {
     <div class="px-6 py-5 flex justify-between items-center border-b border-slate-100 bg-white flex-shrink-0">
       <div class="flex items-center gap-3">
         <h2 class="font-bold text-xl text-slate-800 font-display">일정 요청</h2>
-        <span class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">
+        <span v-if="notificationRequests.length > 0" class="px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100">
           {{ notificationRequests.length }}
         </span>
       </div>
@@ -69,6 +91,10 @@ const goToAllNotifications = () => {
     </div>
 
     <div class="overflow-y-auto flex-1 p-4 bg-slate-50/50 custom-scrollbar space-y-3">
+      <div v-if="notificationRequests.length === 0" class="text-center py-10 text-slate-400 text-sm">
+        새로운 알림이 없습니다.
+      </div>
+
       <div
           v-for="item in notificationRequests"
           :key="item.id"
@@ -86,9 +112,7 @@ const goToAllNotifications = () => {
             <p class="text-[13px] text-slate-600 mb-1 leading-relaxed">
               <span class="text-slate-900 font-bold">{{ item.date }}</span> {{ item.type }} 참여 요청
             </p>
-
             <p class="text-xs text-slate-500 mb-3">장소: {{ item.location }}</p>
-
             <div class="flex justify-between items-center text-[11px]">
               <span class="text-slate-400">요청자: {{ item.requester }}</span>
               <span class="text-slate-400">{{ item.time }}</span>
@@ -147,10 +171,10 @@ const goToAllNotifications = () => {
         </div>
 
         <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-          <button @click="closeModal" class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all">
+          <button @click="handleDecision('reject')" class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all">
             거절하기
           </button>
-          <button @click="closeModal" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all">
+          <button @click="handleDecision('accept')" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all">
             수락하기
           </button>
         </div>
