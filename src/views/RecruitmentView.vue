@@ -31,7 +31,7 @@ const jobs = ref([
       { step: '면접', count: 4, active: true },
       { step: '처우', count: 1, active: false },
     ],
-    interviewers: ['김', '이', 'Park']
+    interviewers: ['김기술', '이디자인', 'Park']
   },
   {
     id: 2,
@@ -47,7 +47,7 @@ const jobs = ref([
       { step: '면접', count: 0, active: false },
       { step: '처우', count: 0, active: false },
     ],
-    interviewers: ['Choi', 'Jung']
+    interviewers: ['최프론트', '박팀장']
   },
   {
     id: 3,
@@ -62,7 +62,7 @@ const jobs = ref([
       { step: '면접', count: 2, active: true },
       { step: '최종', count: 0, active: false },
     ],
-    interviewers: ['Lee', 'Kim', 'Ho']
+    interviewers: ['Lee', '김기술', 'Park']
   },
   {
     id: 4,
@@ -121,6 +121,57 @@ const confirmDelete = () => {
     jobs.value = jobs.value.filter(job => job.id !== deleteTargetId.value)
   }
   closeDeleteModal()
+}
+
+// --- 링크 복사 및 면접관 설정 기능 ---
+const allInterviewers = [
+  { id: 1, name: '김기술', position: '백엔드 리드' },
+  { id: 2, name: '박팀장', position: '인사 팀장' },
+  { id: 105, name: '이디자인', position: '프로덕트 디자이너' },
+  { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
+  { id: 107, name: 'Park', position: 'CTO' },
+  { id: 108, name: 'Lee', position: 'HR Manager' },
+]
+
+const isInterviewerModalOpen = ref(false)
+const editingJob = ref(null)
+
+const copyLink = (id) => {
+  const link = `${window.location.origin}/careers/${id}`
+  navigator.clipboard.writeText(link).then(() => {
+    alert('채용 공고 링크가 복사되었습니다.')
+  }).catch(err => {
+    console.error('링크 복사 실패:', err)
+  })
+}
+
+const openInterviewerModal = (job) => {
+  editingJob.value = JSON.parse(JSON.stringify(job))
+  isInterviewerModalOpen.value = true
+  activeMenuId.value = null
+}
+
+const closeInterviewerModal = () => {
+  isInterviewerModalOpen.value = false
+  editingJob.value = null
+}
+
+const toggleInterviewerAssignment = (name) => {
+  if (!editingJob.value) return
+  const index = editingJob.value.interviewers.indexOf(name)
+  if (index === -1) {
+    editingJob.value.interviewers.push(name)
+  } else {
+    editingJob.value.interviewers.splice(index, 1)
+  }
+}
+
+const saveInterviewers = () => {
+  const index = jobs.value.findIndex(j => j.id === editingJob.value.id)
+  if (index !== -1) {
+    jobs.value[index].interviewers = editingJob.value.interviewers
+  }
+  closeInterviewerModal()
 }
 </script>
 
@@ -220,12 +271,18 @@ const confirmDelete = () => {
                 공고 수정
               </button>
 
-              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+              <button
+                  @click.stop="copyLink(job.id)"
+                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
+              >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
                 링크 복사
               </button>
 
-              <button class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors">
+              <button
+                  @click.stop="openInterviewerModal(job)"
+                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
+              >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 면접관 설정
               </button>
@@ -266,7 +323,7 @@ const confirmDelete = () => {
           <div class="flex -space-x-2">
             <div v-for="(intr, iIdx) in job.interviewers" :key="iIdx"
                  class="w-8 h-8 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold text-slate-600 ring-2 ring-white shadow-sm">
-              {{ intr }}
+              {{ intr[0] }}
             </div>
           </div>
           <button @click="goToDetail(job.id)"
@@ -319,6 +376,52 @@ const confirmDelete = () => {
       </div>
     </div>
   </Transition>
+
+  <!-- 모달: 면접관 수정 -->
+  <Transition name="fade">
+    <div v-if="isInterviewerModalOpen" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
+      <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeInterviewerModal"></div>
+
+      <div class="relative bg-white rounded-2xl shadow-2xl w-[450px] max-w-[95%] overflow-hidden flex flex-col max-h-[80vh] animate-fade-in-up border border-slate-100">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
+            <p class="text-xs text-slate-500 mt-1">{{ editingJob?.title }} 공고의 면접관을 배정합니다.</p>
+          </div>
+          <button @click="closeInterviewerModal" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          <div v-for="intr in allInterviewers" :key="intr.id"
+               @click="toggleInterviewerAssignment(intr.name)"
+               class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
+               :class="editingJob?.interviewers.includes(intr.name) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
+              {{ intr.name[0] }}
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-bold text-slate-800">{{ intr.name }}</p>
+              <p class="text-xs text-slate-400">{{ intr.position }}</p>
+            </div>
+            <div v-if="editingJob?.interviewers.includes(intr.name)" class="text-brand-500">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-6 border-t border-slate-100 flex gap-3">
+          <button @click="closeInterviewerModal" class="flex-1 py-2.5 px-4 bg-white border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors">
+            취소
+          </button>
+          <button @click="saveInterviewers" class="flex-1 bg-brand-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-brand-700 shadow-md transition-all">
+            저장하기
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
@@ -350,4 +453,9 @@ const confirmDelete = () => {
 .fade-leave-to {
   opacity: 0;
 }
+
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
 </style>
