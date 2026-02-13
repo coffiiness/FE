@@ -10,31 +10,51 @@ const activeTab = ref('CALENDAR') // 'CALENDAR' | 'APPLICANTS'
 const calendarView = ref('MONTH') // 'MONTH' | 'WEEK' | 'DAY'
 const currentDate = ref(new Date(2024, 1, 14)) // 기준일: 2024년 2월 14일
 
+// 검색어 상태
+const applicantSearchQuery = ref('')
+
 // 모달 관련 상태
 const isDayModalOpen = ref(false)
+const isInterviewerEditModalOpen = ref(false) // 면접관 수정 모달
 const selectedDateTitle = ref('')
 const selectedDateEvents = ref([])
 
 const draggingCardId = ref(null)
 const draggingOverColumnId = ref(null)
 
-// --- Mock Data: 채용 공고 & 통계 ---
-const recruitment = ref({
-  id: 1,
-  title: '2024 상반기 백엔드 개발자 공개채용',
-  period: '2024.02.01 ~ 2024.02.28',
-  status: 'ACTIVE',
-  dday: 'D-15',
-  totalApplicants: 42,
-  ongoingInterviews: 5,
-  completionRate: 1.71,
+// --- 링크 복사 기능 ---
+const copyRecruitmentLink = () => {
+  const dummyLink = `https://careers.nexus.ai/jobs/${recruitment.value.id}`
+  navigator.clipboard.writeText(dummyLink).then(() => {
+    alert('공고 링크가 클립보드에 복사되었습니다.')
+  })
+}
+
+// --- 지원자 검색 필터링 ---
+const filteredApplicants = computed(() => {
+  const query = applicantSearchQuery.value.trim().toLowerCase()
+  if (!query) return applicants.value
+  return applicants.value.filter(a => 
+    a.name.toLowerCase().includes(query) || a.email.toLowerCase().includes(query)
+  )
 })
 
-// --- Mock Data: 면접관 (스타일 클래스 포함) ---
+const getApplicantsByProcess = (pid) => filteredApplicants.value.filter(a => a.processId === pid)
+
+// --- 면접관 관리 ---
+// 전체 면접관 목록 (수정 모달용)
+const allInterviewers = ref([
+  { id: 1, name: '김기술', position: '백엔드 리드' },
+  { id: 2, name: '박팀장', position: '인사 팀장' },
+  { id: 105, name: '이디자인', position: '프로덕트 디자이너' },
+  { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
+])
+
 const interviewers = ref([
   { 
     id: 1, 
     name: '김기술', 
+    position: '백엔드 리드',
     // 달력 바 색상
     bgClass: 'bg-blue-600', 
     // 달력 바 테두리 (hover용)
@@ -49,6 +69,7 @@ const interviewers = ref([
   { 
     id: 2, 
     name: '박팀장', 
+    position: '인사 팀장',
     bgClass: 'bg-emerald-500', 
     borderClass: 'border-emerald-600',
     badgeTextClass: 'text-emerald-700',
@@ -57,6 +78,38 @@ const interviewers = ref([
     checked: true 
   },
 ])
+
+// 면접관 추가/삭제 토글
+const toggleInterviewerAssignment = (intr) => {
+  const index = interviewers.value.findIndex(i => i.id === intr.id)
+  if (index === -1) {
+    // 추가 (기본 스타일 할당)
+    interviewers.value.push({
+      ...intr,
+      bgClass: 'bg-slate-600',
+      borderClass: 'border-slate-700',
+      badgeTextClass: 'text-slate-700',
+      lightBgClass: 'bg-slate-50',
+      lightBorderClass: 'border-slate-100',
+      checked: true
+    })
+  } else {
+    // 삭제
+    interviewers.value.splice(index, 1)
+  }
+}
+
+// --- Mock Data: 채용 공고 & 통계 ---
+const recruitment = ref({
+  id: 1,
+  title: '2024 상반기 백엔드 개발자 공개채용',
+  period: '2024.02.01 ~ 2024.02.28',
+  status: 'ACTIVE',
+  dday: 'D-15',
+  totalApplicants: 42,
+  ongoingInterviews: 5,
+  completionRate: 1.71,
+})
 
 // --- Mock Data: 일정 (시간 포함) ---
 const schedules = ref([
@@ -185,7 +238,6 @@ const closeDayModal = () => {
 }
 
 // --- Drag & Drop ---
-const getApplicantsByProcess = (pid) => applicants.value.filter(a => a.processId === pid)
 const onDragStart = (evt, aid) => { draggingCardId.value = aid; evt.dataTransfer.effectAllowed = 'move' }
 const onDrop = (evt, pid) => {
   const app = applicants.value.find(a => a.id === draggingCardId.value)
@@ -208,7 +260,12 @@ const onDrop = (evt, pid) => {
         <div>
           <h5 class="text-xs font-bold text-slate-500 mb-2">공고 상세 정보</h5>
           <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-2">{{ recruitment.title }}</h1>
-          <p class="text-xs text-slate-500 font-medium">기간: {{ recruitment.period }}</p>
+          <p class="text-xs text-slate-500 font-medium mb-4">기간: {{ recruitment.period }}</p>
+          
+          <button @click="copyRecruitmentLink" class="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-50 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold hover:bg-brand-100 transition-colors">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            공고 링크 복사
+          </button>
         </div>
 
         <div>
@@ -230,6 +287,7 @@ const onDrop = (evt, pid) => {
         <div>
           <div class="flex justify-between items-center mb-4">
             <h5 class="text-xs font-bold text-slate-500">담당 면접관</h5>
+            <button @click="isInterviewerEditModalOpen = true" class="text-[10px] font-bold text-brand-600 hover:underline">편집</button>
           </div>
           <div class="space-y-3">
             <div v-for="member in interviewers" :key="member.id" class="flex items-center">
@@ -266,6 +324,16 @@ const onDrop = (evt, pid) => {
           <div class="relative inline-block w-10 mr-2 align-middle select-none">
             <input type="checkbox" checked class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
             <div class="toggle-label block overflow-hidden h-5 rounded-full bg-brand-500 cursor-pointer"></div>
+          </div>
+        </div>
+
+        <div v-if="activeTab === 'APPLICANTS'" class="flex items-center gap-3">
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </span>
+            <input v-model="applicantSearchQuery" type="text" placeholder="지원자 이름 또는 이메일 검색..." 
+                   class="bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:border-brand-500 w-64 transition-all">
           </div>
         </div>
       </header>
@@ -386,7 +454,7 @@ const onDrop = (evt, pid) => {
                    :class="{'opacity-50 border-dashed': draggingCardId === app.id}">
                 <div class="flex justify-between items-start mb-2">
                   <span class="font-bold text-slate-900">{{ app.name }}</span>
-                  <div v-if="app.hasInterview" class="text-brand-600 bg-brand-50 p-1 rounded-full"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
+                  <div v-if="app.hasInterview" class="text-brand-600 bg-brand-50 p-1 rounded-full"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg></div>
                 </div>
                 <p class="text-xs text-slate-500 mb-2">{{ app.email }}</p>
                 <div class="flex gap-1">
@@ -400,9 +468,9 @@ const onDrop = (evt, pid) => {
 
     </main>
 
+    <!-- 모달: 일일 일정 -->
     <div v-if="isDayModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="closeDayModal">
       <div class="bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] overflow-hidden flex flex-col max-h-[600px] animate-fade-in-up border border-slate-200">
-        
         <div class="bg-slate-50 p-5 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 class="text-xl font-bold text-slate-900 tracking-tight">{{ selectedDateTitle }}</h3>
@@ -412,21 +480,16 @@ const onDrop = (evt, pid) => {
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
-
         <div class="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
           <div v-if="selectedDateEvents.length === 0" class="flex flex-col items-center justify-center h-40 text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
             <p class="font-medium">등록된 일정이 없습니다.</p>
           </div>
-          
           <div v-for="evt in selectedDateEvents" :key="evt.id" 
                class="p-4 rounded-xl border flex items-center space-x-4 hover:shadow-md hover:translate-x-1 transition-all bg-white group cursor-default"
                :class="[getInterviewerStyle(evt.interviewerId).lightBorderClass, getInterviewerStyle(evt.interviewerId).lightBgClass]">
-            
-            <div class="flex-none flex items-center justify-center w-16 h-12 rounded-lg bg-white border shadow-sm text-slate-800"
-                 :class="getInterviewerStyle(evt.interviewerId).lightBorderClass">
+            <div class="flex-none flex items-center justify-center w-16 h-12 rounded-lg bg-white border shadow-sm text-slate-800" :class="getInterviewerStyle(evt.interviewerId).lightBorderClass">
               <span class="text-base font-black tracking-tight">{{ evt.time }}</span>
             </div>
-
             <div class="flex-1 min-w-0">
               <h4 class="text-base font-bold text-slate-900 truncate group-hover:text-brand-700 transition-colors">{{ evt.title }}</h4>
               <div class="flex items-center mt-1">
@@ -436,16 +499,50 @@ const onDrop = (evt, pid) => {
             </div>
           </div>
         </div>
-
         <div class="p-4 border-t border-slate-100 bg-slate-50 text-right">
           <button class="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-lg transition-colors shadow-sm">
             + 일정 추가하기
           </button>
         </div>
-
       </div>
     </div>
 
+    <!-- 모달: 면접관 수정 -->
+    <div v-if="isInterviewerEditModalOpen" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="isInterviewerEditModalOpen = false">
+      <div class="bg-white rounded-2xl shadow-2xl w-[450px] max-w-[95%] overflow-hidden flex flex-col max-h-[80vh] animate-fade-in-up">
+        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div>
+            <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
+            <p class="text-xs text-slate-500 mt-1">이 공고의 면접을 담당할 면접관을 배정합니다.</p>
+          </div>
+          <button @click="isInterviewerEditModalOpen = false" class="text-slate-400 hover:text-slate-600">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          <div v-for="intr in allInterviewers" :key="intr.id" 
+               @click="toggleInterviewerAssignment(intr)"
+               class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
+               :class="interviewers.some(i => i.id === intr.id) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
+              {{ intr.name[0] }}
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-bold text-slate-800">{{ intr.name }}</p>
+              <p class="text-xs text-slate-400">{{ intr.position }}</p>
+            </div>
+            <div v-if="interviewers.some(i => i.id === intr.id)" class="text-brand-500">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+            </div>
+          </div>
+        </div>
+        <div class="p-6 border-t border-slate-100 flex justify-end">
+          <button @click="isInterviewerEditModalOpen = false" class="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors">
+            저장 후 닫기
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
