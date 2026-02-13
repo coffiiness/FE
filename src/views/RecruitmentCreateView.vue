@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -12,7 +12,9 @@ const form = ref({
   startDate: '',
   endDate: '',
   applicationTemplateId: '',
-  contents: ''
+  contents: '',
+  teamId: [],
+  interviewerIds: []
 })
 
 // --- 2. 채용 프로세스 데이터 ---
@@ -35,7 +37,54 @@ const templates = ref([
   { id: 3, name: '경력직 공통 지원서' },
 ])
 
+const teams = ref([
+  { id: 1, name: '디자인팀' },
+  { id: 2, name: '개발본부' },
+  { id: 3, name: '마케팅' },
+  { id: 10, name: '플랫폼팀' },
+  { id: 13, name: '인프라팀' },
+])
+
+const interviewers = ref([
+  { id: 101, name: '김기술', position: '백엔드 리드', teamId: 2 },
+  { id: 102, name: '박팀장', position: '인사 팀장', teamId: 3 },
+  { id: 105, name: '이디자인', position: '프로덕트 디자이너', teamId: 1 },
+  { id: 106, name: '최프론트', position: '프론트엔드 개발자', teamId: 2 },
+  { id: 107, name: '정플랫폼', position: '인프라 엔지니어', teamId: 10 },
+  { id: 108, name: '강인사', position: '인사 담당자', teamId: 3 },
+])
+
+// --- Search & Filter Logic ---
+const interviewerSearchQuery = ref('')
+
+// 선택된 팀에 속한 면접관들 (자동 추천)
+const recommendedInterviewers = computed(() => {
+  if (form.value.teamId.length === 0) return []
+  return interviewers.value.filter(i => form.value.teamId.includes(i.teamId))
+})
+
+// 검색 결과 (추천된 사람 제외하고 검색어에 맞는 사람들)
+const searchResultInterviewers = computed(() => {
+  const query = interviewerSearchQuery.value.trim().toLowerCase()
+  if (!query) return []
+  
+  return interviewers.value.filter(i => {
+    const matchesQuery = i.name.toLowerCase().includes(query) || i.position.toLowerCase().includes(query)
+    const isAlreadyRecommended = recommendedInterviewers.value.some(ri => ri.id === i.id)
+    return matchesQuery && !isAlreadyRecommended
+  })
+})
+
 // --- Helper Functions ---
+
+const toggleSelection = (list, id) => {
+  const index = list.indexOf(id)
+  if (index === -1) {
+    list.push(id)
+  } else {
+    list.splice(index, 1)
+  }
+}
 
 const addStage = () => {
   const insertIndex = Math.max(0, processes.value.length - 1)
@@ -189,6 +238,116 @@ const handleSubmit = async () => {
                 <label class="block text-sm font-bold text-slate-700 mb-2">마감일시 <span class="text-rose-500">*</span></label>
                 <input v-model="form.endDate" type="datetime-local"
                        class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+          <h3 class="text-lg font-bold text-slate-800 mb-6 flex items-center">
+            <span class="w-1.5 h-6 bg-brand-500 mr-2 rounded-full"></span>
+            담당 조직 및 면접관
+          </h3>
+
+          <div class="space-y-6">
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-3">배정 팀 (중복 선택 가능)</label>
+              <div class="flex flex-wrap gap-2">
+                <button v-for="team in teams" :key="team.id"
+                        @click="toggleSelection(form.teamId, team.id)"
+                        type="button"
+                        class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
+                        :class="form.teamId.includes(team.id)
+                          ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'">
+                  {{ team.name }}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-3">배정 면접관</label>
+              
+              <!-- 검색창 -->
+              <div class="relative mb-4">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </span>
+                <input v-model="interviewerSearchQuery" type="text" placeholder="이름 또는 직책으로 면접관 검색..."
+                       class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-brand-500 transition-all">
+              </div>
+
+              <!-- 검색 결과가 있을 때 -->
+              <div v-if="searchResultInterviewers.length > 0" class="mb-6">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">검색 결과</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button v-for="interviewer in searchResultInterviewers" :key="interviewer.id"
+                          @click="toggleSelection(form.interviewerIds, interviewer.id)"
+                          type="button"
+                          class="flex items-center p-3 rounded-xl border transition-all text-left"
+                          :class="form.interviewerIds.includes(interviewer.id) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+                    <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
+                      {{ interviewer.name.substring(0, 1) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-slate-700 truncate">{{ interviewer.name }}</p>
+                      <p class="text-xs text-slate-400 truncate">{{ interviewer.position }}</p>
+                    </div>
+                    <div v-if="form.interviewerIds.includes(interviewer.id)" class="ml-2">
+                      <svg class="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 추천 면접관 (선택된 팀원들) -->
+              <div v-if="recommendedInterviewers.length > 0" class="mb-6">
+                <p class="text-[11px] font-bold text-brand-600 uppercase tracking-wider mb-2 flex items-center">
+                  <span class="w-1 h-1 bg-brand-500 rounded-full mr-1.5"></span>
+                  선택된 팀의 팀원 (추천)
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <button v-for="interviewer in recommendedInterviewers" :key="interviewer.id"
+                          @click="toggleSelection(form.interviewerIds, interviewer.id)"
+                          type="button"
+                          class="flex items-center p-3 rounded-xl border transition-all text-left"
+                          :class="form.interviewerIds.includes(interviewer.id) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+                    <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
+                      {{ interviewer.name.substring(0, 1) }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-bold text-slate-700 truncate">{{ interviewer.name }}</p>
+                      <p class="text-xs text-slate-400 truncate">{{ interviewer.position }}</p>
+                    </div>
+                    <div v-if="form.interviewerIds.includes(interviewer.id)" class="ml-2">
+                      <svg class="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 그 외 현재 선택된 면접관 (팀 소속이 아니지만 선택된 경우) -->
+              <div v-if="form.interviewerIds.some(id => !recommendedInterviewers.some(ri => ri.id === id))">
+                <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">추가된 면접관</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <template v-for="id in form.interviewerIds" :key="id">
+                    <button v-if="!recommendedInterviewers.some(ri => ri.id === id)"
+                            @click="toggleSelection(form.interviewerIds, id)"
+                            type="button"
+                            class="flex items-center p-3 rounded-xl border bg-brand-50 border-brand-500 shadow-sm text-left">
+                      <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
+                        {{ interviewers.find(i => i.id === id)?.name.substring(0, 1) }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-bold text-brand-700 truncate">{{ interviewers.find(i => i.id === id)?.name }}</p>
+                        <p class="text-xs text-slate-400 truncate">{{ interviewers.find(i => i.id === id)?.position }}</p>
+                      </div>
+                      <div class="ml-2">
+                        <svg class="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                      </div>
+                    </button>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
