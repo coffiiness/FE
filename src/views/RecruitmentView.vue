@@ -24,7 +24,9 @@ const jobs = ref([
     position: 'Junior (1-3년)',
     team: 'Platform Team',
     status: 'active',
-    dday: 'D-5',
+    dday: 'D-30',
+    ddayValue: 30,
+    createdAt: '2026-02-13',
     totalApplicants: 42,
     funnel: [
       { step: '서류', count: 15, active: false },
@@ -41,6 +43,8 @@ const jobs = ref([
     team: 'Design Group',
     status: 'urgent',
     dday: 'D-2',
+    ddayValue: 2,
+    createdAt: '2026-02-10',
     totalApplicants: 28,
     funnel: [
       { step: '서류', count: 5, active: true },
@@ -57,7 +61,9 @@ const jobs = ref([
     team: 'Infra Unit',
     status: 'active',
     dday: 'D-12',
-    totalApplicants: 15,
+    ddayValue: 12,
+    createdAt: '2026-01-20',
+    totalApplicants: 85,
     funnel: [
       { step: '서류', count: 8, active: false },
       { step: '면접', count: 2, active: true },
@@ -72,6 +78,8 @@ const jobs = ref([
     team: 'Web Core',
     status: 'closed',
     dday: '마감',
+    ddayValue: 999,
+    createdAt: '2025-12-15',
     totalApplicants: 156,
     funnel: [
       { step: '종료', count: 156, active: false },
@@ -123,6 +131,48 @@ const confirmDelete = () => {
   }
   closeDeleteModal()
 }
+
+// --- 검색 및 필터링 로직 ---
+const searchQuery = ref('')
+const statusFilter = ref('전체 상태')
+const sortBy = ref('최신순')
+
+const filteredJobs = computed(() => {
+  let result = [...jobs.value]
+
+  // 1. 검색어 필터링
+  const query = searchQuery.value.trim().toLowerCase()
+  if (query) {
+    result = result.filter(job => 
+      job.title.toLowerCase().includes(query) ||
+      job.team.toLowerCase().includes(query) ||
+      job.position.toLowerCase().includes(query) ||
+      job.interviewers.some(intr => intr.toLowerCase().includes(query))
+    )
+  }
+
+  // 2. 상태 필터링
+  if (statusFilter.value !== '전체 상태') {
+    const statusMap = {
+      '진행 중': 'active',
+      '마감 임박': 'urgent',
+      '종료됨': 'closed'
+    }
+    const targetStatus = statusMap[statusFilter.value]
+    result = result.filter(job => job.status === targetStatus)
+  }
+
+  // 3. 정렬
+  if (sortBy.value === '최신순') {
+    result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  } else if (sortBy.value === '지원자순') {
+    result.sort((a, b) => b.totalApplicants - a.totalApplicants)
+  } else if (sortBy.value === '마감일순') {
+    result.sort((a, b) => a.ddayValue - b.ddayValue)
+  }
+
+  return result
+})
 
 // --- 링크 복사 및 면접관 설정 기능 ---
 const allInterviewers = [
@@ -229,19 +279,20 @@ const saveInterviewers = () => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
+            v-model="searchQuery"
             type="text"
             placeholder="공고명, 부서명 또는 담당자 검색..."
             class="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm"
         >
       </div>
       <div class="flex gap-2">
-        <select class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
+        <select v-model="statusFilter" class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
           <option>전체 상태</option>
           <option>진행 중</option>
           <option>마감 임박</option>
           <option>종료됨</option>
         </select>
-        <select class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
+        <select v-model="sortBy" class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
           <option>최신순</option>
           <option>지원자순</option>
           <option>마감일순</option>
@@ -250,7 +301,7 @@ const saveInterviewers = () => {
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      <div v-for="job in jobs" :key="job.id"
+      <div v-for="job in filteredJobs" :key="job.id"
            class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm"
            :class="{'relative z-20 border-brand-300 ring-2 ring-brand-100': activeMenuId === job.id}">
 
