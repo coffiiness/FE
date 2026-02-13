@@ -7,6 +7,7 @@ const router = useRouter()
 
 const isModalOpen = ref(false)
 const selectedNotification = ref(null)
+const memoContent = ref('')
 
 const notificationRequests = ref([
   {
@@ -35,12 +36,14 @@ const notificationRequests = ref([
 
 const openNotificationModal = (notificationData) => {
   selectedNotification.value = notificationData
+  memoContent.value = ''
   isModalOpen.value = true
 }
 
 const closeModal = () => {
   isModalOpen.value = false
   selectedNotification.value = null
+  memoContent.value = ''
 }
 
 const goToAllNotifications = () => {
@@ -50,6 +53,8 @@ const goToAllNotifications = () => {
 
 const handleDecision = (type) => {
   if (!selectedNotification.value) return
+
+  console.log(`Decision: ${type}, Memo: ${memoContent.value}`)
 
   notificationRequests.value = notificationRequests.value.filter(
       (item) => item.id !== selectedNotification.value.id
@@ -130,21 +135,21 @@ const handleDecision = (type) => {
     <div v-if="isModalOpen" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" @click="closeModal"></div>
 
-      <div class="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-fade-in-down">
-        <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+      <div class="relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-fade-in-down flex flex-col max-h-[90vh]">
+        <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-shrink-0">
           <h3 class="font-bold text-slate-800 text-lg">{{ selectedNotification?.title }}</h3>
           <button @click="closeModal" class="text-slate-400 hover:text-slate-600 transition-colors">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
         </div>
 
-        <div class="p-6 space-y-6">
-          <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+        <div class="p-6 overflow-y-auto custom-scrollbar">
+          <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl mb-6">
             <p class="text-blue-700 font-bold text-base mb-1">{{ selectedNotification?.date }}</p>
             <p class="text-slate-600 text-sm">{{ selectedNotification?.type }}에 참여 요청이 있습니다.</p>
           </div>
 
-          <div class="space-y-4 pt-2">
+          <div class="space-y-4">
             <div class="flex justify-between items-center text-sm">
               <span class="text-slate-500">지원자</span>
               <span class="font-medium text-slate-800">{{ selectedNotification?.applicant }}</span>
@@ -158,9 +163,19 @@ const handleDecision = (type) => {
               <span class="font-medium text-slate-800">{{ selectedNotification?.requester }}</span>
             </div>
           </div>
+
+          <div class="mt-6 pt-5 border-t border-slate-100">
+            <label class="block text-xs font-bold text-slate-500 mb-2">메모 (선택사항)</label>
+            <textarea
+                v-model="memoContent"
+                class="w-full text-sm font-medium text-slate-800 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none placeholder-slate-400"
+                rows="3"
+                placeholder="전달할 내용이나 특이사항을 입력해주세요."
+            ></textarea>
+          </div>
         </div>
 
-        <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+        <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3 flex-shrink-0">
           <button
               @click="handleDecision('reject')"
               class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all"
