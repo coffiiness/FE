@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -7,6 +7,7 @@ const router = useRouter()
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
 const showDeleteModal = ref(false) // 삭제 모달 상태
+const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 
 // --- 데이터 (Mock) ---
@@ -131,15 +132,27 @@ const allInterviewers = [
   { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
   { id: 107, name: 'Park', position: 'CTO' },
   { id: 108, name: 'Lee', position: 'HR Manager' },
+  { id: 109, name: '정플랫폼', position: '인프라 엔지니어' },
+  { id: 110, name: '강인사', position: '인사 담당자' },
 ]
 
 const isInterviewerModalOpen = ref(false)
 const editingJob = ref(null)
+const interviewerSearchQuery = ref('')
+
+const searchResultInterviewers = computed(() => {
+  const query = interviewerSearchQuery.value.trim().toLowerCase()
+  if (!query) return allInterviewers
+  return allInterviewers.filter(i => 
+    i.name.toLowerCase().includes(query) || i.position.toLowerCase().includes(query)
+  )
+})
 
 const copyLink = (id) => {
   const link = `${window.location.origin}/careers/${id}`
   navigator.clipboard.writeText(link).then(() => {
-    alert('채용 공고 링크가 복사되었습니다.')
+    showCopyModal.value = true
+    activeMenuId.value = null
   }).catch(err => {
     console.error('링크 복사 실패:', err)
   })
@@ -148,6 +161,7 @@ const copyLink = (id) => {
 const openInterviewerModal = (job) => {
   editingJob.value = JSON.parse(JSON.stringify(job))
   isInterviewerModalOpen.value = true
+  interviewerSearchQuery.value = ''
   activeMenuId.value = null
 }
 
@@ -377,12 +391,42 @@ const saveInterviewers = () => {
     </div>
   </Transition>
 
+  <!-- 모달: 링크 복사 성공 -->
+  <Transition name="fade">
+    <div v-if="showCopyModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
+      <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="showCopyModal = false"></div>
+
+      <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+        <div class="flex flex-col items-center text-center">
+          <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mb-4">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+
+          <h3 class="text-xl font-bold text-slate-900 mb-2">링크 복사 완료</h3>
+          <p class="text-slate-500 text-sm mb-6 leading-relaxed">
+            채용 공고 링크가 클립보드에 복사되었습니다.<br>
+            원하는 곳에 붙여넣어 공유해 보세요.
+          </p>
+
+          <button
+              @click="showCopyModal = false"
+              class="w-full py-2.5 px-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-md hover:shadow-lg transition-all"
+          >
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
   <!-- 모달: 면접관 수정 -->
   <Transition name="fade">
     <div v-if="isInterviewerModalOpen" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeInterviewerModal"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-[450px] max-w-[95%] overflow-hidden flex flex-col max-h-[80vh] animate-fade-in-up border border-slate-100">
+      <div class="relative bg-white rounded-2xl shadow-2xl w-[550px] max-w-[95%] overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up border border-slate-100">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
@@ -393,21 +437,41 @@ const saveInterviewers = () => {
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-          <div v-for="intr in allInterviewers" :key="intr.id"
-               @click="toggleInterviewerAssignment(intr.name)"
-               class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
-               :class="editingJob?.interviewers.includes(intr.name) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
-            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
-              {{ intr.name[0] }}
+        <!-- 검색창 (RecruitmentEditView 스타일) -->
+        <div class="px-6 pt-6">
+          <div class="relative mb-4">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </span>
+            <input v-model="interviewerSearchQuery" type="text" placeholder="이름 또는 직책으로 면접관 검색..."
+                   class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-brand-500 transition-all">
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 pt-2 custom-scrollbar">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div v-for="intr in searchResultInterviewers" :key="intr.id"
+                 @click="toggleInterviewerAssignment(intr.name)"
+                 class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
+                 :class="editingJob?.interviewers.includes(intr.name) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+              <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3 flex-shrink-0">
+                {{ intr.name[0] }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold text-slate-800 truncate">{{ intr.name }}</p>
+                <p class="text-xs text-slate-400 truncate">{{ intr.position }}</p>
+              </div>
+              <div v-if="editingJob?.interviewers.includes(intr.name)" class="text-brand-500 ml-2 flex-shrink-0">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+              </div>
             </div>
-            <div class="flex-1">
-              <p class="text-sm font-bold text-slate-800">{{ intr.name }}</p>
-              <p class="text-xs text-slate-400">{{ intr.position }}</p>
-            </div>
-            <div v-if="editingJob?.interviewers.includes(intr.name)" class="text-brand-500">
-              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-            </div>
+          </div>
+
+          <div v-if="searchResultInterviewers.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-400">
+            <svg class="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <p class="text-sm">검색 결과가 없습니다.</p>
           </div>
         </div>
 
