@@ -54,7 +54,11 @@ const routes = [
         name: 'Schedule',
         component: () => import('@/views/MyScheduleView.vue')
       },
-
+      {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/NotificationView.vue')
+      },
       {
         path: 'recruitment',
         redirect: '/recruitment/home'
