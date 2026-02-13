@@ -1,6 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
-
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const emit = defineEmits(['close', 'update:count'])
@@ -34,17 +33,6 @@ const notificationRequests = ref([
   }
 ])
 
-watch(
-    () => notificationRequests.value.length,
-    (newCount) => {
-      emit('update:count', newCount)
-    }
-)
-
-onMounted(() => {
-  emit('update:count', notificationRequests.value.length)
-})
-
 const openNotificationModal = (notificationData) => {
   selectedNotification.value = notificationData
   isModalOpen.value = true
@@ -68,6 +56,8 @@ const handleDecision = (type) => {
   )
 
   closeModal()
+
+  emit('update:count', notificationRequests.value.length)
 }
 </script>
 
@@ -171,10 +161,16 @@ const handleDecision = (type) => {
         </div>
 
         <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-          <button @click="handleDecision('reject')" class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all">
+          <button
+              @click="handleDecision('reject')"
+              class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all"
+          >
             거절하기
           </button>
-          <button @click="handleDecision('accept')" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all">
+          <button
+              @click="handleDecision('accept')"
+              class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md transition-all"
+          >
             수락하기
           </button>
         </div>
