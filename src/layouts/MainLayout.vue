@@ -2,15 +2,22 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
+import { useNotificationStore } from '@/Stores/notification'
+import { storeToRefs } from 'pinia'
 
 const route = useRoute()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
 
 const isNotificationOpen = ref(false)
+const notificationStore = useNotificationStore()
+const { unreadCount } = storeToRefs(notificationStore)
 
 const toggleNotification = () => {
   isNotificationOpen.value = !isNotificationOpen.value
+  if (!isNotificationOpen.value) {
+    notificationStore.markAllRead()
+  }
 }
 
 const toggleSubMenu = (name) => {
@@ -232,7 +239,12 @@ watch(
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full border-2 border-white"></span>
+              <span
+                v-if="unreadCount > 0"
+                class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-brand-500 text-white text-[10px] leading-[18px] rounded-full border-2 border-white text-center font-bold"
+              >
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+              </span>
             </button>
 
             <NotificationDropdown
