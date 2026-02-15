@@ -1,9 +1,12 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { useRoute } from 'vue-router'
+import { useNotificationStore } from '@/Stores/notification'
+import { storeToRefs } from 'pinia'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -45,6 +48,9 @@ const selectedDate = ref(getToday())
 const selectedEventToEdit = ref(null)
 const selectedEventDetail = ref(null)
 const targetDeleteId = ref(null)
+const route = useRoute()
+const notificationStore = useNotificationStore()
+const { acceptedSchedules } = storeToRefs(notificationStore)
 
 // 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임)
 const allSchedules = ref([
@@ -281,6 +287,29 @@ const openDetailModal = (event) => {
   selectedEventDetail.value = event
   isDetailModalOpen.value = true
 }
+
+const mergeAcceptedSchedules = (items) => {
+  items.forEach((item) => {
+    if (!allSchedules.value.some((e) => e.id === item.id)) {
+      allSchedules.value.push({ ...item })
+    }
+  })
+}
+
+onMounted(() => {
+  const scheduleId = Number(route.query.scheduleId)
+  if (Number.isNaN(scheduleId)) return
+  const target = allSchedules.value.find((e) => e.id === scheduleId)
+  if (target) openDetailModal(target)
+})
+
+watch(
+  acceptedSchedules,
+  (value) => {
+    mergeAcceptedSchedules(value)
+  },
+  { deep: true, immediate: true }
+)
 
 const openCreateForm = (date = null) => {
   selectedDate.value = date || selectedDate.value
