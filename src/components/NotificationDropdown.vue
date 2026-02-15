@@ -16,6 +16,7 @@ const actionMessage = ref('')
 
 const openNotificationModal = (notificationData) => {
   selectedNotification.value = notificationData
+  memoContent.value = ''
   isModalOpen.value = true
   store.markRead(notificationData.id)
 }
@@ -23,6 +24,7 @@ const openNotificationModal = (notificationData) => {
 const closeModal = () => {
   isModalOpen.value = false
   selectedNotification.value = null
+  memoContent.value = ''
 }
 
 const goToAllNotifications = (tab = 'all') => {
@@ -241,9 +243,19 @@ onBeforeUnmount(() => {
               <span class="font-medium text-slate-800 text-right">{{ selectedNotification?.memo }}</span>
             </div>
           </div>
+
+          <div class="mt-6 pt-5 border-t border-slate-100">
+            <label class="block text-xs font-bold text-slate-500 mb-2">메모 (선택사항)</label>
+            <textarea
+                v-model="memoContent"
+                class="w-full text-sm font-medium text-slate-800 p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none placeholder-slate-400"
+                rows="3"
+                placeholder="전달할 내용이나 특이사항을 입력해주세요."
+            ></textarea>
+          </div>
         </div>
 
-        <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+        <div class="p-4 px-6 bg-slate-50 border-t border-slate-100 flex gap-3 flex-shrink-0">
           <button
             @click="handleDecision(selectedNotification?.id, 'reject')"
             class="flex-1 py-2.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold transition-all"
