@@ -169,8 +169,47 @@ const routes = [
         component: () =>
           import('@/views/interview/InterviewScheduleCreateView.vue'),
         meta: { requiresAuth: true }
-      }
+      },
 
+      {
+        path: 'recruitment/jobs/:id/interview/create',
+        name: 'InterviewCreate',
+        component: () =>
+            import('@/views/interview/InterviewCreateView.vue'),
+        meta: { requiresAuth: true }
+      },
+
+      {
+        path: 'recruitment/interview/select',
+        name: 'InterviewSelect',
+        component: () =>
+            import('@/views/interview/InterviewSelectView.vue'),
+        meta: { requiresAuth: true }
+      },
+
+      {
+        path: 'recruitment/interview/room',
+        name: 'InterviewRoom',
+        component: () =>
+            import('@/views/interview/InterviewRoomView.vue'),
+        meta: { requiresAuth: true }
+      },
+
+      {
+        path: 'recruitment/interview/confirm',
+        name: 'InterviewConfirm',
+        component: () =>
+            import('@/views/interview/InterviewConfirmView.vue'),
+        meta: { requiresAuth: true }
+      },
+
+      {
+        path: 'recruitment/interview/schedule',
+        name: 'InterviewScheduleCreate',
+        component: () =>
+            import('@/views/interview/InterviewScheduleCreateView.vue'),
+        meta: { requiresAuth: true }
+      }
     ]
   },
 

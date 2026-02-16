@@ -1,3 +1,13 @@
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const jobId = route.query.jobId
+const interviewerIds = route.query.interviewers?.split(',') || []
+const applicantIds = route.query.applicants?.split(',') || []
+
+console.log(jobId, interviewerIds, applicantIds)
+
 <template>
   <div class="page">
 
