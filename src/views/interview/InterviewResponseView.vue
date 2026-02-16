@@ -129,7 +129,7 @@ const reject = () => {
 /* 기본 정보 */
 .info p {
   font-size: 15px;
-  font-weight: 700;   /* 🔥 핵심 */
+  font-weight: 700;
   color: #020617;
   margin-bottom: 6px;
 }
