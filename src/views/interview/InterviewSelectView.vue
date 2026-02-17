@@ -237,8 +237,6 @@ const goBack = () => router.back()
 
 <style scoped>
 
-/* ================= BASE ================= */
-
 .page {
   /* 컬러 변수 여기로 이동 (중요) */
   --brand: #0d9488;
@@ -259,26 +257,17 @@ const goBack = () => router.back()
   min-height: 100vh;
 }
 
-
-/* ================= HEADER ================= */
-
 .header h1 {
   font-size: 28px;
   font-weight: 900;
   color: var(--text-main);
 }
 
-
-/* ================= LAYOUT ================= */
-
 .layout {
   display: flex;
   gap: 28px;
   margin-top: 20px;
 }
-
-
-/* ================= PANEL ================= */
 
 .panel {
   flex: 1;
@@ -288,9 +277,6 @@ const goBack = () => router.back()
 
   border: 1px solid var(--border);
 }
-
-
-/* ================= PANEL HEADER ================= */
 
 .panel-header {
   display: flex;
@@ -318,9 +304,6 @@ const goBack = () => router.back()
   cursor: default;
 }
 
-
-/* ================= SEARCH ================= */
-
 .search {
   margin-top: 12px;
   width: 100%;
@@ -347,17 +330,11 @@ const goBack = () => router.back()
   border-color: var(--brand);
 }
 
-
-/* ================= LIST ================= */
-
 .list {
   margin-top: 14px;
   max-height: 320px;
   overflow-y: auto;
 }
-
-
-/* ================= CARD ================= */
 
 .card {
   padding: 14px 16px;
@@ -409,9 +386,6 @@ const goBack = () => router.back()
   color: var(--brand);
 }
 
-
-/* ================= ACTIVE ================= */
-
 .card.active {
   background: var(--brand);
   border-color: var(--brand);
@@ -422,9 +396,6 @@ const goBack = () => router.back()
 .card.active .picked {
   color: white;
 }
-
-
-/* ================= EMPTY ================= */
 
 .empty {
   text-align: center;
@@ -437,9 +408,6 @@ const goBack = () => router.back()
   color: #475569;
   font-weight: 700;
 }
-
-
-/* ================= SELECTED ================= */
 
 .selected-box {
   margin-top: 18px;
@@ -454,9 +422,6 @@ const goBack = () => router.back()
   color: var(--text-main);
   margin-bottom: 10px;
 }
-
-
-/* ================= CHIPS ================= */
 
 .chips {
   display: flex;
@@ -490,9 +455,6 @@ const goBack = () => router.back()
   border-radius: 50%;
   cursor: pointer;
 }
-
-
-/* ================= ACTIONS ================= */
 
 .actions {
   margin-top: 26px;

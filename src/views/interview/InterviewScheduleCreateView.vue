@@ -2,10 +2,13 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import InterviewConfirmModal from './InterviewConfirmModal.vue'
 import { useRoute, useRouter } from 'vue-router'
+import AutoAssignModal from './AutoAssignModal.vue'
 
 
 const route = useRoute()
 const router = useRouter()
+
+const showAutoModal = ref(false)
 
 const goToday = () => {
   anchorDate.value = todayStr()
@@ -14,6 +17,12 @@ const goToday = () => {
 
 const resetSelection = () => {
   selectedKeys.value = []
+}
+
+const isWeekend = (dateStr) => {
+  const d = new Date(dateStr)
+  const day = d.getDay()
+  return day === 0 || day === 6
 }
 
 // 임시 더미 면접관
@@ -78,7 +87,7 @@ const isToday = (dateStr) => dateStr === todayStr()
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 
 const anchorDate = ref('2026-02-16')
-// const anchorDate = ref(todayStr())
+
 
 const weekDays = computed(() => {
   const base = new Date(anchorDate.value)
@@ -97,6 +106,28 @@ const weekDays = computed(() => {
     }
   })
 })
+
+const autoAssignSchedule = () => {
+
+  selectedKeys.value = []
+
+  for (const day of weekDays.value) {
+    for (const time of timeSlots) {
+
+      if (!isBlocked(day.date, time)) {
+
+        const key = keyOf(day.date, time)
+
+        selectedKeys.value = [key]
+
+        alert(`자동 배정 완료: ${day.date} ${time}`)
+        return
+      }
+    }
+  }
+
+  alert('가능한 시간이 없습니다.')
+}
 
 const monthTitle = computed(() => {
   const d = new Date(anchorDate.value)
@@ -156,7 +187,12 @@ const selectedRoom = computed(() => {
 })
 
 const isBlocked = (date, time) => {
-  return selectedRoom.value.blocked.some(b => b.date === date && b.time === time)
+
+  if (isWeekend(date)) return true
+
+  return selectedRoom.value.blocked.some(
+      b => b.date === date && b.time === time
+  )
 }
 
 const MAX_HOURS = 6
@@ -310,6 +346,69 @@ const dayHeaderClass = (dayIndex) => {
   if (dayIndex === 6) return 'saturday'
   return ''
 }
+
+const handleAutoAssign = ({
+                            useTimeRange,
+                            start,
+                            end,
+                            useMaxHour,
+                            hours
+                          }) => {
+
+  selectedKeys.value = []
+
+  const startMin = useTimeRange
+      ? timeToMin(`${pad2(start)}:00`)
+      : 0
+
+  const endMin = useTimeRange
+      ? timeToMin(`${pad2(end)}:00`)
+      : 24 * 60
+
+  const needMinutes = useMaxHour
+      ? hours * 60
+      : 60
+
+
+  for (const day of weekDays.value) {
+
+    if (isWeekend(day.date)) continue
+
+    let streak = []
+
+    for (const time of timeSlots) {
+
+      const min = timeToMin(time)
+
+      if (min < startMin || min >= endMin) continue
+
+      if (isBlocked(day.date, time)) {
+        streak = []
+        continue
+      }
+
+      streak.push(time)
+
+      if (streak.length * 60 >= needMinutes) {
+
+        streak.forEach(t => {
+          selectedKeys.value.push(keyOf(day.date, t))
+        })
+
+        alert(`자동 배정 완료: ${day.date}`)
+
+        showAutoModal.value = false
+        return
+      }
+    }
+
+    streak = []
+  }
+
+  alert('조건에 맞는 시간이 없습니다.')
+}
+
+
 </script>
 
 <template>
@@ -376,6 +475,10 @@ const dayHeaderClass = (dayIndex) => {
 
       <button class="todayMiniBtn" @click="goToday">
         오늘로 이동
+      </button>
+
+      <button class="autoAssignBtn" @click="showAutoModal = true">
+        자동 배정
       </button>
     </div>
 
@@ -492,6 +595,12 @@ const dayHeaderClass = (dayIndex) => {
 
       @close="showModal=false"
       @submit="sendInvite"
+  />
+
+  <AutoAssignModal
+      :open="showAutoModal"
+      @close="showAutoModal = false"
+      @submit="handleAutoAssign"
   />
 
 </template>
@@ -689,6 +798,7 @@ const dayHeaderClass = (dayIndex) => {
 .cell.block {
   background: #FEE2E2;
   cursor: not-allowed;
+  opacity: 0.7;
 }
 .cell.block:hover { background: #FEE2E2; }
 
@@ -925,6 +1035,21 @@ const dayHeaderClass = (dayIndex) => {
 
 .todayMiniBtn:hover {
   background: #0f766e;
+}
+
+.autoAssignBtn {
+  background: #2563EB;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.autoAssignBtn:hover {
+  background: #1f2937;
 }
 
 </style>
