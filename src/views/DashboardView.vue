@@ -272,12 +272,13 @@ const openScheduleDetail = (schedule) => {
               <span class="w-1.5 h-5 bg-orange-500 rounded-full"></span>
               실시간 회의실 현황
             </h2>
-            <button @click="router.push('/meeting-rooms')" class="text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors">예약하기</button>
+            <button @click="router.push('/meeting-rooms/list')" class="text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors">예약하기</button>
           </div>
           
           <div class="flex-1 overflow-hidden">
              <div class="overflow-y-auto h-full custom-scrollbar pr-2 space-y-3">
                 <div v-for="room in meetingRooms" :key="room.id" 
+                     @click="router.push('/meeting-rooms/list')"
                      class="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all cursor-pointer">
                    <div class="flex items-center gap-3">
                      <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg bg-white border border-slate-100 shadow-sm"
