@@ -205,7 +205,7 @@ watch(
             K
           </div>
           <div v-if="sidebarOpen" class="ml-3 transition-opacity duration-300">
-            <p class="text-sm font-medium text-white">김천수</p>
+            <p class="text-sm font-medium text-white">김철수</p>
             <p class="text-[11px] text-slate-400 font-medium">채용담당자</p>
           </div>
         </div>

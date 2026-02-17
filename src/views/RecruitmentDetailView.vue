@@ -23,6 +23,15 @@ const calendarState = reactive({
   currentMonth: new Date(2024, 1, 14), // 2024년 2월
 })
 
+const currentView = ref('MONTH')
+const viewOptions = [
+  { label: '일', value: 'DAY' },
+  { label: '주', value: 'WEEK' },
+  { label: '월', value: 'MONTH' }
+]
+
+const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}${i + 9}:00`)
+
 const selectedDay = ref(null)
 const expandedBookingIds = ref(new Set())
 
@@ -205,14 +214,31 @@ const getBookingsForDay = (day) => {
   })
 }
 
-const goPrevMonth = () => {
-  calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() - 1, 1)
+const goPrev = () => {
+  if (currentView.value === 'MONTH') {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() - 1, 1)
+  } else if (currentView.value === 'WEEK') {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() - 7))
+  } else {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() - 1))
+    selectedDay.value = new Date(calendarState.currentMonth)
+  }
 }
-const goNextMonth = () => {
-  calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() + 1, 1)
+
+const goNext = () => {
+  if (currentView.value === 'MONTH') {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() + 1, 1)
+  } else if (currentView.value === 'WEEK') {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() + 7))
+  } else {
+    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() + 1))
+    selectedDay.value = new Date(calendarState.currentMonth)
+  }
 }
+
 const goToday = () => {
   calendarState.currentMonth = new Date()
+  selectedDay.value = new Date()
 }
 
 const getDayColor = (index) => {
@@ -259,6 +285,44 @@ const selectedDayBookings = computed(() => {
   if (!selectedDay.value) return []
   return getBookingsForDay(selectedDay.value)
 })
+
+// --- Computed for Week View ---
+const currentWeekDays = computed(() => {
+  const curr = new Date(calendarState.currentMonth)
+  const dayOfWeek = curr.getDay()
+  const startDay = new Date(curr)
+  startDay.setDate(curr.getDate() - dayOfWeek)
+
+  const week = []
+  for (let i = 0; i < 7; i++) {
+    const next = new Date(startDay)
+    next.setDate(startDay.getDate() + i)
+    week.push(new Date(next))
+  }
+  return week
+})
+
+// --- Helper for Week View Styles ---
+const getEventStyle = (booking) => {
+  if (!booking.time || !booking.endTime) return {}
+  const startHour = parseInt(booking.time.split(':')[0])
+  const startMin = parseInt(booking.time.split(':')[1])
+  const endHour = parseInt(booking.endTime.split(':')[0])
+  const endMin = parseInt(booking.endTime.split(':')[1])
+
+  const baseHour = 9
+  const slotHeight = 60 // Slightly smaller slot height for fit
+
+  const top = ((startHour - baseHour) * slotHeight) + ((startMin / 60) * slotHeight)
+  const durationHour = endHour - startHour
+  const durationMin = endMin - startMin
+  const height = (durationHour * slotHeight) + ((durationMin / 60) * slotHeight)
+
+  return {
+    top: `${top}px`,
+    height: `${height}px`
+  }
+}
 
 // --- Applicants & Other Logic ---
 const filteredApplicants = computed(() => {
@@ -408,14 +472,24 @@ const goInterview = () => {
             <!-- Calendar Header -->
             <div class="p-6 border-b border-slate-300 flex items-center justify-between bg-white">
               <div class="flex items-center gap-4">
-                 
+                 <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+                  <button
+                      v-for="opt in viewOptions"
+                      :key="opt.value"
+                      @click="currentView = opt.value"
+                      class="px-3 py-1 text-xs font-bold rounded-md transition-all"
+                      :class="currentView === opt.value ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                  >
+                    {{ opt.label }}
+                  </button>
+                </div>
               </div>
               <div class="flex items-center gap-4">
                 <button @click="goToday" class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold">
                   {{ labels.todayMove }}
                 </button>
                 <div class="flex items-center gap-6">
-                  <button @click="goPrevMonth" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                  <button @click="goPrev" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
                     </svg>
@@ -423,7 +497,7 @@ const goInterview = () => {
                   <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight w-40 text-center">
                     {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
                   </h2>
-                  <button @click="goNextMonth" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                  <button @click="goNext" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
                     </svg>
@@ -432,62 +506,148 @@ const goInterview = () => {
               </div>
             </div>
 
-            <!-- Days Header -->
-            <div class="grid grid-cols-7 text-center border-b border-slate-300 bg-slate-50/50">
-              <div v-for="(day, idx) in koDays" :key="day" class="py-2.5 text-[10px] font-black tracking-[0.12em]" :class="getDayColor(idx)">
-                {{ day }}
+            <!-- MONTH VIEW -->
+            <template v-if="currentView === 'MONTH'">
+              <!-- Days Header -->
+              <div class="grid grid-cols-7 text-center border-b border-slate-300 bg-slate-50/50">
+                <div v-for="(day, idx) in koDays" :key="day" class="py-2.5 text-[10px] font-black tracking-[0.12em]" :class="getDayColor(idx)">
+                  {{ day }}
+                </div>
               </div>
-            </div>
 
-            <!-- Calendar Grid Body -->
-            <div class="grid grid-cols-7 grid-rows-5 flex-1 bg-white">
-              <div
-                v-for="(day, index) in calendarDays"
-                :key="day ? day.toISOString() : `empty-${index}`"
-                class="border-r border-b border-slate-300 p-2.5 transition-all relative group h-full overflow-hidden"
-                :class="{
-                  'bg-slate-50/30': !day || !isSameMonth(day, calendarState.currentMonth),
-                  'border-r-0': (index + 1) % 7 === 0,
-                  'cursor-pointer hover:bg-slate-50/50': day && isSameMonth(day, calendarState.currentMonth),
-                  'cursor-default': !day || !isSameMonth(day, calendarState.currentMonth)
-                }"
-                @click="day && openDayDetail(day)"
-              >
-                <div class="flex items-center justify-between">
-                  <span
-                    v-if="day"
-                    :class="[
-                      'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
-                      isSameDay(day, new Date()) ? 'bg-brand-600 text-white shadow-md' : (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
-                    ]"
-                  >
-                    {{ day.getDate() }}
-                  </span>
-                </div>
-                <div class="space-y-1 h-[calc(100%-28px)] overflow-hidden" v-if="day">
-                  <div
-                    v-for="booking in getBookingsForDay(day).slice(0, 2)"
-                    :key="booking.id"
-                    class="text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity text-slate-800 font-bold"
-                    :style="{
-                      backgroundColor: `${getInterviewerColor(booking.interviewerId)}20`,
-                      borderLeft: `2px solid ${getInterviewerColor(booking.interviewerId)}`
-                    }"
-                    @click.stop="openInterviewDetail(booking)"
-                  >
-                    <span>{{ getInterviewerName(booking.interviewerId) }}</span>
-                    <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.time) }}</span>
+              <!-- Calendar Grid Body -->
+              <div class="grid grid-cols-7 grid-rows-5 flex-1 bg-white">
+                <div
+                  v-for="(day, index) in calendarDays"
+                  :key="day ? day.toISOString() : `empty-${index}`"
+                  class="border-r border-b border-slate-300 p-2.5 transition-all relative group h-full overflow-hidden"
+                  :class="{
+                    'bg-slate-50/30': !day || !isSameMonth(day, calendarState.currentMonth),
+                    'border-r-0': (index + 1) % 7 === 0,
+                    'cursor-pointer hover:bg-slate-50/50': day && isSameMonth(day, calendarState.currentMonth),
+                    'cursor-default': !day || !isSameMonth(day, calendarState.currentMonth)
+                  }"
+                  @click="day && openDayDetail(day)"
+                >
+                  <div class="flex items-center justify-between">
+                    <span
+                      v-if="day"
+                      :class="[
+                        'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
+                        isSameDay(day, new Date()) ? 'bg-brand-600 text-white shadow-md' : (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
+                      ]"
+                    >
+                      {{ day.getDate() }}
+                    </span>
                   </div>
-                  <button
-                    v-if="getBookingsForDay(day).length > 2"
-                    class="text-[10px] text-slate-500 px-1.5 font-semibold text-right w-full"
-                    @click.stop="openDayDetail(day)"
-                  >
-                    외 {{ getBookingsForDay(day).length - 2 }}개
-                  </button>
+                  <div class="space-y-1 h-[calc(100%-28px)] overflow-hidden" v-if="day">
+                    <div
+                      v-for="booking in getBookingsForDay(day).slice(0, 2)"
+                      :key="booking.id"
+                      class="text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity text-slate-800 font-bold"
+                      :style="{
+                        backgroundColor: `${getInterviewerColor(booking.interviewerId)}20`,
+                        borderLeft: `2px solid ${getInterviewerColor(booking.interviewerId)}`
+                      }"
+                      @click.stop="openInterviewDetail(booking)"
+                    >
+                      <span>{{ getInterviewerName(booking.interviewerId) }}</span>
+                      <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.time) }}</span>
+                    </div>
+                    <button
+                      v-if="getBookingsForDay(day).length > 2"
+                      class="text-[10px] text-slate-500 px-1.5 font-semibold text-right w-full"
+                      @click.stop="openDayDetail(day)"
+                    >
+                      외 {{ getBookingsForDay(day).length - 2 }}개
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
+
+            <!-- WEEK VIEW -->
+            <template v-else-if="currentView === 'WEEK'">
+              <div class="flex flex-col h-full overflow-hidden">
+                 <!-- Week Header -->
+                <div class="grid grid-cols-[60px_1fr] border-b border-slate-300 bg-slate-50/50 sticky top-0 z-30">
+                  <div class="border-r border-slate-300"></div>
+                  <div class="grid grid-cols-7">
+                    <div v-for="(day, idx) in currentWeekDays" :key="day.toISOString()"
+                         class="py-3 text-center border-r border-slate-300 last:border-0 flex flex-col items-center gap-1 group cursor-pointer hover:bg-slate-100 transition-colors"
+                         @click="calendarState.currentMonth = new Date(day); selectedDay = day; currentView = 'DAY'">
+                      <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ koDays[idx] }}</span>
+                      <span class="text-lg font-display font-bold leading-none w-7 h-7 flex items-center justify-center rounded-lg transition-all"
+                            :class="{
+                              'bg-brand-600 text-white shadow-md': isSameDay(day, new Date()),
+                              'ring-1 ring-brand-600 text-brand-600': isSameDay(day, calendarState.currentMonth) && !isSameDay(day, new Date()),
+                              'text-slate-700 group-hover:text-brand-600': !isSameDay(day, new Date()) && !isSameDay(day, calendarState.currentMonth)
+                            }">
+                        {{ day.getDate() }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Time Grid -->
+                <div class="flex flex-1 overflow-y-auto custom-scrollbar">
+                  <div class="w-[60px] border-r border-slate-300 shrink-0 bg-slate-50/10">
+                    <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-300 text-[10px] font-bold text-slate-500 flex items-start justify-center pt-2">
+                      {{ time }}
+                    </div>
+                  </div>
+                  <div class="flex-1 grid grid-cols-7 relative">
+                    <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="relative border-r border-slate-300 last:border-0 group">
+                      <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
+
+                      <div v-for="evt in getBookingsForDay(day)" :key="evt.id"
+                           @click="openInterviewDetail(evt)"
+                           class="absolute left-1 right-1 p-1.5 rounded-lg shadow-sm z-20 cursor-pointer hover:scale-[1.02] transition-transform overflow-hidden border-l-4"
+                           :style="{
+                             ...getEventStyle(evt),
+                             backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
+                             borderColor: getInterviewerColor(evt.interviewerId)
+                           }">
+                        <p class="text-[9px] font-bold opacity-80">{{ evt.time }}</p>
+                        <p class="text-[10px] font-extrabold truncate text-slate-800">{{ evt.applicantName }}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- DAY VIEW -->
+            <template v-else>
+              <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                <div class="space-y-4 max-w-3xl mx-auto">
+                  <div v-if="getBookingsForDay(calendarState.currentMonth).length === 0" class="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[28px] border border-dashed border-slate-300">
+                     <p class="text-sm font-bold text-slate-400">등록된 면접 일정이 없습니다.</p>
+                  </div>
+
+                  <div v-for="evt in getBookingsForDay(calendarState.currentMonth)" :key="evt.id"
+                       @click="openInterviewDetail(evt)"
+                       class="group p-6 rounded-[24px] border border-slate-200 bg-white hover:border-brand-300 hover:shadow-lg hover:shadow-brand-500/10 transition-all cursor-pointer flex items-center gap-6">
+                    
+                    <div class="w-20 text-center shrink-0 border-r-2 border-slate-100 pr-4">
+                      <span class="block text-xl font-black text-slate-800 tracking-tighter">{{ evt.time }}</span>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                      <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-2"
+                            :style="{
+                              backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
+                              color: getInterviewerColor(evt.interviewerId)
+                            }">
+                        {{ getInterviewerName(evt.interviewerId) }}
+                      </span>
+                      <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ evt.title }}</h4>
+                      <p class="text-sm text-slate-500 mt-1 font-medium">{{ evt.description }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- Selected Day Details Sidebar -->
