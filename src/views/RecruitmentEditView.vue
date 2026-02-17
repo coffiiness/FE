@@ -136,17 +136,35 @@ const removeStage = (index) => {
 }
 
 // Drag & Drop Logic
-const dragIndex = ref(null)
-const dragOverIndex = ref(null)
+const dragIndex = ref(null)      // 현재 드래그 중인 아이템의 인덱스
+const dragOverIndex = ref(null)  // 드래그한 아이템이 올라가 있는 위치의 인덱스
 
-const onDragStart = (idx) => { dragIndex.value = idx }
-const onDragEnter = (idx) => { if (idx !== dragIndex.value) dragOverIndex.value = idx }
-const onDragEnd = () => { dragIndex.value = null; dragOverIndex.value = null }
-const onDrop = (dropIdx) => {
-  const item = processes.value[dragIndex.value]
+const onDragStart = (index) => {
+  dragIndex.value = index
+}
+
+// 드래그한 아이템이 다른 아이템 위로 들어왔을 때
+const onDragEnter = (index) => {
+  // 자기 자신이 아닐 때만 타겟 인덱스 업데이트
+  if (index !== dragIndex.value) {
+    dragOverIndex.value = index
+  }
+}
+
+const onDrop = (dropIndex) => {
+  const draggedItem = processes.value[dragIndex.value]
   processes.value.splice(dragIndex.value, 1)
-  processes.value.splice(dropIdx, 0, item)
-  onDragEnd()
+  processes.value.splice(dropIndex, 0, draggedItem)
+
+  // 상태 초기화
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+// 드래그가 끝났을 때 (취소되거나 드롭되었을 때) 초기화
+const onDragEnd = () => {
+  dragIndex.value = null
+  dragOverIndex.value = null
 }
 
 const handleUpdate = async () => {
@@ -390,45 +408,78 @@ onMounted(() => {
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg font-bold text-slate-800 flex items-center">
               <span class="w-1.5 h-6 bg-brand-500 mr-2 rounded-full"></span>
-              채용 단계
+              채용 단계 설정
             </h3>
             <button @click="addStage" class="text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg border border-brand-200 transition-colors">
-              + 추가
+              + 단계 추가
             </button>
           </div>
 
           <div class="space-y-4 relative">
             <div class="absolute left-[15px] top-4 bottom-4 w-0.5 bg-slate-200 -z-10"></div>
 
-            <div v-for="(stage, idx) in processes" :key="idx" 
-                 class="relative pl-0 group cursor-move"
-                 draggable="true" @dragstart="onDragStart(idx)" @dragenter="onDragEnter(idx)" @dragend="onDragEnd" @dragover.prevent @drop="onDrop(idx)">
-              
-              <div class="flex items-start gap-3 bg-white border rounded-xl p-3 shadow-sm transition-all duration-200"
-                   :class="{
-                     'opacity-40 scale-95 border-dashed border-slate-300': dragIndex === idx,
-                     'border-2 border-brand-500 bg-brand-50 scale-105 z-10': dragOverIndex === idx && dragIndex !== idx,
-                     'border-slate-200 hover:border-brand-300': dragIndex !== idx && dragOverIndex !== idx
-                   }">
-                
+            <div
+              v-for="(stage, idx) in processes"
+              :key="idx"
+              class="relative pl-0 group cursor-move"
+              draggable="true"
+              @dragstart="onDragStart(idx)"
+              @dragenter="onDragEnter(idx)"
+              @dragend="onDragEnd"
+              @dragover.prevent
+              @drop="onDrop(idx)"
+            >
+              <div
+                class="flex items-start gap-3 bg-white border rounded-xl p-3 shadow-sm transition-all duration-200"
+                :class="{
+                  'opacity-40 scale-95 border-dashed border-slate-300': dragIndex === idx, // 드래그 중인 아이템 스타일
+                  'border-2 border-brand-500 bg-brand-50 scale-105 shadow-md z-10': dragOverIndex === idx && dragIndex !== idx, // 드롭 대상(가까워질 때) 스타일
+                  'border-slate-200 hover:border-brand-300 hover:shadow-md': dragIndex !== idx && dragOverIndex !== idx // 평상시 스타일
+                }"
+              >
                 <div class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border-2 z-10 transition-colors shadow-sm mt-1"
-                     :class="stage.stageType === 'PASS' ? 'bg-white text-brand-600 border-brand-500' : 'bg-white text-slate-500 border-slate-300'">
+                     :class="{
+                        'bg-brand-500 text-white border-brand-500': dragOverIndex === idx && dragIndex !== idx,
+                        'bg-white text-brand-600 border-brand-500': stage.stageType === 'PASS' && dragOverIndex !== idx,
+                        'bg-white text-slate-500 border-slate-300 group-hover:border-brand-400 group-hover:text-brand-500': stage.stageType !== 'PASS' && dragOverIndex !== idx
+                     }">
                   {{ idx + 1 }}
                 </div>
 
                 <div class="flex-1 min-w-0">
                   <div class="flex justify-between items-start mb-2">
-                    <select v-model="stage.stageType" class="text-xs font-bold pl-2 pr-6 py-1.5 rounded bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-500 w-full appearance-none cursor-pointer">
-                      <option v-for="type in stageTypes" :key="type.value" :value="type.value">{{ type.label }}</option>
-                    </select>
-                    <button v-if="processes.length > 2" @click.stop="removeStage(idx)" class="text-slate-300 hover:text-rose-500 p-1 ml-1">
+                    <div class="relative">
+                      <select v-model="stage.stageType"
+                              class="text-xs font-bold pl-2 pr-6 py-1.5 rounded bg-slate-50 border border-slate-200 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 appearance-none cursor-pointer text-slate-700 w-full transition-colors"
+                              :class="{'bg-white': dragOverIndex === idx && dragIndex !== idx}">
+                        <option v-for="type in stageTypes" :key="type.value" :value="type.value">
+                          {{ type.label }}
+                        </option>
+                      </select>
+                      <svg class="w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+
+                    <button v-if="processes.length > 2" @click.stop="removeStage(idx)" class="text-slate-300 hover:text-rose-500 transition-colors p-1 ml-1 cursor-pointer">
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                   </div>
-                  <input v-model="stage.stageName" type="text" class="w-full border border-slate-200 rounded px-2 py-1.5 text-sm text-slate-900 font-bold focus:outline-none focus:border-brand-500">
+
+                  <input v-model="stage.stageName" type="text" placeholder="단계명 입력"
+                         class="w-full border rounded px-2 py-1.5 text-sm text-slate-900 font-bold placeholder-slate-400 focus:outline-none focus:border-brand-500 transition-colors"
+                         :class="dragOverIndex === idx && dragIndex !== idx ? 'bg-white border-brand-200' : 'bg-white border-slate-200'">
                 </div>
               </div>
             </div>
+          </div>
+
+          <div class="mt-6 p-4 bg-brand-50 rounded-xl border border-brand-100 text-xs text-brand-800 leading-relaxed">
+            <p class="font-bold mb-1 flex items-center">
+              <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              도움말
+            </p>
+            카드를 클릭하고 드래그하여 순서를 변경할 수 있습니다.
           </div>
         </div>
       </div>
