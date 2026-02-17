@@ -210,6 +210,8 @@ const getBookingsForDay = (day) => {
   return schedules.value.filter(s => {
     // 체크된 면접관의 일정만 필터링
     if (!checkedInterviewerIds.includes(s.interviewerId)) return false
+    // 휴가(off) 제외
+    if (s.type === 'off') return false
     return s.date === dateStr
   })
 }
@@ -284,6 +286,27 @@ const selectedDayTitle = computed(() => {
 const selectedDayBookings = computed(() => {
   if (!selectedDay.value) return []
   return getBookingsForDay(selectedDay.value)
+})
+
+const currentDayTitle = computed(() => {
+  const d = calendarState.currentMonth
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
+})
+
+const currentWeekTitle = computed(() => {
+  if (currentWeekDays.value.length === 0) return ''
+  const start = currentWeekDays.value[0]
+  const end = currentWeekDays.value[6]
+  const startMonth = start.getMonth() + 1
+  const endMonth = end.getMonth() + 1
+  
+  if (start.getFullYear() !== end.getFullYear()) {
+     return `${start.getFullYear()}년 ${startMonth}월 ${start.getDate()}일 - ${end.getFullYear()}년 ${endMonth}월 ${end.getDate()}일`
+  }
+  if (startMonth !== endMonth) {
+     return `${start.getFullYear()}년 ${startMonth}월 ${start.getDate()}일 - ${endMonth}월 ${end.getDate()}일`
+  }
+  return `${start.getFullYear()}년 ${startMonth}월 ${start.getDate()}일 - ${end.getDate()}일`
 })
 
 // --- Computed for Week View ---
@@ -488,15 +511,19 @@ const goInterview = () => {
                 <button @click="goToday" class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold">
                   {{ labels.todayMove }}
                 </button>
-                <div class="flex items-center gap-6">
+                  <div class="flex items-center gap-6">
                   <button @click="goPrev" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
-                  <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight w-40 text-center">
-                    {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
-                  </h2>
+                  <div class="text-center min-w-[240px]">
+                    <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight">
+                      {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
+                    </h2>
+                    <p v-if="currentView === 'WEEK'" class="text-sm font-bold text-brand-600 mt-1">{{ currentWeekTitle }}</p>
+                    <p v-if="currentView === 'DAY'" class="text-sm font-bold text-brand-600 mt-1">{{ currentDayTitle }}</p>
+                  </div>
                   <button @click="goNext" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
@@ -534,7 +561,9 @@ const goInterview = () => {
                       v-if="day"
                       :class="[
                         'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
-                        isSameDay(day, new Date()) ? 'bg-brand-600 text-white shadow-md' : (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
+                        isSameDay(day, new Date()) ? 'bg-brand-600 text-white shadow-md' : 
+                        (selectedDay && isSameDay(day, selectedDay)) ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-200' :
+                        (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
                       ]"
                     >
                       {{ day.getDate() }}
@@ -605,11 +634,15 @@ const goInterview = () => {
                            class="absolute left-1 right-1 p-1.5 rounded-lg shadow-sm z-20 cursor-pointer hover:scale-[1.02] transition-transform overflow-hidden border-l-4"
                            :style="{
                              ...getEventStyle(evt),
-                             backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
-                             borderColor: getInterviewerColor(evt.interviewerId)
+                             backgroundColor: `${getInterviewerColor(evt.interviewerId)}`,
+                             borderColor: getInterviewerColor(evt.interviewerId),
+                             color: '#fff'
                            }">
-                        <p class="text-[9px] font-bold opacity-80">{{ evt.time }}</p>
-                        <p class="text-[10px] font-extrabold truncate text-slate-800">{{ evt.applicantName }}</p>
+                        <div class="flex flex-col h-full justify-center">
+                           <!-- <p class="text-[9px] font-bold opacity-90 mb-0.5">{{ evt.time }}</p> -->
+                           <p class="text-[10px] font-extrabold truncate leading-tight">{{ evt.applicantName }}</p>
+                           <p class="text-[9px] font-medium truncate opacity-90">{{ evt.title }}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -634,7 +667,7 @@ const goInterview = () => {
                     </div>
 
                     <div class="flex-1 min-w-0">
-                      <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-2"
+                      <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-1"
                             :style="{
                               backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
                               color: getInterviewerColor(evt.interviewerId)
