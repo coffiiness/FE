@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +12,11 @@ const applicantSearchQuery = ref('')
 const isInterviewerEditModalOpen = ref(false)
 const draggingCardId = ref(null)
 const draggingOverColumnId = ref(null)
+
+// --- Modal State ---
+const isInterviewDetailModalOpen = ref(false)
+const selectedInterview = ref(null)
+const showCopyModal = ref(false) // 링크 복사 모달
 
 // --- Calendar State (New) ---
 const calendarState = reactive({
@@ -84,13 +90,34 @@ const allInterviewers = ref([
 ])
 
 const schedules = ref([
-  { id: 1, date: '2024-02-08', time: '14:00', endTime: '15:00', title: '김지원 면접', interviewerId: 1 },
-  { id: 2, date: '2024-02-09', time: '14:00', endTime: '15:00', title: '이수민 면접', interviewerId: 1 },
-  { id: 3, date: '2024-02-14', time: '10:00', endTime: '11:00', title: '최진우 면접', interviewerId: 1 },
-  { id: 4, date: '2024-02-14', time: '14:00', endTime: '15:00', title: '박동현 면접', interviewerId: 2 },
-  { id: 5, date: '2024-02-15', time: '09:00', endTime: '18:00', title: '박팀장 휴가', interviewerId: 2, type: 'off' },
-  { id: 6, date: '2024-02-16', time: '14:00', endTime: '15:00', title: '정하늘 면접', interviewerId: 1 },
-  { id: 10, date: '2024-02-16', time: '15:00', endTime: '16:00', title: '강민수 면접', interviewerId: 2 },
+  { 
+    id: 1, date: '2024-02-08', time: '14:00', endTime: '15:00', title: '김지원 면접', interviewerId: 1, 
+    applicantName: '김지원', location: '1층 미팅룸 A', description: '기술 면접 (1시간)'
+  },
+  { 
+    id: 2, date: '2024-02-09', time: '14:00', endTime: '15:00', title: '이수민 면접', interviewerId: 1,
+    applicantName: '이수민', location: '1층 미팅룸 B', description: '포트폴리오 리뷰 및 인성 면접'
+  },
+  { 
+    id: 3, date: '2024-02-14', time: '10:00', endTime: '11:00', title: '최진우 면접', interviewerId: 1,
+    applicantName: '최진우', location: '2층 회의실', description: '코딩 테스트 리뷰'
+  },
+  { 
+    id: 4, date: '2024-02-14', time: '14:00', endTime: '15:00', title: '박동현 면접', interviewerId: 2,
+    applicantName: '박동현', location: '2층 회의실', description: '실무 면접'
+  },
+  { 
+    id: 5, date: '2024-02-15', time: '09:00', endTime: '18:00', title: '박팀장 휴가', interviewerId: 2, type: 'off',
+    applicantName: '-', location: '-', description: '연차 휴가'
+  },
+  { 
+    id: 6, date: '2024-02-16', time: '14:00', endTime: '15:00', title: '정하늘 면접', interviewerId: 1,
+    applicantName: '정하늘', location: '1층 미팅룸 A', description: '기술 면접'
+  },
+  { 
+    id: 10, date: '2024-02-16', time: '15:00', endTime: '16:00', title: '강민수 면접', interviewerId: 2,
+    applicantName: '강민수', location: '1층 미팅룸 B', description: '임원 면접'
+  },
 ])
 
 const processes = ref([
@@ -212,6 +239,17 @@ const toggleBooking = (bookingId) => {
   expandedBookingIds.value = next
 }
 
+const openInterviewDetail = (booking) => {
+  selectedInterview.value = {
+    ...booking,
+    host: getInterviewerName(booking.interviewerId),
+    attendees: booking.applicantName ? [booking.applicantName] : [],
+  }
+  isInterviewDetailModalOpen.value = true
+}
+
+// --- Computed ---
+
 const selectedDayTitle = computed(() => {
   if (!selectedDay.value) return ''
   return `${selectedDay.value.getFullYear()}년 ${selectedDay.value.getMonth() + 1}월 ${selectedDay.value.getDate()}일`
@@ -236,7 +274,9 @@ const getApplicantsByProcess = (pid) => filteredApplicants.value.filter(a => a.p
 const copyRecruitmentLink = () => {
   const dummyLink = `https://careers.nexus.ai/jobs/${recruitment.value.id}`
   navigator.clipboard.writeText(dummyLink).then(() => {
-    alert('공고 링크가 클립보드에 복사되었습니다.')
+    showCopyModal.value = true
+  }).catch(err => {
+    console.error('링크 복사 실패', err)
   })
 }
 
@@ -316,7 +356,7 @@ const goInterview = () => {
         <hr class="border-slate-100">
 
         <div>
-          <div class="flex justify-between items-center mb-4">
+           <div class="flex justify-between items-center mb-4">
             <h5 class="text-xs font-bold text-slate-500">담당 면접관</h5>
             <button @click="isInterviewerEditModalOpen = true" class="text-[10px] font-bold text-brand-600 hover:underline">편집</button>
           </div>
@@ -368,7 +408,7 @@ const goInterview = () => {
             <!-- Calendar Header -->
             <div class="p-6 border-b border-slate-300 flex items-center justify-between bg-white">
               <div class="flex items-center gap-4">
-                <!-- Dropdown Removed -->
+                 
               </div>
               <div class="flex items-center gap-4">
                 <button @click="goToday" class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold">
@@ -433,7 +473,7 @@ const goInterview = () => {
                       backgroundColor: `${getInterviewerColor(booking.interviewerId)}20`,
                       borderLeft: `2px solid ${getInterviewerColor(booking.interviewerId)}`
                     }"
-                    @click.stop="openDayDetail(day)"
+                    @click.stop="openInterviewDetail(booking)"
                   >
                     <span>{{ getInterviewerName(booking.interviewerId) }}</span>
                     <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.time) }}</span>
@@ -490,10 +530,10 @@ const goInterview = () => {
                 <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ getInterviewerName(booking.interviewerId) }}</p>
 
                 <div v-if="expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
-                  <div class="text-xs text-slate-600">
-                    {{ booking.title }} 상세 내용...
+                  <div class="text-xs text-slate-600 mb-2">
+                    {{ booking.description }}
                   </div>
-                  <button class="mt-2 text-xs text-brand-600 hover:text-brand-700">
+                  <button @click.stop="openInterviewDetail(booking)" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline">
                     {{ labels.detail }}
                   </button>
                 </div>
@@ -574,6 +614,44 @@ const goInterview = () => {
         </div>
       </div>
     </div>
+
+    <!-- 모달: 링크 복사 성공 -->
+    <Transition name="fade">
+      <div v-if="showCopyModal" class="fixed inset-0 z-[70] flex items-center justify-center" role="dialog">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="showCopyModal = false"></div>
+
+        <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+          <div class="flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mb-4">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            </div>
+
+            <h3 class="text-xl font-bold text-slate-900 mb-2">링크 복사 완료</h3>
+            <p class="text-slate-500 text-sm mb-6 leading-relaxed">
+              채용 공고 링크가 클립보드에 복사되었습니다.<br>
+              원하는 곳에 붙여넣어 공유해 보세요.
+            </p>
+
+            <button
+                @click="showCopyModal = false"
+                class="w-full py-2.5 px-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-md hover:shadow-lg transition-all"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 모달: 면접 상세 보기 -->
+    <InterviewDetailModal 
+      :show="isInterviewDetailModalOpen" 
+      :event="selectedInterview" 
+      @close="isInterviewDetailModalOpen = false"
+    />
+
   </div>
 </template>
 
@@ -589,5 +667,15 @@ const goInterview = () => {
 }
 .animate-fade-in-up {
   animation: fadeInUp 0.3s ease-out forwards;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
