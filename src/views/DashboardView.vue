@@ -2,8 +2,34 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
+import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
 
 const router = useRouter()
+
+const showAnnouncementModal = ref(false)
+const announcementMode = ref('list') // list | create | detail
+const selectedAnnouncementId = ref(null)
+
+// 만들기
+const openCreateAnnouncement = () => {
+  announcementMode.value = 'create'
+  selectedAnnouncementId.value = null
+  showAnnouncementModal.value = true
+}
+
+// 상세보기
+const openAnnouncementDetail = (id) => {
+  announcementMode.value = 'detail'
+  selectedAnnouncementId.value = id
+  showAnnouncementModal.value = true
+}
+
+// 닫기
+const closeAnnouncement = () => {
+  showAnnouncementModal.value = false
+  announcementMode.value = 'list'
+  selectedAnnouncementId.value = null
+}
 
 // --- Data: User & Stats ---
 const userName = '김철수'
@@ -52,12 +78,83 @@ const schedules = ref([
   }
 ])
 
+// --- Announcement Pagination ---
+const currentPage = ref(1)
+const pageSize = 3 // 한 페이지에 3개씩
+
+const totalPages = computed(() => {
+  return Math.ceil(announcements.value.length / pageSize)
+})
+
+const pagedAnnouncements = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  const end = start + pageSize
+  return announcements.value.slice(start, end)
+})
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--
+  }
+}
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++
+  }
+}
+
+
 // --- Data: Announcements ---
 const announcements = ref([
-  { id: 1, title: '탕비실 비품 도난 사건', tag: '새 공지', date: '2026. 01. 26' },
-  { id: 2, title: '설 연휴 대체 휴무 안내', tag: '필독', date: '2026. 01. 20' },
-  { id: 3, title: '2026년 상반기 채용 계획 취합', tag: '', date: '2026. 01. 15' },
+  {
+    id: 1,
+    title: '탕비실 비품 도난 사건',
+    content: '최근 탕비실 비품 분실 사례가 발생했습니다.',
+    pinned: true,
+    author: '김인사',
+    tag: '새 공지',
+    date: '2026.01.26'
+  },
+  {
+    id: 2,
+    title: '설 연휴 대체 휴무 안내',
+    content: '2/10~2/12 대체 휴무입니다.',
+    pinned: false,
+    author: '김인사',
+    tag: '필독',
+    date: '2026.01.20'
+  },
+  {
+    id: 3,
+    title: '2026년 상반기 채용 계획 취합',
+    content: '상반기 채용 계획을 취합합니다.',
+    pinned: false,
+    author: '김인사',
+    tag: '',
+    date: '2026.01.15'
+  }
 ])
+
+const handleSaveAnnouncement = (data) => {
+  announcements.value.unshift({
+    id: Date.now(),
+    title: data.title,
+    content: data.content,
+    pinned: data.pinned,
+    author: '김인사',
+    tag: data.pinned ? '고정' : '',
+    date: new Date().toISOString().slice(0,10)
+  })
+
+  currentPage.value = 1
+}
+
+const handleRemoveAnnouncement = (id) => {
+  announcements.value =
+      announcements.value.filter(a => a.id !== id)
+}
+
 
 // --- Data: Meeting Rooms (Replacement for Work Status) ---
 const meetingRooms = ref([
@@ -128,6 +225,8 @@ const modalEvent = ref(null)
 const openScheduleDetail = (schedule) => {
   modalEvent.value = { ...schedule, description: `${schedule.position} / ${schedule.candidate}` }
   isDetailModalOpen.value = true
+
+
 }
 </script>
 
@@ -239,23 +338,49 @@ const openScheduleDetail = (schedule) => {
           <div class="flex justify-between items-center mb-6">
             <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
               사내 공지사항
-              <span class="text-slate-300 font-light text-sm px-2 border-l border-slate-200">&lt; 1 / 1 &gt;</span>
+              <div class="flex items-center gap-2 text-sm text-slate-400 font-medium">
+
+                <button
+                    @click="prevPage"
+                    :disabled="currentPage === 1"
+                    class="px-1 hover:text-slate-600 disabled:opacity-30"
+                >
+                  &lt;
+                </button>
+
+                <span>
+    {{ currentPage }} / {{ totalPages }}
+  </span>
+
+                <button
+                    @click="nextPage"
+                    :disabled="currentPage === totalPages"
+                    class="px-1 hover:text-slate-600 disabled:opacity-30"
+                >
+                  &gt;
+                </button>
+
+              </div>
             </h2>
             <div class="flex items-center gap-2">
-              <button class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-              </button>
-              <button class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors shadow-sm">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              <button
+                  @click="openCreateAnnouncement"
+                  class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg"
+              >
                 공지사항 만들기
               </button>
+
             </div>
           </div>
 
           <div class="flex-1 overflow-y-auto">
              <ul class="space-y-1">
-               <li v-for="item in announcements" :key="item.id" class="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl cursor-pointer group transition-colors">
-                  <div class="flex items-center gap-3">
+               <li
+                   v-for="item in pagedAnnouncements"
+                   :key="item.id"
+                   @click="openAnnouncementDetail(item.id)"
+                   class="flex justify-between items-center p-3 hover:bg-slate-50 rounded-xl cursor-pointer"
+               >                  <div class="flex items-center gap-3">
                     <span class="text-sm font-bold text-slate-700 group-hover:text-brand-700 transition-colors">{{ item.title }}</span>
                     <span v-if="item.tag" class="px-2 py-0.5 rounded bg-brand-100 text-brand-600 text-[10px] font-bold">{{ item.tag }}</span>
                   </div>
@@ -311,6 +436,17 @@ const openScheduleDetail = (schedule) => {
       @close="isDetailModalOpen = false"
     />
   </div>
+
+  <AnnouncementModal
+      :show="showAnnouncementModal"
+      :mode="announcementMode"
+      :selected-id="selectedAnnouncementId"
+      :announcements="announcements"
+      @close="closeAnnouncement"
+      @save="handleSaveAnnouncement"
+      @remove="handleRemoveAnnouncement"
+  />
+
 </template>
 
 <style scoped>
