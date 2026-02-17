@@ -1,11 +1,12 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
 import { useNotificationStore } from '@/Stores/notification'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()
+const router = useRouter()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
 
@@ -204,7 +205,7 @@ watch(
             K
           </div>
           <div v-if="sidebarOpen" class="ml-3 transition-opacity duration-300">
-            <p class="text-sm font-medium text-white">김천수</p>
+            <p class="text-sm font-medium text-white">김철수</p>
             <p class="text-[11px] text-slate-400 font-medium">채용담당자</p>
           </div>
         </div>
@@ -218,6 +219,15 @@ watch(
           <button @click="sidebarOpen = !sidebarOpen" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
+            </svg>
+          </button>
+          <!-- Global Back Button -->
+          <button @click="route.path !== '/dashboard' ? router.back() : null" 
+                  class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                  v-if="route.path !== '/dashboard'"
+          >
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
           <h2 class="text-lg font-bold text-slate-800 tracking-tight">{{ currentTitle }}</h2>
