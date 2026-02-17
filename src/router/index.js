@@ -168,13 +168,20 @@ const routes = [
       },
 
       {
-        path: 'recruitments/:recruitmentId/schedule/create',
-        name: 'InterviewScheduleCreate',
+        path: 'recruitment/interview/select',
+        name: 'InterviewSelect',
         component: () =>
-          import('@/views/interview/InterviewScheduleCreateView.vue'),
+            import('@/views/interview/InterviewSelectView.vue'),
         meta: { requiresAuth: true }
-      }
+      },
 
+        {
+            path: 'recruitment/interview/schedule',
+            name: 'InterviewScheduleCreate',
+            component: () =>
+                import('@/views/interview/InterviewScheduleCreateView.vue'),
+            meta: { requiresAuth: true }
+        }
     ]
   },
 

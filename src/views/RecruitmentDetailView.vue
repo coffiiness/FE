@@ -244,6 +244,17 @@ const onDrop = (evt, pid) => {
   if (app) app.processId = pid
   draggingCardId.value = null; draggingOverColumnId.value = null
 }
+
+const goInterview = () => {
+  router.push({
+    path: '/recruitment/interview/select',
+    query: {
+      jobId: recruitment.value.id
+    }
+  })
+}
+
+
 </script>
 
 <template>
@@ -267,6 +278,14 @@ const onDrop = (evt, pid) => {
             공고 링크 복사
           </button>
         </div>
+
+        <!-- 면접 생성 버튼 -->
+        <button
+            @click="goInterview"
+            class="w-full mt-4 bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition"
+        >
+          + 면접 생성하기
+        </button>
 
         <div>
           <h2 class="text-sm font-bold text-slate-800 mb-3">총 지원자: {{ recruitment.totalApplicants }}명</h2>
