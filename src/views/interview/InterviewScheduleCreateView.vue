@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import InterviewConfirmModal from './InterviewConfirmModal.vue'
 import { useRoute, useRouter } from 'vue-router'
+
 
 const route = useRoute()
 const router = useRouter()
@@ -14,8 +16,42 @@ const resetSelection = () => {
   selectedKeys.value = []
 }
 
-const interviewers = ref(JSON.parse(route.query.interviewers || '[]')) // [{id,name}]
-const applicants = ref(JSON.parse(route.query.applicants || '[]'))     // [{id,name}]
+// 임시 더미 면접관
+const dummyInterviewers = [
+  { id: 1, name: '김기술' },
+  { id: 2, name: '정민수' },
+  { id: 3, name: '박상수' }
+]
+
+// 임시 더미 지원자
+const dummyApplicants = [
+  { id: 101, name: '홍길동' },
+  { id: 102, name: '김하늘' },
+  { id: 103, name: '박민준' }
+]
+
+// query 있으면 사용, 없으면 더미 사용
+const interviewers = ref(
+    route.query.interviewers
+        ? JSON.parse(route.query.interviewers)
+        : dummyInterviewers
+)
+
+const applicants = ref(
+    route.query.applicants
+        ? JSON.parse(route.query.applicants)
+        : dummyApplicants
+)
+
+const showModal = ref(false)
+
+const sendInvite = (memo) => {
+  alert('초대장이 발송되었습니다.')
+
+  showModal.value = false
+
+  router.push('/recruitment/home')
+}
 
 const COLOR = {
   brand: '#0D9488',      // 선택됨
@@ -266,17 +302,8 @@ const selectedTimeRanges = computed(() => {
 })
 
 const goNext = () => {
-  router.push({
-    path: '/recruitment/interview/confirm',
-    query: {
-      roomId: String(selectedRoomId.value),
-      selected: JSON.stringify(selectedKeys.value),
-      interviewers: JSON.stringify(interviewers.value),
-      applicants: JSON.stringify(applicants.value)
-    }
-  })
+  showModal.value = true
 }
-
 
 const dayHeaderClass = (dayIndex) => {
   if (dayIndex === 0) return 'sunday'
@@ -452,6 +479,21 @@ const dayHeaderClass = (dayIndex) => {
     </div>
 
   </div>
+
+  <InterviewConfirmModal
+      :open="showModal"
+
+      :date="weekDays[0].date"
+      :time="selectedTimeRanges.join(', ')"
+      :interviewers="interviewers.map(i=>i.name).join(', ')"
+      :applicant="applicants.map(a=>a.name).join(', ')"
+      :room="selectedRoom.name"
+      requester="HR 담당자"
+
+      @close="showModal=false"
+      @submit="sendInvite"
+  />
+
 </template>
 
 <style scoped>
