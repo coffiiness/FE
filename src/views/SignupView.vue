@@ -42,97 +42,139 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-50">
-    <div class="text-center mb-8">
-      <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight">
-        <span class="text-brand-600">Cal</span>Fit
-      </h1>
-      <p class="mt-3 text-base font-medium text-slate-600">
-        복잡한 채용 일정, CalFit으로 간편하게
-      </p>
+  <div class="flex min-h-screen bg-white">
+    <!-- Left Section: Stylish Background & Branding -->
+    <div class="hidden lg:flex lg:w-1/2 bg-slate-900 relative justify-center items-center overflow-hidden">
+        <!-- Background Pattern/Gradient -->
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-brand-950 opacity-90 z-0"></div>
+        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0"></div>
+        
+        <!-- Decorative Shapes -->
+        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl"></div>
+
+        <!-- Content -->
+        <div class="relative z-10 text-center px-10">
+            <h1 class="text-5xl font-extrabold text-white mb-6 tracking-tight leading-tight">
+                Join the <br/> <span class="text-brand-400">Revolution.</span>
+            </h1>
+            <p class="text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
+                복잡한 채용 일정, CalFit으로 간편하게 시작하세요.
+            </p>
+            
+            <!-- Illustration Placeholder (CSS-only minimal graphic) -->
+             <div class="mt-12 flex justify-center">
+                 <div class="relative w-48 h-48">
+                    <div class="absolute inset-0 bg-brand-500 rounded-full opacity-20 animate-ping"></div>
+                    <div class="absolute inset-0 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full shadow-2xl flex items-center justify-center">
+                        <span class="text-6xl">🚀</span>
+                    </div>
+                 </div>
+            </div>
+        </div>
     </div>
 
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-      <div class="px-8 py-10">
-        <h2 class="text-2xl font-black text-slate-900 text-center mb-8">회원가입</h2>
+    <!-- Right Section: Signup Form -->
+    <div class="flex flex-1 flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
+      <div class="mx-auto w-full max-w-sm lg:w-96">
+        
+        <div class="mb-10">
+           <h2 class="text-3xl font-bold tracking-tight text-slate-900">
+             계정 만들기
+           </h2>
+           <p class="mt-2 text-sm text-slate-500">
+             30일 무료 체험을 시작하세요. 언제든 취소 가능합니다.
+           </p>
+        </div>
 
-        <form class="space-y-6" @submit.prevent="handleSubmit">
+        <form class="space-y-5" @submit.prevent="handleSubmit">
           <div>
-            <label for="nickname" class="block text-sm font-bold text-slate-900 mb-1.5">이름</label>
-            <input
+            <label for="nickname" class="block text-sm font-semibold text-slate-700">이름</label>
+            <div class="mt-1">
+              <input
                 id="nickname"
                 v-model="nickname"
                 type="text"
                 required
-                class="mt-1 block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-                placeholder="김철수"
-            />
+                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
+                placeholder="홍길동"
+              />
+            </div>
           </div>
 
           <div>
-            <label for="email" class="block text-sm font-bold text-slate-900 mb-1.5">이메일</label>
-            <input
+            <label for="email" class="block text-sm font-semibold text-slate-700">이메일</label>
+            <div class="mt-1">
+              <input
                 id="email"
                 v-model="email"
                 type="email"
                 required
-                class="mt-1 block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
                 placeholder="name@company.com"
-            />
+              />
+            </div>
           </div>
 
           <div>
-            <label for="password" class="block text-sm font-bold text-slate-900 mb-1.5">비밀번호</label>
-            <input
+            <label for="password" class="block text-sm font-semibold text-slate-700">비밀번호</label>
+            <div class="mt-1">
+              <input
                 id="password"
                 v-model="password"
                 type="password"
                 required
-                class="mt-1 block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
                 placeholder="••••••••"
-            />
+              />
+            </div>
           </div>
 
           <div>
-            <label for="passwordConfirm" class="block text-sm font-bold text-slate-900 mb-1.5">비밀번호 확인</label>
-            <input
+            <label for="passwordConfirm" class="block text-sm font-semibold text-slate-700">비밀번호 확인</label>
+            <div class="mt-1">
+              <input
                 id="passwordConfirm"
                 v-model="passwordConfirm"
                 type="password"
                 required
-                class="mt-1 block w-full px-4 py-3 border border-slate-300 rounded-xl shadow-sm text-slate-900 font-medium placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
                 placeholder="••••••••"
-            />
+              />
+            </div>
           </div>
 
-          <div v-if="error" class="text-sm text-red-700 font-bold text-center bg-red-50 py-3 rounded-xl border border-red-200">
+          <div v-if="error" class="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-100">
             {{ error }}
           </div>
 
-          <button
+          <div>
+            <button
               type="submit"
               :disabled="loading"
-              class="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-base font-black text-white bg-brand-600 hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-          >
-            <span v-if="loading" class="flex items-center">
-              <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              가입 중...
-            </span>
-            <span v-else>회원가입 완료</span>
-          </button>
+              class="flex w-full justify-center rounded-lg border border-transparent bg-brand-600 py-3 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+            >
+               <span v-if="loading" class="flex items-center">
+                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  가입 중...
+                </span>
+                <span v-else>회원가입 완료</span>
+            </button>
+          </div>
         </form>
-      </div>
 
-      <div class="px-8 py-5 bg-slate-100 border-t border-slate-200 text-center">
-        <p class="text-sm font-bold text-slate-600">
-          이미 계정이 있으신가요?
-          <button @click="router.push('/login')" class="font-black text-brand-600 hover:text-brand-700 hover:underline ml-1">
-            로그인하기
-          </button>
-        </p>
+        <div class="mt-8 text-center">
+            <p class="text-sm text-slate-500">
+                이미 계정이 있으신가요? 
+                <button @click="router.push('/login')" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
+                    로그인하기
+                </button>
+            </p>
+        </div>
+
       </div>
     </div>
   </div>
