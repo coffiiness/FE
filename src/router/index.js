@@ -181,6 +181,14 @@ const routes = [
             component: () =>
                 import('@/views/interview/InterviewScheduleCreateView.vue'),
             meta: { requiresAuth: true }
+        },
+
+        {
+            path: 'recruitment/interview/response',
+            name: 'InterviewResponse',
+            component: () =>
+                import('@/views/interview/InterviewResponse.vue'),
+            meta: { requiresAuth: true }
         }
     ]
   },

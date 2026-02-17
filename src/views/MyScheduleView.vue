@@ -7,6 +7,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRoute } from 'vue-router'
 import { useNotificationStore } from '@/Stores/notification'
 import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -347,6 +348,14 @@ const confirmDelete = () => {
   isFormModalOpen.value = false
   targetDeleteId.value = null
 }
+
+// 면접관 응답 확인 연결
+const router = useRouter()
+
+const goToInterviewResponse = () => {
+  router.push('/recruitment/interview/response')
+}
+
 </script>
 
 <template>
@@ -567,9 +576,28 @@ const confirmDelete = () => {
               <p class="text-[11px] text-slate-500 mt-1.5 font-medium flex items-center gap-1.5"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{{ event.time }}</p>
             </div>
           </div>
+          <!-- 면접관 응답 확인 버튼 영역 -->
+          <div class="mt-6 pt-5 border-t border-slate-200">
+            <button
+                @click="$router.push('/recruitment/interview/response')"
+                class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
+           bg-brand-50 text-brand-600 font-bold text-sm
+           hover:bg-brand-100 transition-all"
+            >
+              면접관 응답 확인
+              <svg class="w-4 h-4 transition-transform group-hover:translate-x-1"
+                   fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
+
+
 
     <ScheduleDetailModal
         :isOpen="isDetailModalOpen"
