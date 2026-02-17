@@ -398,6 +398,16 @@ const goInterview = () => {
     query: { jobId: recruitment.value.id }
   })
 }
+
+const handleInterviewDelete = (interviewId) => {
+  // TODO: 실제 면접 삭제 API 호출
+  // axios.delete(`/recruitment/interviews/${interviewId}`)
+  isInterviewDetailModalOpen.value = false
+  setTimeout(() => {
+    alert('면접 일정이 삭제되었습니다.')
+    // 실제 데이터에서 제거하는 로직은 생략 (Mock)
+  }, 300)
+}
 </script>
 
 <template>
@@ -843,6 +853,7 @@ const goInterview = () => {
       :show="isInterviewDetailModalOpen" 
       :event="selectedInterview" 
       @close="isInterviewDetailModalOpen = false"
+      @delete="handleInterviewDelete"
     />
 
   </div>

@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const props = defineProps({
   show: {
@@ -13,6 +14,14 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'delete', 'edit'])
+
+const isDeleteConfirmOpen = ref(false)
+
+const handleDelete = () => {
+  isDeleteConfirmOpen.value = false
+  emit('delete', props.event.id)
+}
+
 
 const closeOnBackdrop = (e) => {
   if (e.target === e.currentTarget) emit('close')
@@ -106,20 +115,26 @@ const attendees = computed(() => props.event.attendees || [])
 
         <!-- Footer -->
         <div class="px-6 py-5 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-4">
-          <button @click="$emit('delete', event.id)" class="text-sm font-bold text-rose-500 hover:text-rose-700 transition-colors">
+          <button @click="isDeleteConfirmOpen = true" class="text-sm font-bold text-rose-500 hover:text-rose-700 transition-colors">
             삭제
-          </button>
-          <button @click="$emit('edit', event)" class="bg-[#0D9488] text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#0F766E] transition-colors flex items-center gap-1.5 shadow-sm">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-            </svg>
-            수정하기
           </button>
         </div>
 
       </div>
     </div>
+
   </Transition>
+
+  <ConfirmModal
+    :show="isDeleteConfirmOpen"
+    title="면접 일정 삭제"
+    message="정말로 이 면접 일정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+    confirm-text="삭제"
+    cancel-text="취소"
+    type="danger"
+    @confirm="handleDelete"
+    @cancel="isDeleteConfirmOpen = false"
+  />
 </template>
 
 <style scoped>
