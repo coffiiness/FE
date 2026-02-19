@@ -10,12 +10,11 @@
         "endTime": "15:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_a",
+        "roomId": "r1",
         "applicantName": "한지훈",
-        "location": "301호 회의실",
-        "attendees": [
-            "김기술 (백엔드 리드)",
-            "박인사 (인사 팀장)"
+        "attendeeIds": [
+            104,
+            201
         ]
     },
     {
@@ -29,12 +28,11 @@
         "endTime": "11:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_b",
+        "roomId": "r2",
         "applicantName": "박영희",
-        "location": "302호 회의실",
-        "attendees": [
-            "이디자인 (프로덕트 디자이너)",
-            "최프론트 (프론트엔드 개발자)"
+        "attendeeIds": [
+            301,
+            101
         ]
     },
     {
@@ -48,11 +46,10 @@
         "endTime": "17:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_c",
+        "roomId": "r3",
         "applicantName": "공유",
-        "location": "ZOOM 화상회의",
-        "attendees": [
-            "박팀장 (인사 팀장)"
+        "attendeeIds": [
+            201
         ]
     },
     {
@@ -66,12 +63,11 @@
         "endTime": "15:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 2차 임원 면접",
-        "roomId": "room_a",
+        "roomId": "r1",
         "applicantName": "수지",
-        "location": "임원실",
-        "attendees": [
-            "Park (CTO)",
-            "Lee (HR Manager)"
+        "attendeeIds": [
+            201,
+            101
         ]
     },
     {
@@ -85,11 +81,10 @@
         "endTime": "12:00",
         "type": "INTERVIEW",
         "description": "DevOps Engineer 포지션 면접",
-        "roomId": "room_b",
+        "roomId": "r2",
         "applicantName": "송혜교",
-        "location": "301호 회의실",
-        "attendees": [
-            "정플랫폼 (인프라 엔지니어)"
+        "attendeeIds": [
+            109
         ]
     },
     {
@@ -103,11 +98,12 @@
         "endTime": "10:30",
         "type": "OTHERS",
         "description": "백엔드 팀 주간 업무 공유",
-        "roomId": "room_l",
+        "roomId": "r3",
         "applicantName": "",
-        "location": "대회의실",
-        "attendees": [
-            "백엔드팀 전원"
+        "attendeeIds": [
+            104,
+            105,
+            106
         ]
     },
     {
@@ -121,11 +117,10 @@
         "endTime": "16:00",
         "type": "INTERVIEW",
         "description": "Product Designer 포지션 면접",
-        "roomId": "room_c",
+        "roomId": "r3",
         "applicantName": "김고은",
-        "location": "303호 회의실",
-        "attendees": [
-            "강인사 (인사 담당자)"
+        "attendeeIds": [
+            201
         ]
     },
     {
@@ -141,7 +136,6 @@
         "description": "개인 사정",
         "roomId": "",
         "applicantName": "",
-        "location": "-",
-        "attendees": []
+        "attendeeIds": []
     }
 ]
