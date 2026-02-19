@@ -121,8 +121,6 @@ const handleDeleteCancel = () => {
   <div class="space-y-6">
     <!-- 헤더 -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <h1 class="text-2xl font-bold text-gray-900">지원서 템플릿</h1>
-
       <div class="flex items-center gap-3">
         <!-- 검색 -->
         <div class="relative">
@@ -137,17 +135,18 @@ const handleDeleteCancel = () => {
           </svg>
         </div>
 
-        <!-- 템플릿 생성 버튼 -->
-        <button
-          @click="goToCreate"
-          class="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-          </svg>
-          템플릿 생성
-        </button>
       </div>
+
+      <!-- 템플릿 생성 버튼 -->
+      <button
+        @click="goToCreate"
+        class="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium sm:ml-auto"
+      >
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        템플릿 생성
+      </button>
     </div>
 
     <!-- 테이블 -->

@@ -147,8 +147,7 @@ const formatPercent = (v) => v + '%'
 
 <template>
   <div class="space-y-8">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900">리포트</h1>
+    <div class="flex items-center justify-end">
       <span class="text-sm text-gray-400">기준: 2026년 2월</span>
     </div>
 
