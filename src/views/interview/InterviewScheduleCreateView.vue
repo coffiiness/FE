@@ -302,12 +302,6 @@ const rooms = ref([
   }
 
 ])
-import { useRoomStore } from '@/stores/room'
-import { storeToRefs } from 'pinia'
-
-const roomStore = useRoomStore()
-const { rooms } = storeToRefs(roomStore)
-
 const selectedRoomId = ref(rooms.value[0]?.id || '')
 
 const selectedRoom = computed(() => {
