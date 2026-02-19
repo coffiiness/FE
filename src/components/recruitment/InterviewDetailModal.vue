@@ -29,10 +29,15 @@ const closeOnBackdrop = (e) => {
 
 const formattedDate = computed(() => {
   if (!props.event.date) return ''
-  const [y, m, d] = props.event.date.split('-')
-  const startTime = props.event.time || ''
+  // const [y, m, d] = props.event.date.split('-') // Not needed if we just use the string
+  
+  if (props.event.time) {
+      return `${props.event.date} · ${props.event.time}`
+  }
+  
+  const startTime = props.event.startTime || ''
   const endTime = props.event.endTime || ''
-  return `${y}-${m}-${d} · ${startTime} - ${endTime}`
+  return `${props.event.date} · ${startTime} - ${endTime}`
 })
 
 const location = computed(() => props.event.location || '지정된 장소 없음')

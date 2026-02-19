@@ -80,7 +80,8 @@ const recruitment = computed(() => {
     totalApplicants: job.totalApplicants,
     ongoingInterviews: job.ongoingInterviews, 
     completionRate: job.completionRate,
-    interviewers: job.interviewers || []
+    interviewers: job.interviewers || [],
+    position: job.position || '직군 미정' // Added position field
   }
 })
 
@@ -421,7 +422,8 @@ const handleInterviewDelete = (interviewId) => {
 
         <div>
           <h5 class="text-xs font-bold text-slate-500 mb-2">공고 상세 정보</h5>
-          <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-2">{{ recruitment.title }}</h1>
+          <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-1">{{ recruitment.title }}</h1>
+          <p class="text-sm font-bold text-brand-600 mb-2">{{ recruitment.position }}</p>
           <p class="text-xs text-slate-500 font-medium mb-4">기간: {{ recruitment.period }}</p>
           
           <button @click="copyRecruitmentLink" class="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-50 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold hover:bg-brand-100 transition-colors">
