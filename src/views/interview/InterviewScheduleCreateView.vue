@@ -88,7 +88,8 @@ const sendInvite = (memo) => {
         startTime: minToTime(s),
         endTime: minToTime(e),
         type: 'INTERVIEW',
-        description: `면접관: ${interviewerNames}\n지원자: ${applicantNames}\n장소: ${selectedRoom.value.name}\n메모: ${memo || '없음'}`
+        description: `면접관: ${interviewerNames}\n지원자: ${applicantNames}\n장소: ${selectedRoom.value.name}\n메모: ${memo || '없음'}`,
+        roomId: selectedRoom.value.id // [추가] 회의실 ID
       })
     }
 
@@ -202,36 +203,13 @@ const moveMonth = (deltaMonth) => {
   anchorDate.value = ymd(d)
 }
 
-const rooms = ref([
-  {
-    id: 1,
-    name: 'Astra-1',
-    blocked: [
-      { date: '2026-02-17', time: '10:00' },
-      { date: '2026-02-19', time: '13:00' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Astra-2',
-    blocked: [
-      { date: '2026-02-16', time: '12:00' },
-      { date: '2026-02-16', time: '13:00' },
-      { date: '2026-02-20', time: '10:00' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Orion',
-    blocked: [
-      { date: '2026-02-18', time: '11:00' },
-      { date: '2026-02-18', time: '12:00' },
-      { date: '2026-02-18', time: '13:00' }
-    ]
-  }
-])
+import { useRoomStore } from '@/stores/room'
+import { storeToRefs } from 'pinia'
 
-const selectedRoomId = ref(2)
+const roomStore = useRoomStore()
+const { rooms } = storeToRefs(roomStore)
+
+const selectedRoomId = ref(rooms.value[0]?.id || '')
 
 const selectedRoom = computed(() => {
   return rooms.value.find(r => r.id === selectedRoomId.value) || rooms.value[0]
@@ -241,7 +219,9 @@ const isBlocked = (date, time) => {
 
   if (isWeekend(date)) return true
 
-  return selectedRoom.value.blocked.some(
+  // blocked 정보가 없거나 배열이 아니면 빈 배열로 처리
+  const blockedArr = selectedRoom.value?.blocked || []
+  return blockedArr.some(
       b => b.date === date && b.time === time
   )
 }

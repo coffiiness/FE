@@ -63,7 +63,8 @@ const handleSubmit = () => {
     startTime: state.startTime,
     endTime: state.endTime,
     type: 'MEETING',
-    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${state.attendees}\n내용: ${state.description || '-'}`
+    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${state.attendees}\n내용: ${state.description || '-'}`,
+    roomId: props.room.id // [추가] 회의실 연동을 위한 ID
   })
 
   state.title = ''
