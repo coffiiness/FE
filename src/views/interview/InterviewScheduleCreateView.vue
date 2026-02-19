@@ -52,6 +52,7 @@ const applicants = ref(
         : dummyApplicants
 )
 
+
 const showModal = ref(false)
 
 const sendInvite = (memo) => {
@@ -152,32 +153,102 @@ const moveMonth = (deltaMonth) => {
 }
 
 const rooms = ref([
+
+  // Astra-1 (소형 회의실)
   {
     id: 1,
     name: 'Astra-1',
+    capacity: '2~4인실',
     blocked: [
-      { date: '2026-02-17', time: '10:00' },
-      { date: '2026-02-19', time: '13:00' }
+
+      // 월요일 오전 정기회의
+      { date: '2026-02-16', time: '09:00' },
+      { date: '2026-02-16', time: '10:00' },
+      { date: '2026-02-16', time: '11:00' },
+
+      // 화요일 프로젝트 미팅
+      { date: '2026-02-17', time: '14:00' },
+      { date: '2026-02-17', time: '15:00' },
+
+      // 수요일 랜덤
+      { date: '2026-02-18', time: '13:00' },
+
+      // 목요일 오전 점유
+      { date: '2026-02-19', time: '09:00' },
+      { date: '2026-02-19', time: '10:00' },
+
+      // 금요일 리뷰
+      { date: '2026-02-20', time: '16:00' },
+      { date: '2026-02-20', time: '17:00' }
     ]
   },
+
+
+  // Astra-2 (중형 회의실)
   {
     id: 2,
     name: 'Astra-2',
+    capacity: '4~6인실',
     blocked: [
-      { date: '2026-02-16', time: '12:00' },
+
+      // 월요일 오후 워크샵
       { date: '2026-02-16', time: '13:00' },
-      { date: '2026-02-20', time: '10:00' }
+      { date: '2026-02-16', time: '14:00' },
+      { date: '2026-02-16', time: '15:00' },
+
+      // 화요일 임원 회의
+      { date: '2026-02-17', time: '10:00' },
+      { date: '2026-02-17', time: '11:00' },
+      { date: '2026-02-17', time: '12:00' },
+
+      // 수요일 전체회의
+      { date: '2026-02-18', time: '14:00' },
+      { date: '2026-02-18', time: '15:00' },
+      { date: '2026-02-18', time: '16:00' },
+
+      // 목요일 랜덤
+      { date: '2026-02-19', time: '11:00' },
+
+      // 금요일 피크타임
+      { date: '2026-02-20', time: '10:00' },
+      { date: '2026-02-20', time: '11:00' }
     ]
   },
+
+
+  // Orion (대형 회의실)
   {
     id: 3,
     name: 'Orion',
+    capacity: '6~8인실',
     blocked: [
+
+      // 월요일 전략회의 (반나절)
+      { date: '2026-02-16', time: '09:00' },
+      { date: '2026-02-16', time: '10:00' },
+      { date: '2026-02-16', time: '11:00' },
+      { date: '2026-02-16', time: '12:00' },
+
+      // 화요일 외부미팅
+      { date: '2026-02-17', time: '15:00' },
+      { date: '2026-02-17', time: '16:00' },
+
+      // 수요일 대형면접
+      { date: '2026-02-18', time: '09:00' },
+      { date: '2026-02-18', time: '10:00' },
       { date: '2026-02-18', time: '11:00' },
-      { date: '2026-02-18', time: '12:00' },
-      { date: '2026-02-18', time: '13:00' }
+
+      // 목요일 세미나
+      { date: '2026-02-19', time: '13:00' },
+      { date: '2026-02-19', time: '14:00' },
+      { date: '2026-02-19', time: '15:00' },
+
+      // 금요일 마감회의
+      { date: '2026-02-20', time: '17:00' },
+      { date: '2026-02-20', time: '18:00' }
     ]
   }
+
 ])
 
 const selectedRoomId = ref(2)
@@ -186,14 +257,30 @@ const selectedRoom = computed(() => {
   return rooms.value.find(r => r.id === selectedRoomId.value) || rooms.value[0]
 })
 
+const isPastDate = (dateStr) => {
+  const today = new Date()
+  today.setHours(0,0,0,0)
+
+  const target = new Date(dateStr)
+  target.setHours(0,0,0,0)
+
+  return target < today
+}
+
+
 const isBlocked = (date, time) => {
 
+  // 과거 날짜 차단
+  if (isPastDate(date)) return true
+
+  // 주말 차단
   if (isWeekend(date)) return true
 
   return selectedRoom.value.blocked.some(
       b => b.date === date && b.time === time
   )
 }
+
 
 const MAX_HOURS = 6
 const selectedKeys = ref([])
@@ -264,10 +351,8 @@ onBeforeUnmount(() => {
 })
 
 watch(selectedRoomId, () => {
-  selectedKeys.value = selectedKeys.value.filter(k => {
-    const [d, t] = k.split('_')
-    return !isBlocked(d, t)
-  })
+  // 회의실 변경 시 무조건 초기화
+  selectedKeys.value = []
 })
 
 const parseKey = (k) => {
@@ -348,65 +433,149 @@ const dayHeaderClass = (dayIndex) => {
 }
 
 const handleAutoAssign = ({
+                            useAllRooms,
                             useTimeRange,
                             start,
-                            end,
                             useMaxHour,
                             hours
                           }) => {
 
   selectedKeys.value = []
 
+  const totalPeople =
+      interviewers.value.length + applicants.value.length
+
   const startMin = useTimeRange
       ? timeToMin(`${pad2(start)}:00`)
       : 0
 
-  const endMin = useTimeRange
-      ? timeToMin(`${pad2(end)}:00`)
-      : 24 * 60
+  const endMin = 24 * 60
 
-  const needMinutes = useMaxHour
-      ? hours * 60
-      : 60
+  const needMinutes =
+      useMaxHour ? hours * 60 : 60
+
+  const now = new Date()
+  const todayStrNow = todayStr()
+  const currentMin =
+      now.getHours() * 60 + now.getMinutes()
+
+  // 인원 수용 가능한 방만 필터 (정렬 없음)
+  const candidateRooms = rooms.value.filter(room => {
+
+    const [min, max] = room.capacity
+        .replace('인실', '')
+        .split('~')
+        .map(Number)
+
+    return totalPeople >= min &&
+        totalPeople <= max
+  })
 
 
+  // 🔥 날짜 → 시간 → 방
   for (const day of weekDays.value) {
 
-    if (isWeekend(day.date)) continue
-
-    let streak = []
+    if (isPastDate(day.date)) continue
 
     for (const time of timeSlots) {
 
       const min = timeToMin(time)
 
-      if (min < startMin || min >= endMin) continue
-
-      if (isBlocked(day.date, time)) {
-        streak = []
+      if (min < startMin || min >= endMin)
         continue
-      }
 
-      streak.push(time)
+      if (day.date === todayStrNow &&
+          min <= currentMin)
+        continue
 
-      if (streak.length * 60 >= needMinutes) {
+      for (const room of candidateRooms) {
 
-        streak.forEach(t => {
-          selectedKeys.value.push(keyOf(day.date, t))
-        })
+        let ok = true
 
-        alert(`자동 배정 완료: ${day.date}`)
+        for (let i = 0; i < needMinutes / 60; i++) {
 
-        showAutoModal.value = false
-        return
+          const nextMin = min + i * 60
+          const nextTime = minToTime(nextMin)
+
+          const blocked =
+              room.blocked.some(
+                  b =>
+                      b.date === day.date &&
+                      b.time === nextTime
+              )
+
+          if (blocked) {
+            ok = false
+            break
+          }
+        }
+
+        if (ok) {
+
+          selectedRoomId.value = room.id
+
+          selectedKeys.value =
+              Array.from(
+                  { length: needMinutes / 60 },
+                  (_, i) =>
+                      keyOf(
+                          day.date,
+                          minToTime(min + i * 60)
+                      )
+              )
+
+          alert(
+              `자동 배정 완료: ${room.name} / ${day.date}`
+          )
+
+          showAutoModal.value = false
+          return
+        }
       }
     }
-
-    streak = []
   }
 
   alert('조건에 맞는 시간이 없습니다.')
 }
+
+
+watch([selectedRoomId, interviewers, applicants], () => {
+
+  const total =
+      interviewers.value.length + applicants.value.length
+
+  const room = rooms.value.find(
+      r => r.id === selectedRoomId.value
+  )
+
+  if (!room) return
+
+
+  const [min, max] = room.capacity
+      .replace('인실', '')
+      .split('~')
+      .map(Number)
+
+
+  if (total < min || total > max) {
+
+    alert('현재 인원으로는 이 회의실을 사용할 수 없습니다.')
+
+    // 자동으로 가능한 방으로 변경
+    const available = rooms.value.find(r => {
+      const [a, b] = r.capacity
+          .replace('인실', '')
+          .split('~')
+          .map(Number)
+
+      return total >= a && total <= b
+    })
+
+    if (available) {
+      selectedRoomId.value = available.id
+    }
+  }
+})
 
 
 </script>
@@ -465,7 +634,7 @@ const handleAutoAssign = ({
 
       <select class="roomSelect" v-model="selectedRoomId">
         <option v-for="r in rooms" :key="r.id" :value="r.id">
-          {{ r.name }}
+          {{ r.name }} ({{ r.capacity }})
         </option>
       </select>
 
@@ -477,7 +646,11 @@ const handleAutoAssign = ({
         오늘로 이동
       </button>
 
-      <button class="autoAssignBtn" @click="showAutoModal = true">
+      <button
+          class="autoAssignBtn"
+          title="모든 회의실 기준으로 자동 탐색"
+          @click="showAutoModal = true"
+      >
         자동 배정
       </button>
     </div>

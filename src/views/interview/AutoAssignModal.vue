@@ -23,22 +23,26 @@ const hourOptions = computed(() => {
   return list
 })
 
+const useAllRooms = ref(false)
+
 const startHour = ref(9)
 
 const maxHour = ref(1)
 
 const submit = () => {
 
-    const options = {
-      useStartTime: useStartTime.value,
-      start: startHour.value,
+  const options = {
+    useAllRooms: useAllRooms.value,
 
-      useMaxHour: useMaxHour.value,
-      hours: maxHour.value
-    }
+    useTimeRange: useStartTime.value,
+    start: startHour.value,
 
-    emit('submit', options)
-    emit('close')
+    useMaxHour: useMaxHour.value,
+    hours: maxHour.value
+  }
+
+  emit('submit', options)
+  emit('close')
 }
 
 </script>
@@ -49,6 +53,11 @@ const submit = () => {
     <div class="modal">
 
       <h2 class="title">자동 일정 배정</h2>
+
+      <label class="checkLabel">
+        <input type="checkbox" v-model="useAllRooms" />
+        전체 회의실에서 찾기
+      </label>
 
       <!-- 시간 범위 -->
       <div class="row">
