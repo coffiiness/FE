@@ -106,7 +106,7 @@ watch(
   <div class="flex h-screen bg-slate-50 font-sans overflow-hidden">
     <aside
         :class="[
-        'bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white transition-all duration-300 flex flex-col shadow-xl z-20',
+        'bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white transition-all duration-300 flex flex-col shadow-xl z-50',
         sidebarOpen ? 'w-64' : 'w-20'
       ]"
     >

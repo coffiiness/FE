@@ -59,6 +59,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </div>
             <div>
               <p class="text-sm font-bold text-slate-700">장소 및 메모</p>
+              <p v-if="event.room" class="text-sm font-bold text-brand-600 mt-0.5">
+                {{ event.room.name }} ({{ event.room.floor }}층)
+              </p>
               <p class="text-sm text-slate-600 mt-0.5 whitespace-pre-wrap">{{ event.description || '상세 내용이 없습니다.' }}</p>
             </div>
           </div>

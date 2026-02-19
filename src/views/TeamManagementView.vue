@@ -1,5 +1,22 @@
 <script setup>
 import { ref, computed } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+
+// ── 공통 알림 모달 ────────────────────────────────────────────────────────────
+const modal = ref({
+  show: false, title: '', message: '', type: 'info',
+  showCancel: false, confirmText: '확인', cancelText: '취소',
+  onConfirm: () => {},
+})
+
+const openModal = (opts) => {
+  modal.value = {
+    show: true, showCancel: false, confirmText: '확인', cancelText: '취소', onConfirm: () => {},
+    ...opts,
+  }
+}
+const onModalConfirm = () => { modal.value.onConfirm(); modal.value.show = false }
+const onModalCancel  = () => { modal.value.show = false }
 
 // 1. 상태 관리
 const isInviteModalOpen = ref(false)
@@ -13,7 +30,6 @@ const activeFilterGroup = ref('All')
 const inviteEmailInput = ref('')
 const inviteRole = ref('Member')
 const pendingInvites = ref([]) // 초대 대기 명단
-const inviteLink = ref('https://app.nexus.ai/invitation-link?invitationLinkId=...')
 
 // 그룹 생성 모달 관련 상태
 const newGroupName = ref('')
@@ -82,20 +98,16 @@ const closeGroupModal = () => {
 // [초대 모달] 임시 목록에 추가
 const addInviteToList = () => {
   if (!inviteEmailInput.value || !inviteEmailInput.value.includes('@')) {
-    alert('유효한 이메일을 입력해주세요.');
-    return;
+    openModal({ title: '입력 오류', message: '유효한 이메일 주소를 입력해주세요.', type: 'warning' })
+    return
   }
-  // 중복 체크
   if (pendingInvites.value.some(p => p.email === inviteEmailInput.value)) {
-    alert('이미 목록에 있는 이메일입니다.');
-    return;
+    openModal({ title: '중복 이메일', message: '이미 목록에 추가된 이메일입니다.', type: 'warning' })
+    return
   }
 
-  pendingInvites.value.push({
-    email: inviteEmailInput.value,
-    role: inviteRole.value
-  })
-  inviteEmailInput.value = '' // 입력창 초기화
+  pendingInvites.value.push({ email: inviteEmailInput.value, role: inviteRole.value })
+  inviteEmailInput.value = ''
 }
 
 // [초대 모달] 임시 목록에서 삭제
@@ -105,9 +117,10 @@ const removePendingInvite = (index) => {
 
 // [초대 모달] 최종 초대 전송
 const confirmInvitations = () => {
-  if (pendingInvites.value.length === 0) return;
+  if (pendingInvites.value.length === 0) return
 
   const today = new Date().toISOString().split('T')[0]
+  const count = pendingInvites.value.length
 
   pendingInvites.value.forEach(invite => {
     members.value.push({
@@ -115,7 +128,7 @@ const confirmInvitations = () => {
       name: invite.email.split('@')[0],
       email: invite.email,
       role: invite.role,
-      group: '일반', // 기본 그룹
+      group: '일반',
       status: 'Pending',
       avatar: invite.email.substring(0, 2).toUpperCase(),
       lastActive: '-',
@@ -124,14 +137,14 @@ const confirmInvitations = () => {
     })
   })
 
-  alert(`${pendingInvites.value.length}명을 초대했습니다.`);
-  closeInviteModal();
+  closeInviteModal()
+  openModal({
+    title: '초대 완료',
+    message: `${count}명에게 초대 이메일이 발송되었습니다.`,
+    type: 'success',
+  })
 }
 
-const copyInviteLink = () => {
-  navigator.clipboard.writeText(inviteLink.value)
-  alert('초대 링크가 복사되었습니다.')
-}
 
 // [그룹 모달] 멤버 선택 토글
 const toggleMemberForGroup = (member) => {
@@ -146,34 +159,34 @@ const toggleMemberForGroup = (member) => {
 // [그룹 모달] 그룹 생성 완료
 const createGroup = () => {
   if (!newGroupName.value.trim()) {
-    alert('그룹 이름을 입력해주세요.')
+    openModal({ title: '입력 오류', message: '그룹 이름을 입력해주세요.', type: 'warning' })
     return
   }
 
   const colors = ['bg-orange-100 text-orange-600', 'bg-emerald-100 text-emerald-600', 'bg-indigo-100 text-indigo-600', 'bg-rose-100 text-rose-600']
   const newGroupColor = colors[Math.floor(Math.random() * colors.length)]
+  const groupName = newGroupName.value
 
-  // 1. 그룹 추가
-  groups.value.push({
-    id: Date.now(),
-    name: newGroupName.value,
-    color: newGroupColor
-  })
+  groups.value.push({ id: Date.now(), name: groupName, color: newGroupColor })
 
-  // 2. 선택된 멤버들의 그룹 정보 업데이트 (선택 사항)
   selectedMembersForNewGroup.value.forEach(selectedMember => {
-    const memberIndex = members.value.findIndex(m => m.id === selectedMember.id)
-    if (memberIndex !== -1) {
-      members.value[memberIndex].group = newGroupName.value
-    }
+    const idx = members.value.findIndex(m => m.id === selectedMember.id)
+    if (idx !== -1) members.value[idx].group = groupName
   })
 
-  alert(`'${newGroupName.value}' 그룹이 생성되었습니다.`);
-  closeGroupModal();
+  closeGroupModal()
+  openModal({ title: '그룹 생성 완료', message: `'${groupName}' 그룹이 생성되었습니다.`, type: 'success' })
 }
 
 const removeMember = (id) => {
-  if(confirm('멤버를 삭제하시겠습니까?')) members.value = members.value.filter(m => m.id !== id)
+  openModal({
+    title: '멤버 삭제',
+    message: '해당 멤버를 워크스페이스에서 삭제하시겠습니까?',
+    type: 'danger',
+    showCancel: true,
+    confirmText: '삭제하기',
+    onConfirm: () => { members.value = members.value.filter(m => m.id !== id) },
+  })
 }
 
 // [Helper] 그룹 색상 찾기
@@ -184,12 +197,8 @@ const getGroupColor = (groupName) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 p-8 font-sans text-slate-700">
-    <header class="flex justify-between items-end mb-12">
-      <div>
-        <h1 class="text-4xl font-display font-bold text-slate-900 tracking-tight">팀 관리</h1>
-        <p class="text-slate-500 mt-2 text-lg"> 사용자 정보와 활동 내역을 상세히 확인하세요.</p>
-      </div>
+  <div class="min-h-screen bg-slate-50 px-8 pt-2 pb-8 font-sans text-slate-700">
+    <header class="flex justify-end items-end mb-8">
       <div class="flex gap-3">
         <button @click="openGroupModal" class="px-5 py-3 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl transition-all shadow-sm font-medium">+ 그룹 추가</button>
         <button @click="openInviteModal" class="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow-lg shadow-teal-600/20 transition-all">멤버 초대</button>
@@ -337,17 +346,7 @@ const getGroupColor = (groupName) => {
                 </div>
               </div>
             </div>
-            <div class="bg-slate-50/80 px-6 py-5 border-y border-slate-100">
-              <h3 class="text-sm font-bold text-slate-800 mb-2">초대 링크</h3>
-              <p class="text-xs text-slate-400 mb-3">링크를 통해 멤버 권한으로 즉시 초대됩니다.</p>
-              <div class="bg-white border border-slate-200 rounded-lg p-2.5 flex items-center justify-between shadow-sm">
-                <span class="text-xs text-slate-500 truncate flex-1 mr-2">{{ inviteLink }}</span>
-                <button @click="copyInviteLink" class="text-teal-600 hover:text-teal-700 flex-shrink-0 p-1 hover:bg-teal-50 rounded">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                </button>
-              </div>
-            </div>
-            <div class="p-6 pt-4 flex gap-3 justify-end">
+<div class="p-6 pt-4 flex gap-3 justify-end">
               <button @click="closeInviteModal" class="px-5 py-2.5 text-slate-500 font-bold text-sm hover:bg-slate-100 rounded-lg transition-colors">취소</button>
               <button @click="confirmInvitations" class="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm rounded-lg shadow-md shadow-teal-600/10 transition-colors">초대하기</button>
             </div>
@@ -415,6 +414,19 @@ const getGroupColor = (groupName) => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 공통 알림 모달 -->
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :type="modal.type"
+      :show-cancel="modal.showCancel"
+      :confirm-text="modal.confirmText"
+      :cancel-text="modal.cancelText"
+      @confirm="onModalConfirm"
+      @cancel="onModalCancel"
+    />
   </div>
 </template>
 

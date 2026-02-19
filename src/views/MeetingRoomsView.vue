@@ -1,9 +1,13 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useRoomStore } from '@/stores/room'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const ROOMS_KEY = 'meeting_rooms'
 const BOOKINGS_KEY = 'meeting_bookings'
@@ -72,6 +76,8 @@ const defaultRooms = [
     color: '#ec4899'
   }
 ]
+const roomStore = useRoomStore()
+const { rooms } = storeToRefs(roomStore)
 
 const defaultBookings = [
   {
@@ -120,6 +126,7 @@ const detailModalOpen = ref(false)
 const roomDetailOpen = ref(false)
 const createRoomOpen = ref(false)
 const editingRoom = ref(null)
+const successModalOpen = ref(false)
 
 const selectedRoom = ref(null)
 const selectedBooking = ref(null)
@@ -227,6 +234,7 @@ const handleBookingConfirm = (booking) => {
     ...booking
   })
   bookingModalOpen.value = false
+  successModalOpen.value = true
 }
 
 const handleBookingDelete = (bookingId) => {
@@ -334,6 +342,17 @@ const openCreateRoom = () => {
         :mode="editingRoom ? 'edit' : 'create'"
         @close="createRoomOpen = false; editingRoom = null"
         @confirm="handleRoomConfirm"
+    />
+
+    <ConfirmModal
+      :show="successModalOpen"
+      type="success"
+      title="예약 완료"
+      message="회의실 예약이 성공적으로 완료되었습니다."
+      confirmText="확인"
+      :showCancel="false"
+      @close="successModalOpen = false"
+      @confirm="successModalOpen = false"
     />
   </div>
 </template>

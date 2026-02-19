@@ -1,9 +1,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useRecruitmentStore } from '@/Stores/recruitment'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const router = useRouter()
+const store = useRecruitmentStore()
 const loading = ref(false)
+const showSuccessModal = ref(false)
 
 // --- 1. 기본 정보 데이터 ---
 const form = ref({
@@ -141,8 +145,22 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
+    // 선택된 팀 이름 찾기
+    const selectedTeamNames = teams.value
+        .filter(t => form.value.teamId.includes(t.id))
+        .map(t => t.name)
+        .join(', ')
+
+    // 선택된 면접관 이름 찾기
+    const selectedInterviewerNames = interviewers.value
+        .filter(i => form.value.interviewerIds.includes(i.id))
+        .map(i => i.name)
+
     const payload = {
       ...form.value,
+      team: selectedTeamNames || '미지정', // UI 표시용
+      position: 'New Position', // UI 표시용 임시값
+      interviewers: selectedInterviewerNames,
       processes: processes.value.map((p, index) => ({
         stageName: p.stageName,
         stageType: p.stageType,
@@ -151,13 +169,18 @@ const handleSubmit = async () => {
     }
 
     console.log('생성 요청 데이터:', payload)
+    
+    // Store에 추가
+    store.addJob(payload)
 
     setTimeout(() => {
-      alert('공고가 성공적으로 등록되었습니다.')
-      router.push('/recruitment/home')
-    }, 1000)
+      // alert('공고가 성공적으로 등록되었습니다.')
+      // router.push('/recruitment')
+      showSuccessModal.value = true
+    }, 500)
 
   } catch (e) {
+    console.error(e)
     alert('오류가 발생했습니다.')
   } finally {
     loading.value = false
@@ -447,6 +470,17 @@ const handleSubmit = async () => {
 
     </div>
   </div>
+
+  <ConfirmModal
+    :show="showSuccessModal"
+    title="공고 등록 완료"
+    message="공고가 성공적으로 등록되었습니다."
+    confirm-text="확인"
+    :show-cancel="false"
+    type="info"
+    @confirm="router.push('/recruitment')"
+    @cancel="showSuccessModal = false"
+  />
 </template>
 
 <style scoped>

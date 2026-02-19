@@ -1,8 +1,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useRecruitmentStore } from '@/Stores/recruitment'
+import { storeToRefs } from 'pinia'
 
 const router = useRouter()
+const store = useRecruitmentStore()
+const { jobs } = storeToRefs(store)
 
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
@@ -17,76 +21,7 @@ const stats = ref([
   { label: '조율 대기 (병목)', value: 3, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
 ])
 
-const jobs = ref([
-  {
-    id: 1,
-    title: 'Backend Server Developer',
-    position: 'Junior (1-3년)',
-    team: 'Platform Team',
-    status: 'active',
-    dday: 'D-30',
-    ddayValue: 30,
-    createdAt: '2026-02-13',
-    totalApplicants: 42,
-    funnel: [
-      { step: '서류', count: 15, active: false },
-      { step: '과제', count: 8, active: false },
-      { step: '면접', count: 4, active: true },
-      { step: '처우', count: 1, active: false },
-    ],
-    interviewers: ['김기술', '이디자인', 'Park']
-  },
-  {
-    id: 2,
-    title: 'Product Designer (UX/UI)',
-    position: 'Senior (5년 이상)',
-    team: 'Design Group',
-    status: 'urgent',
-    dday: 'D-2',
-    ddayValue: 2,
-    createdAt: '2026-02-10',
-    totalApplicants: 28,
-    funnel: [
-      { step: '서류', count: 5, active: true },
-      { step: '포트폴리오', count: 2, active: false },
-      { step: '면접', count: 0, active: false },
-      { step: '처우', count: 0, active: false },
-    ],
-    interviewers: ['최프론트', '박팀장']
-  },
-  {
-    id: 3,
-    title: 'DevOps Engineer',
-    position: 'Mid-Level',
-    team: 'Infra Unit',
-    status: 'active',
-    dday: 'D-12',
-    ddayValue: 12,
-    createdAt: '2026-01-20',
-    totalApplicants: 85,
-    funnel: [
-      { step: '서류', count: 8, active: false },
-      { step: '면접', count: 2, active: true },
-      { step: '최종', count: 0, active: false },
-    ],
-    interviewers: ['Lee', '김기술', 'Park']
-  },
-  {
-    id: 4,
-    title: 'Frontend Developer',
-    position: 'All Levels',
-    team: 'Web Core',
-    status: 'closed',
-    dday: '마감',
-    ddayValue: 999,
-    createdAt: '2025-12-15',
-    totalApplicants: 156,
-    funnel: [
-      { step: '종료', count: 156, active: false },
-    ],
-    interviewers: ['Park']
-  },
-])
+// jobs ref removed in favor of store.jobs
 
 // --- Helper Functions ---
 const getStatusColor = (status) => {
@@ -126,8 +61,7 @@ const closeDeleteModal = () => {
 // 3. 실제 삭제 수행
 const confirmDelete = () => {
   if (deleteTargetId.value) {
-    // API 호출 로직...
-    jobs.value = jobs.value.filter(job => job.id !== deleteTargetId.value)
+    store.deleteJob(deleteTargetId.value)
   }
   closeDeleteModal()
 }
@@ -231,9 +165,8 @@ const toggleInterviewerAssignment = (name) => {
 }
 
 const saveInterviewers = () => {
-  const index = jobs.value.findIndex(j => j.id === editingJob.value.id)
-  if (index !== -1) {
-    jobs.value[index].interviewers = editingJob.value.interviewers
+  if (editingJob.value) {
+    store.updateJob(editingJob.value)
   }
   closeInterviewerModal()
 }

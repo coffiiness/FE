@@ -6,8 +6,10 @@ import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRoute } from 'vue-router'
 import { useNotificationStore } from '@/Stores/notification'
+import { useScheduleStore } from '@/Stores/schedule'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
+import { useRoomStore } from '@/stores/room'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -25,24 +27,10 @@ const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
 
-// [유틸] 오늘 날짜 구하기 (YYYY-MM-DD)
-const getToday = () => {
-  const d = new Date()
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-// [유틸] 오늘 기준 N일 후 날짜 구하기 (데이터 생성용)
-const getRelativeDate = (offset) => {
-  const d = new Date()
-  d.setDate(d.getDate() + offset)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// Store
+const scheduleStore = useScheduleStore()
+const { schedules: allSchedules } = storeToRefs(scheduleStore)
+const { getToday } = scheduleStore
 
 // 초기값: 진짜 오늘 날짜로 설정
 const selectedDate = ref(getToday())
@@ -53,69 +41,7 @@ const route = useRoute()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 
-// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임)
-const allSchedules = ref([
-  {
-    id: 101,
-    type: 'INTERVIEW',
-    title: '기술 면접: 박지원',
-    date: getRelativeDate(0), // 오늘
-    startTime: '13:00',
-    endTime: '14:30',
-    description: '1층 미팅룸 A',
-    time: '오후 1:00 - 2:30'
-  },
-  {
-    id: 102,
-    type: 'INTERVIEW',
-    title: '임원 면접 대기',
-    date: getRelativeDate(0), // 오늘
-    startTime: '15:00',
-    endTime: '16:00',
-    description: '화상 면접 링크 확인',
-    time: '오후 3:00 - 4:00'
-  },
-  {
-    id: 103,
-    type: 'MEETING',
-    title: '주간 회의',
-    date: getRelativeDate(0), // 오늘
-    startTime: '16:00',
-    endTime: '17:00',
-    description: '상반기 공고 마감 관련',
-    time: '오후 4:00 - 5:00'
-  },
-  {
-    id: 104,
-    type: 'MEETING',
-    title: '팀 점심 회식',
-    date: getRelativeDate(1), // 내일
-    startTime: '12:00',
-    endTime: '13:30',
-    description: '맛집 탐방',
-    time: '오후 12:00 - 1:30'
-  },
-  {
-    id: 105,
-    type: 'INTERVIEW',
-    title: '최종 면접: 김인사',
-    date: getRelativeDate(2), // 모레
-    startTime: '14:00',
-    endTime: '15:00',
-    description: '인사팀 참관',
-    time: '오후 2:00 - 3:00'
-  },
-  {
-    id: 106,
-    type: 'OTHERS',
-    title: '서류 검토',
-    date: getRelativeDate(-1), // 어제 (지난 일정 테스트용)
-    startTime: '10:00',
-    endTime: '12:00',
-    description: '신입 공채 서류',
-    time: '오전 10:00 - 12:00'
-  }
-])
+// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임) - Store로 이동됨
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
 const upcomingEvents = computed(() => {
@@ -241,6 +167,7 @@ const weekViewTitle = computed(() => {
 })
 
 const currentListEvents = computed(() => {
+  if (!selectedDate.value) return []
   return allSchedules.value
       .filter(e => e.date === selectedDate.value)
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -285,14 +212,15 @@ const handleDateClick = (date) => {
 }
 
 const openDetailModal = (event) => {
-  selectedEventDetail.value = event
+  const room = getRoomInfo(event)
+  selectedEventDetail.value = { ...event, room }
   isDetailModalOpen.value = true
 }
 
 const mergeAcceptedSchedules = (items) => {
   items.forEach((item) => {
     if (!allSchedules.value.some((e) => e.id === item.id)) {
-      allSchedules.value.push({ ...item })
+      scheduleStore.addSchedule(item)
     }
   })
 }
@@ -326,10 +254,9 @@ const openEditForm = (event) => {
 
 const handleSave = (formData) => {
   if (formData.id) {
-    const idx = allSchedules.value.findIndex(e => e.id === formData.id)
-    if (idx !== -1) allSchedules.value[idx] = { ...allSchedules.value[idx], ...formData }
+    scheduleStore.updateSchedule(formData)
   } else {
-    allSchedules.value.push({ ...formData, id: Date.now() })
+    scheduleStore.addSchedule(formData)
   }
   isFormModalOpen.value = false
 }
@@ -342,7 +269,7 @@ const openDeleteConfirm = (id) => {
 
 const confirmDelete = () => {
   if (targetDeleteId.value) {
-    allSchedules.value = allSchedules.value.filter(e => e.id !== targetDeleteId.value)
+    scheduleStore.deleteSchedule(targetDeleteId.value)
   }
   isDeleteModalOpen.value = false
   isFormModalOpen.value = false
@@ -356,6 +283,16 @@ const goToInterviewResponse = () => {
   router.push('/recruitment/interview/response')
 }
 
+// Room Store
+const roomStore = useRoomStore()
+
+const getRoomInfo = (schedule) => {
+  if (schedule.roomId) {
+    const r = roomStore.getRoomById(schedule.roomId)
+    if (r) return r
+  }
+  return null
+}
 </script>
 
 <template>
@@ -484,8 +421,8 @@ const goToInterviewResponse = () => {
                   <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
 
                   <div v-for="evt in getEventsForDate(day.fullDate)" :key="evt.id"
-                       @click="openDetailModal(evt)"
-                       class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-20 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
+                       @click.stop="openDetailModal(evt)"
+                       class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
                        :class="evt.type === 'INTERVIEW' ? 'bg-indigo-600 text-white border-indigo-800' : 'bg-amber-100 text-amber-800 border-amber-400'"
                        :style="getEventStyle(evt)">
                     <p class="text-[10px] font-bold opacity-90">{{ evt.startTime }}</p>
@@ -594,10 +531,40 @@ const goToInterviewResponse = () => {
             </button>
           </div>
         </div>
+
+        <div class="bg-white border border-slate-200 p-6 rounded-[32px] shadow-sm flex flex-col gap-4 relative overflow-hidden group">
+          <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
+
+          <div class="relative z-10 flex justify-between items-start">
+            <div>
+              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Calendar Sync</h3>
+              <p class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" class="w-5 h-5">
+                Google Calendar
+              </p>
+            </div>
+            <span class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          연동됨
+        </span>
+          </div>
+
+          <div class="relative z-10">
+            <p class="text-xs text-slate-500 mb-4 font-medium">
+              마지막 동기화: <span class="text-slate-700 font-bold">방금 전</span><br>
+              계정: <span class="text-slate-700">recruiter@company.com</span>
+            </p>
+
+            <button class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn">
+              <svg class="w-4 h-4 text-slate-400 group-hover/btn:text-brand-500 group-hover/btn:rotate-180 transition-all duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              지금 동기화하기
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-
-
 
     <ScheduleDetailModal
         :isOpen="isDetailModalOpen"
@@ -611,39 +578,7 @@ const goToInterviewResponse = () => {
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
   </div>
-  <div class="bg-white border border-slate-200 p-6 rounded-[32px] shadow-sm flex flex-col gap-4 relative overflow-hidden group">
-    <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
-
-    <div class="relative z-10 flex justify-between items-start">
-      <div>
-        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Calendar Sync</h3>
-        <p class="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" class="w-5 h-5">
-          Google Calendar
-        </p>
-      </div>
-      <span class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-      연동됨
-    </span>
-    </div>
-
-    <div class="relative z-10">
-      <p class="text-xs text-slate-500 mb-4 font-medium">
-        마지막 동기화: <span class="text-slate-700 font-bold">방금 전</span><br>
-        계정: <span class="text-slate-700">recruiter@company.com</span>
-      </p>
-
-      <button class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn">
-        <svg class="w-4 h-4 text-slate-400 group-hover/btn:text-brand-500 group-hover/btn:rotate-180 transition-all duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-        </svg>
-        지금 동기화하기
-      </button>
-    </div>
-  </div>
 </template>
-
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap');
 .font-display { font-family: 'Outfit', sans-serif; }

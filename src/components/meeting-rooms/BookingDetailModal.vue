@@ -198,6 +198,20 @@ const cancelDelete = () => {
 
         <!-- 삭제 확인 상태 -->
         <div v-else class="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+        <button
+          @click="handleDelete"
+          class="px-4 py-2 text-sm font-bold text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-lg transition-colors"
+        >
+          {{ labels.delete }}
+        </button>
+        <button
+          @click="emit('close')"
+          class="px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all"
+        >
+          {{ labels.close }}
+        </button>
+      </div>
 
           {{ labels.deleteConfirm }}
 
