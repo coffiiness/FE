@@ -231,9 +231,20 @@ const handleBookingConfirm = (booking) => {
   successModalOpen.value = true
 }
 
+const deleteBookingModalOpen = ref(false)
+const deleteTargetBookingId = ref(null)
+
 const handleBookingDelete = (bookingId) => {
-  const idx = bookings.value.findIndex((b) => b.id === bookingId)
+  deleteTargetBookingId.value = bookingId
+  deleteBookingModalOpen.value = true
+}
+
+const confirmDeleteBooking = () => {
+  const id = deleteTargetBookingId.value
+  const idx = bookings.value.findIndex((b) => b.id === id)
   if (idx >= 0) bookings.value.splice(idx, 1)
+  deleteBookingModalOpen.value = false
+  deleteTargetBookingId.value = null
   detailModalOpen.value = false
 }
 
@@ -258,13 +269,21 @@ const handleUpdateRoom = (roomData) => {
   createRoomOpen.value = false
 }
 
-const handleDeleteRoom = (roomId) => {
-  if (!confirm('이 회의실을 삭제하시겠습니까?')) return
-  const idx = rooms.value.findIndex((r) => r.id === roomId)
-  if (idx >= 0) rooms.value.splice(idx, 1)
+const deleteRoomModalOpen = ref(false)
+const deleteTargetRoomId = ref(null)
 
-  // 해당 회의실 예약도 같이 제거 (원하면 제거 안 해도 됨)
-  bookings.value = bookings.value.filter((b) => b.roomId !== roomId)
+const handleDeleteRoom = (roomId) => {
+  deleteTargetRoomId.value = roomId
+  deleteRoomModalOpen.value = true
+}
+
+const confirmDeleteRoom = () => {
+  const id = deleteTargetRoomId.value
+  const idx = rooms.value.findIndex((r) => r.id === id)
+  if (idx >= 0) rooms.value.splice(idx, 1)
+  bookings.value = bookings.value.filter((b) => b.roomId !== id)
+  deleteRoomModalOpen.value = false
+  deleteTargetRoomId.value = null
 }
 
 const handleDateClick = (date) => {
@@ -347,6 +366,30 @@ const openCreateRoom = () => {
       :showCancel="false"
       @close="successModalOpen = false"
       @confirm="successModalOpen = false"
+    />
+
+    <ConfirmModal
+      :show="deleteRoomModalOpen"
+      type="danger"
+      title="회의실 삭제"
+      message="이 회의실을 삭제하시겠습니까? 해당 회의실의 예약 내역도 함께 삭제됩니다."
+      confirmText="삭제하기"
+      cancelText="취소"
+      :showCancel="true"
+      @confirm="confirmDeleteRoom"
+      @cancel="deleteRoomModalOpen = false"
+    />
+
+    <ConfirmModal
+      :show="deleteBookingModalOpen"
+      type="danger"
+      title="예약 삭제"
+      message="이 예약을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다."
+      confirmText="삭제하기"
+      cancelText="취소"
+      :showCancel="true"
+      @confirm="confirmDeleteBooking"
+      @cancel="deleteBookingModalOpen = false"
     />
   </div>
 </template>

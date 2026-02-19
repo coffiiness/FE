@@ -1,6 +1,4 @@
 <script setup>
-import { ref, watch } from 'vue'
-
 const props = defineProps({
   open: { type: Boolean, required: true },
   booking: { type: Object, default: null },
@@ -9,35 +7,23 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'delete'])
 
-const showDeleteConfirm = ref(false)
-
-watch(
-    () => props.open,
-    (v) => {
-      if (!v) showDeleteConfirm.value = false
-    }
-)
-
 const labels = {
-  confirmed: '\uD655\uC815',
-  pending: '\uB300\uAE30',
-  cancelled: '\uCDE8\uC18C',
-  datetime: '\uC77C\uC2DC',
-  room: '\uD68C\uC758\uC2E4',
-  organizer: '\uC8FC\uCD5C\uC790',
-  attendees: '\uCC38\uC11D\uC790',
-  description: '\uC124\uBA85',
-  delete: '\uC0AD\uC81C',
-  close: '\uB2EB\uAE30',
-  cancel: '\uCDE8\uC18C',
-  deleteConfirm:
-    '\uC608\uC57D\uC744 \uC0AD\uC81C\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C? \uC0AD\uC81C \uD6C4\uC5D0\uB294 \uBCF5\uAD6C\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.',
-  dot: '\u00B7',
-  year: '\uB144',
-  month: '\uC6D4',
-  day: '\uC77C',
-  people: '\uC778',
-  floor: '\uCE35'
+  confirmed: '확정',
+  pending: '대기',
+  cancelled: '취소',
+  datetime: '일시',
+  room: '회의실',
+  organizer: '주최자',
+  attendees: '참석자',
+  description: '설명',
+  delete: '삭제',
+  close: '닫기',
+  dot: '·',
+  year: '년',
+  month: '월',
+  day: '일',
+  people: '인',
+  floor: '층'
 }
 
 const formatTime = (date) => {
@@ -51,21 +37,6 @@ const formatDate = (date) => {
   if (!date) return ''
   const d = new Date(date)
   return `${d.getFullYear()}${labels.year} ${d.getMonth() + 1}${labels.month} ${d.getDate()}${labels.day}`
-}
-
-const handleDelete = () => {
-  if (!props.booking) return
-  showDeleteConfirm.value = true
-}
-
-const confirmDelete = () => {
-  if (!props.booking) return
-  emit('delete', props.booking.id)
-  showDeleteConfirm.value = false
-}
-
-const cancelDelete = () => {
-  showDeleteConfirm.value = false
 }
 </script>
 
@@ -173,35 +144,10 @@ const cancelDelete = () => {
         </div>
       </div>
 
-      <!-- 하단 버튼 영역 -->
-      <div class="px-6 py-4 bg-slate-50 border-t border-slate-100">
-
-        <!-- 기본 상태 -->
-        <div v-if="!showDeleteConfirm" class="flex justify-end gap-3">
-
-          <button
-              @click="handleDelete"
-              class="px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-          >
-            {{ labels.delete }}
-          </button>
-
-          <button
-              @click="emit('close')"
-              class="px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all"
-          >
-            {{ labels.close }}
-          </button>
-
-        </div>
-
-
-        <!-- 삭제 확인 상태 -->
-        <div v-else class="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
       <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
         <button
-          @click="handleDelete"
-          class="px-4 py-2 text-sm font-bold text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-lg transition-colors"
+          @click="emit('delete', booking?.id)"
+          class="px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
         >
           {{ labels.delete }}
         </button>
@@ -212,30 +158,6 @@ const cancelDelete = () => {
           {{ labels.close }}
         </button>
       </div>
-
-          {{ labels.deleteConfirm }}
-
-          <div class="mt-3 flex justify-end gap-2">
-
-            <button
-                class="px-3 py-1.5 border border-rose-200 rounded-lg text-rose-700 bg-white"
-                @click="cancelDelete"
-            >
-              {{ labels.cancel }}
-            </button>
-
-            <button
-                class="px-3 py-1.5 rounded-lg text-white bg-rose-600 hover:bg-rose-700"
-                @click="confirmDelete"
-            >
-              {{ labels.delete }}
-            </button>
-
-          </div>
-        </div>
-
-      </div>
-
     </div>
   </div>
 </template>
