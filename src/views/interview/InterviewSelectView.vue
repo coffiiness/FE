@@ -88,8 +88,24 @@ const canProceed = computed(() =>
 
 const goNext = () => {
   if (!canProceed.value) return
-  router.push('/recruitment/interview/schedule')
+
+  const selectedInterviewerObjs = interviewers.value.filter(i =>
+      selectedInterviewers.value.includes(i.id)
+  )
+
+  const selectedApplicantObjs = applicants.value.filter(a =>
+      selectedApplicants.value.includes(a.id)
+  )
+
+  router.push({
+    path: '/recruitment/interview/schedule',
+    query: {
+      interviewers: JSON.stringify(selectedInterviewerObjs),
+      applicants: JSON.stringify(selectedApplicantObjs)
+    }
+  })
 }
+
 
 const goBack = () => router.back()
 </script>

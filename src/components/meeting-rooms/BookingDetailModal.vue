@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+
 const props = defineProps({
   open: { type: Boolean, required: true },
   booking: { type: Object, default: null },
@@ -7,7 +8,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'delete'])
+
 const showDeleteConfirm = ref(false)
+
+watch(
+    () => props.open,
+    (v) => {
+      if (!v) showDeleteConfirm.value = false
+    }
+)
 
 const labels = {
   confirmed: '\uD655\uC815',
@@ -164,6 +173,31 @@ const cancelDelete = () => {
         </div>
       </div>
 
+      <!-- 하단 버튼 영역 -->
+      <div class="px-6 py-4 bg-slate-50 border-t border-slate-100">
+
+        <!-- 기본 상태 -->
+        <div v-if="!showDeleteConfirm" class="flex justify-end gap-3">
+
+          <button
+              @click="handleDelete"
+              class="px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+          >
+            {{ labels.delete }}
+          </button>
+
+          <button
+              @click="emit('close')"
+              class="px-5 py-2 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-all"
+          >
+            {{ labels.close }}
+          </button>
+
+        </div>
+
+
+        <!-- 삭제 확인 상태 -->
+        <div v-else class="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
       <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
         <button
           @click="handleDelete"
@@ -179,15 +213,29 @@ const cancelDelete = () => {
         </button>
       </div>
 
-      <div v-if="showDeleteConfirm" class="px-6 pb-6">
-        <div class="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">
           {{ labels.deleteConfirm }}
+
           <div class="mt-3 flex justify-end gap-2">
-            <button class="px-3 py-1.5 border border-rose-200 rounded-lg text-rose-700 bg-white" @click="cancelDelete">{{ labels.cancel }}</button>
-            <button class="px-3 py-1.5 rounded-lg text-white bg-rose-600 hover:bg-rose-700" @click="confirmDelete">{{ labels.delete }}</button>
+
+            <button
+                class="px-3 py-1.5 border border-rose-200 rounded-lg text-rose-700 bg-white"
+                @click="cancelDelete"
+            >
+              {{ labels.cancel }}
+            </button>
+
+            <button
+                class="px-3 py-1.5 rounded-lg text-white bg-rose-600 hover:bg-rose-700"
+                @click="confirmDelete"
+            >
+              {{ labels.delete }}
+            </button>
+
           </div>
         </div>
+
       </div>
+
     </div>
   </div>
 </template>

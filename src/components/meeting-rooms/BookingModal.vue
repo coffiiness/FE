@@ -116,7 +116,7 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
+  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-[100]">
     <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[78vh] overflow-hidden flex flex-col">
       <div class="px-6 py-5 border-b flex items-start justify-between">
         <div>
