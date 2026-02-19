@@ -31,9 +31,22 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   const schedules = ref(initialSchedules)
 
+  // 유틸: 시간 포맷팅 (13:00 -> 오후 1:00)
+  const formatTime = (timeStr) => {
+    if (!timeStr) return ''
+    const [hour, min] = timeStr.split(':').map(Number)
+    const ampm = hour >= 12 ? '오후' : '오전'
+    const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
+    return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
+  }
+
   const addSchedule = (schedule) => {
+    const formattedTimeStr = `${formatTime(schedule.startTime)} - ${formatTime(schedule.endTime)}`
+
     schedules.value.push({
+      type: 'OTHERS', // 기본값
       ...schedule,
+      time: formattedTimeStr,
       id: Date.now()
     })
   }
@@ -41,7 +54,11 @@ export const useScheduleStore = defineStore('schedule', () => {
   const updateSchedule = (updatedSchedule) => {
     const index = schedules.value.findIndex(s => s.id === updatedSchedule.id)
     if (index !== -1) {
-      schedules.value[index] = updatedSchedule
+      const formattedTimeStr = `${formatTime(updatedSchedule.startTime)} - ${formatTime(updatedSchedule.endTime)}`
+      schedules.value[index] = {
+        ...updatedSchedule,
+        time: formattedTimeStr
+      }
     }
   }
 
