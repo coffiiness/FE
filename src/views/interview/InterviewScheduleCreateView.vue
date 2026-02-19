@@ -54,8 +54,59 @@ const applicants = ref(
 
 const showModal = ref(false)
 
+import { useScheduleStore } from '@/Stores/schedule'
+
+const scheduleStore = useScheduleStore()
+
 const sendInvite = (memo) => {
-  alert('초대장이 발송되었습니다.')
+  // [연동] ScheduleStore에 일정 추가
+  // 1. 선택된 키(date_time)를 파싱하여 구간(Range) 단위로 변환
+  const items = selectedKeys.value
+      .map(parseKey)
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+
+  const map = new Map()
+  for (const it of items) {
+    if (!map.has(it.date)) map.set(it.date, [])
+    map.get(it.date).push(it.time)
+  }
+
+  const applicantNames = applicants.value.map(a => a.name).join(', ')
+  const interviewerNames = interviewers.value.map(i => i.name).join(', ')
+
+  // 구간별 일정 추가
+  for (const [date, times] of map.entries()) {
+    const mins = times.map(timeToMin).sort((a, b) => a - b)
+    
+    let start = mins[0]
+    let prev = mins[0]
+
+    const addRange = (s, e) => {
+      scheduleStore.addSchedule({
+        title: `[면접] ${applicantNames}`,
+        date: date,
+        startTime: minToTime(s),
+        endTime: minToTime(e),
+        type: 'INTERVIEW',
+        description: `면접관: ${interviewerNames}\n지원자: ${applicantNames}\n장소: ${selectedRoom.value.name}\n메모: ${memo || '없음'}`
+      })
+    }
+
+    for (let i = 1; i < mins.length; i++) {
+      const cur = mins[i]
+      if (cur === prev + 60) {
+        prev = cur
+      } else {
+        addRange(start, prev + 60)
+        start = cur
+        prev = cur
+      }
+    }
+    // 마지막 구간
+    addRange(start, prev + 60)
+  }
+
+  alert('초대장이 발송되었으며, 내 일정에 등록되었습니다.')
 
   showModal.value = false
 

@@ -1,6 +1,8 @@
 <script setup>
 import { reactive, watch } from 'vue'
 
+import { useScheduleStore } from '@/Stores/schedule'
+
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
@@ -9,6 +11,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
+const scheduleStore = useScheduleStore()
 
 const state = reactive({
   title: '',
@@ -51,6 +54,16 @@ const handleSubmit = () => {
     organizer: state.organizer,
     attendees: state.attendees.split(',').map((a) => a.trim()).filter(Boolean),
     status: 'confirmed'
+  })
+
+  // [연동] ScheduleStore에 일정 추가
+  scheduleStore.addSchedule({
+    title: `[회의실] ${state.title}`,
+    date: state.date,
+    startTime: state.startTime,
+    endTime: state.endTime,
+    type: 'MEETING',
+    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${state.attendees}\n내용: ${state.description || '-'}`
   })
 
   state.title = ''
