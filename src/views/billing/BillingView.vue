@@ -26,21 +26,22 @@ const emailForm = ref({
 const subscriptionHistory = ref([])
 
 const handleCardRegister = () => {
+  // 실제 등록 로직이 들어갈 곳
   showCardModal.value = false
   cardForm.value = { cardNumber: '', expiry: '', bizNumber: '', password: '' }
 }
 
 const handleEmailRegister = () => {
+  // 실제 등록 로직이 들어갈 곳
   showEmailModal.value = false
   emailForm.value = { email: '' }
 }
 </script>
 
 <template>
-  <div class="max-w-4xl">
+  <div class="max-w-7xl mx-auto px-4">
     <h1 class="text-2xl font-bold text-gray-900 mb-8">구독 및 결제</h1>
 
-    <!-- 사용 중인 요금제 -->
     <section class="mb-10">
       <h2 class="text-lg font-bold text-gray-900 mb-4">사용 중인 요금제</h2>
 
@@ -75,8 +76,8 @@ const handleEmailRegister = () => {
               상세 기능 비교
             </button>
             <button
-              class="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
-              @click="showSubscriptionModal = true"
+                class="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+                @click="showSubscriptionModal = true"
             >
               구독 변경
             </button>
@@ -85,7 +86,6 @@ const handleEmailRegister = () => {
       </div>
     </section>
 
-    <!-- 청구 및 결제 정보 -->
     <section class="mb-10">
       <h2 class="text-lg font-bold text-gray-900 mb-4">청구 및 결제 정보</h2>
 
@@ -96,8 +96,8 @@ const handleEmailRegister = () => {
             <span class="text-sm text-gray-500">등록된 카드가 없습니다.</span>
           </div>
           <button
-            class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
-            @click="showCardModal = true"
+              class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
+              @click="showCardModal = true"
           >
             등록하기
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,8 +111,8 @@ const handleEmailRegister = () => {
             <span class="text-sm text-gray-500">등록된 이메일이 없습니다.</span>
           </div>
           <button
-            class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
-            @click="showEmailModal = true"
+              class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
+              @click="showEmailModal = true"
           >
             등록하기
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -123,35 +123,34 @@ const handleEmailRegister = () => {
       </div>
     </section>
 
-    <!-- 구독 내역 -->
     <section>
       <h2 class="text-lg font-bold text-gray-900 mb-4">구독 내역</h2>
 
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-gray-200 bg-gray-50/50">
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 ID</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">요금제</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 시작일</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 종료일</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">상태</th>
-            </tr>
+          <tr class="border-b border-gray-200 bg-gray-50/50">
+            <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 ID</th>
+            <th class="text-left px-6 py-3 font-semibold text-gray-600">요금제</th>
+            <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 시작일</th>
+            <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 종료일</th>
+            <th class="text-left px-6 py-3 font-semibold text-gray-600">상태</th>
+          </tr>
           </thead>
           <tbody>
-            <tr v-for="item in subscriptionHistory" :key="item.id">
-              <td class="px-6 py-4 text-gray-900">{{ item.id }}</td>
-              <td class="px-6 py-4 text-gray-900">{{ item.plan }}</td>
-              <td class="px-6 py-4 text-gray-500">{{ item.startDate }}</td>
-              <td class="px-6 py-4 text-gray-500">{{ item.endDate }}</td>
-              <td class="px-6 py-4">
+          <tr v-for="item in subscriptionHistory" :key="item.id">
+            <td class="px-6 py-4 text-gray-900">{{ item.id }}</td>
+            <td class="px-6 py-4 text-gray-900">{{ item.plan }}</td>
+            <td class="px-6 py-4 text-gray-500">{{ item.startDate }}</td>
+            <td class="px-6 py-4 text-gray-500">{{ item.endDate }}</td>
+            <td class="px-6 py-4">
                 <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full"
-                  :class="item.status === '활성' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
+                      :class="item.status === '활성' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
                 >
                   {{ item.status }}
                 </span>
-              </td>
-            </tr>
+            </td>
+          </tr>
           </tbody>
         </table>
 
@@ -164,7 +163,6 @@ const handleEmailRegister = () => {
       </div>
     </section>
 
-    <!-- 구독 변경 모달 -->
     <teleport to="body">
       <div v-if="showSubscriptionModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showSubscriptionModal = false">
         <div class="bg-white rounded-2xl shadow-2xl w-[680px] max-w-[90vw] max-h-[85vh] overflow-y-auto animate-modal-in">
@@ -184,7 +182,6 @@ const handleEmailRegister = () => {
           </div>
 
           <div class="px-8 pb-6 grid grid-cols-2 gap-4">
-            <!-- 비즈니스 플랜 -->
             <div class="border-2 border-brand-500 rounded-2xl p-6 relative bg-brand-50/30">
               <div class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center mb-4">
                 <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -222,7 +219,6 @@ const handleEmailRegister = () => {
               </div>
             </div>
 
-            <!-- 엔터프라이즈 플랜 -->
             <div class="border border-gray-200 rounded-2xl p-6 hover:border-gray-300 transition-colors">
               <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center mb-4">
                 <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -264,7 +260,6 @@ const handleEmailRegister = () => {
       </div>
     </teleport>
 
-    <!-- 결제 카드 등록 모달 -->
     <teleport to="body">
       <div v-if="showCardModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showCardModal = false">
         <div class="bg-white rounded-2xl shadow-2xl w-[480px] max-w-[90vw] animate-modal-in">
@@ -280,16 +275,16 @@ const handleEmailRegister = () => {
           <div class="px-8">
             <div class="flex border border-gray-200 rounded-lg overflow-hidden mb-6">
               <button
-                class="flex-1 py-2.5 text-sm font-medium transition-colors"
-                :class="cardType === 'corporate' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                @click="cardType = 'corporate'"
+                  class="flex-1 py-2.5 text-sm font-medium transition-colors"
+                  :class="cardType === 'corporate' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  @click="cardType = 'corporate'"
               >
                 법인카드
               </button>
               <button
-                class="flex-1 py-2.5 text-sm font-medium transition-colors"
-                :class="cardType === 'personal' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                @click="cardType = 'personal'"
+                  class="flex-1 py-2.5 text-sm font-medium transition-colors"
+                  :class="cardType === 'personal' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  @click="cardType = 'personal'"
               >
                 개인카드
               </button>
@@ -301,10 +296,10 @@ const handleEmailRegister = () => {
                   {{ cardType === 'corporate' ? '법인 카드 번호' : '카드 번호' }}
                 </label>
                 <input
-                  v-model="cardForm.cardNumber"
-                  type="text"
-                  :placeholder="cardType === 'corporate' ? '결제할 법인 카드 번호를 입력해 주세요.' : '결제할 카드 번호를 입력해 주세요.'"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                    v-model="cardForm.cardNumber"
+                    type="text"
+                    :placeholder="cardType === 'corporate' ? '결제할 법인 카드 번호를 입력해 주세요.' : '결제할 카드 번호를 입력해 주세요.'"
+                    class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
                 >
               </div>
               <div>
@@ -312,29 +307,29 @@ const handleEmailRegister = () => {
                   {{ cardType === 'corporate' ? '법인 카드 유효 기간' : '카드 유효 기간' }}
                 </label>
                 <input
-                  v-model="cardForm.expiry"
-                  type="text"
-                  placeholder="유효기간(MMYY)"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                    v-model="cardForm.expiry"
+                    type="text"
+                    placeholder="유효기간(MMYY)"
+                    class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
                 >
               </div>
               <div>
                 <label class="block text-sm font-semibold text-gray-900 mb-2">사업자 등록 번호</label>
                 <input
-                  v-model="cardForm.bizNumber"
-                  type="text"
-                  placeholder="사업자 등록번호를 입력해 주세요."
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                    v-model="cardForm.bizNumber"
+                    type="text"
+                    placeholder="사업자 등록번호를 입력해 주세요."
+                    class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
                 >
               </div>
               <div>
                 <label class="block text-sm font-semibold text-gray-900 mb-2">카드 비밀번호 앞 두자리</label>
                 <input
-                  v-model="cardForm.password"
-                  type="password"
-                  placeholder="비밀번호 앞 두자리를 입력해 주세요."
-                  maxlength="2"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                    v-model="cardForm.password"
+                    type="password"
+                    placeholder="비밀번호 앞 두자리를 입력해 주세요."
+                    maxlength="2"
+                    class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
                 >
               </div>
             </div>
@@ -342,14 +337,14 @@ const handleEmailRegister = () => {
 
           <div class="flex justify-end gap-3 px-8 py-6">
             <button
-              class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              @click="showCardModal = false"
+                class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                @click="showCardModal = false"
             >
               취소
             </button>
             <button
-              class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
-              @click="handleCardRegister"
+                class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
+                @click="handleCardRegister"
             >
               등록하기
             </button>
@@ -358,7 +353,6 @@ const handleEmailRegister = () => {
       </div>
     </teleport>
 
-    <!-- 결제 확인 이메일 등록 모달 -->
     <teleport to="body">
       <div v-if="showEmailModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showEmailModal = false">
         <div class="bg-white rounded-2xl shadow-2xl w-[480px] max-w-[90vw] animate-modal-in">
@@ -375,24 +369,24 @@ const handleEmailRegister = () => {
             <div>
               <label class="block text-sm font-semibold text-gray-900 mb-2">이메일</label>
               <input
-                v-model="emailForm.email"
-                type="email"
-                placeholder="결제 확인 정보를 받을 이메일을 입력해 주세요."
-                class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                  v-model="emailForm.email"
+                  type="email"
+                  placeholder="결제 확인 정보를 받을 이메일을 입력해 주세요."
+                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
               >
             </div>
           </div>
 
           <div class="flex justify-end gap-3 px-8 py-6">
             <button
-              class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              @click="showEmailModal = false"
+                class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                @click="showEmailModal = false"
             >
               취소
             </button>
             <button
-              class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
-              @click="handleEmailRegister"
+                class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
+                @click="handleEmailRegister"
             >
               등록하기
             </button>
