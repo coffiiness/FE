@@ -1,7 +1,8 @@
 <script setup>
-import { reactive, watch } from 'vue'
-
+import { reactive, watch, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useScheduleStore } from '@/Stores/schedule'
+import { useOrganizationStore } from '@/stores/organization'
+import { storeToRefs } from 'pinia'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -12,6 +13,40 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'confirm'])
 const scheduleStore = useScheduleStore()
+const orgStore = useOrganizationStore()
+const { departments } = storeToRefs(orgStore)
+
+const selectedDeptId = ref(null)
+const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
+const attendeeInput = ref('')
+
+const toggleDept = (deptId) => {
+  selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
+}
+
+const toggleAttendee = (name) => {
+  if (state.attendees.includes(name)) {
+    state.attendees = state.attendees.filter(a => a !== name)
+  } else {
+    state.attendees.push(name)
+  }
+}
+
+const selectAllTeam = (team) => {
+  team.members.forEach(member => {
+    if (!state.attendees.includes(member.name)) {
+      state.attendees.push(member.name)
+    }
+  })
+}
+
+const addAttendee = () => {
+  const name = attendeeInput.value.trim()
+  if (name && !state.attendees.includes(name)) { state.attendees.push(name) }
+  attendeeInput.value = ''
+}
+
+const removeAttendee = (index) => { state.attendees.splice(index, 1) }
 
 const state = reactive({
   title: '',
@@ -20,7 +55,7 @@ const state = reactive({
   startTime: '09:00',
   endTime: '10:00',
   organizer: '',
-  attendees: ''
+  attendees: []
 })
 
 watch(
@@ -32,6 +67,9 @@ watch(
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
     state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
+    state.attendees = [] // 초기화
+    selectedDeptId.value = null
+    attendeeInput.value = ''
   }
 )
 
@@ -45,6 +83,9 @@ const handleSubmit = () => {
   const endDateTime = new Date(base)
   endDateTime.setHours(endHour, endMinute, 0, 0)
 
+  // 문자열로 변환하지 않고 배열 그대로 전송
+  const attendeesList = [...state.attendees]
+
   emit('confirm', {
     roomId: props.room.id,
     title: state.title,
@@ -52,7 +93,7 @@ const handleSubmit = () => {
     startTime: startDateTime,
     endTime: endDateTime,
     organizer: state.organizer,
-    attendees: state.attendees.split(',').map((a) => a.trim()).filter(Boolean),
+    attendees: attendeesList,
     status: 'confirmed'
   })
 
@@ -63,14 +104,14 @@ const handleSubmit = () => {
     startTime: state.startTime,
     endTime: state.endTime,
     type: 'MEETING',
-    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${state.attendees}\n내용: ${state.description || '-'}`,
-    roomId: props.room.id // [추가] 회의실 연동을 위한 ID
+    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${attendeesList.join(', ')}\n내용: ${state.description || '-'}`,
+    roomId: props.room.id
   })
 
   state.title = ''
   state.description = ''
   state.organizer = ''
-  state.attendees = ''
+  state.attendees = []
 }
 </script>
 
@@ -129,8 +170,75 @@ const handleSubmit = () => {
 
         <div class="space-y-2">
           <label class="text-sm font-medium text-slate-900">참석자</label>
-          <input v-model="state.attendees" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" placeholder="참석자를 쉼표로 구분" />
-          <p class="text-xs text-slate-500">예: 홍길동, 김철수</p>
+
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 mb-3">
+            <!-- 1. 부서 선택 -->
+            <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+              <button
+                  v-for="dept in departments"
+                  :key="dept.id"
+                  @click="toggleDept(dept.id)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
+                  :class="selectedDeptId === dept.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
+              >
+                {{ dept.name }}
+              </button>
+            </div>
+
+            <!-- 2. 팀 및 멤버 목록 -->
+            <div v-if="currentDept" class="space-y-3 animate-fade-in-up">
+              <div v-for="team in currentDept.teams" :key="team.id">
+                <h4 class="text-[11px] font-bold text-slate-400 mb-2 flex items-center gap-2">
+                  {{ team.name }}
+                  <button @click="selectAllTeam(team)" class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors">전체 선택</button>
+                </h4>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                      v-for="member in team.members"
+                      :key="member.id"
+                      @click="toggleAttendee(member.name)"
+                      class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
+                      :class="state.attendees.includes(member.name) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                  >
+                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                         :class="state.attendees.includes(member.name) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'">
+                      {{ member.name[0] }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs font-bold text-slate-700 truncate" :class="{'text-brand-700': state.attendees.includes(member.name)}">{{ member.name }}</p>
+                      <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
+                    </div>
+                    <div v-if="state.attendees.includes(member.name)" class="text-brand-600">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="text-center py-6 text-slate-400 text-xs">
+              부서를 선택하여 팀원을 추가하세요.
+            </div>
+          </div>
+
+          <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm">
+                <span v-for="(person, index) in state.attendees" :key="index"
+                      class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up">
+                  {{ person }}
+                  <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </span>
+
+            <input
+                v-model="attendeeInput"
+                @keydown.enter.prevent="addAttendee"
+                @keydown.backspace="attendeeInput === '' && state.attendees.pop()"
+                type="text"
+                placeholder="외부 이름 직접 입력"
+                class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
+            >
+          </div>
         </div>
       </div>
       <div class="px-6 py-4 border-t flex justify-end gap-2 bg-white">
@@ -139,3 +247,13 @@ const handleSubmit = () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
+
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
+</style>
