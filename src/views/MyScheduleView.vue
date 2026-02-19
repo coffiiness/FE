@@ -25,6 +25,7 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}
 const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
+const isSuccessModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
 
 // Store
@@ -259,6 +260,9 @@ const handleSave = (formData) => {
     scheduleStore.addSchedule(formData)
   }
   isFormModalOpen.value = false
+  setTimeout(() => {
+    isSuccessModalOpen.value = true
+  }, 300)
 }
 
 const openDeleteConfirm = (id) => {
@@ -577,6 +581,7 @@ const getRoomInfo = (schedule) => {
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
+    <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
   </div>
 </template>
 <style scoped>
