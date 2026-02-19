@@ -26,6 +26,10 @@ const props = defineProps({
     type: String,
     default: 'danger', // 'danger', 'warning', 'info'
     validator: (value) => ['danger', 'warning', 'info'].includes(value)
+  },
+  showCancel: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -101,6 +105,7 @@ const handleCancel = () => {
             <!-- 버튼 -->
             <div class="flex gap-3">
               <button
+                v-if="showCancel"
                 @click="handleCancel"
                 class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
               >
