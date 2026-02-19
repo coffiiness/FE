@@ -45,10 +45,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto p-6 bg-white min-h-screen">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-slate-900">알림</h1>
-    </div>
+  <div class="max-w-4xl mx-auto p-6 bg-white min-h-screen rounded-[32px] border border-slate-200 shadow-sm">
 
     <div class="flex border-b border-gray-200 mb-6">
       <button
@@ -86,7 +83,7 @@ onBeforeUnmount(() => {
       <div
         v-for="item in listForTab"
         :key="item.id"
-        class="p-5 border border-gray-100 rounded-xl flex gap-4 items-start transition-all cursor-pointer"
+        class="p-5 border border-gray-100 rounded-[24px] flex gap-4 items-start transition-all cursor-pointer"
         :class="[
           item.type === 'request' ? 'bg-blue-50 border-blue-100' : 'bg-white',
           item.read ? 'opacity-90' : 'border-blue-300 shadow-sm'
