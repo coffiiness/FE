@@ -158,7 +158,7 @@ const routes = [
       {
         path: 'reports',
         name: 'Reports',
-        component: () => import('@/views/DashboardView.vue')
+        component: () => import('@/views/ReportView.vue')
       },
 
       {
