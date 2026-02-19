@@ -1,8 +1,5 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { ref } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useRoomStore } from '@/stores/room'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
@@ -76,9 +73,6 @@ const defaultRooms = [
     color: '#ec4899'
   }
 ]
-const roomStore = useRoomStore()
-const { rooms } = storeToRefs(roomStore)
-
 const defaultBookings = [
   {
     id: 'b1',

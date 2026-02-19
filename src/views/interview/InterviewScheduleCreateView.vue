@@ -1,8 +1,20 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import InterviewConfirmModal from './InterviewConfirmModal.vue'
-import { useRoute, useRouter } from 'vue-router'
 import AutoAssignModal from './AutoAssignModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { useRoute, useRouter } from 'vue-router'
+
+// ── 공통 알림 모달 ─────────────────────────────────────────────────────────
+const modal = ref({
+  show: false, title: '', message: '', type: 'info',
+  showCancel: false, confirmText: '확인', onConfirm: () => {},
+})
+const openModal = (opts) => {
+  modal.value = { show: true, showCancel: false, confirmText: '확인', onConfirm: () => {}, ...opts }
+}
+const onModalConfirm = () => { modal.value.onConfirm(); modal.value.show = false }
+const onModalCancel  = () => { modal.value.show = false }
 
 
 const route = useRoute()
@@ -108,11 +120,14 @@ const sendInvite = (memo) => {
     addRange(start, prev + 60)
   }
 
-  alert('초대장이 발송되었으며, 내 일정에 등록되었습니다.')
-
   showModal.value = false
 
-  router.push('/recruitment/home')
+  openModal({
+    title: '일정 등록 완료',
+    message: '초대장이 발송되었으며, 내 일정에 등록되었습니다.',
+    type: 'success',
+    onConfirm: () => router.push('/recruitment/home'),
+  })
 }
 
 const COLOR = {
@@ -173,13 +188,13 @@ const autoAssignSchedule = () => {
 
         selectedKeys.value = [key]
 
-        alert(`자동 배정 완료: ${day.date} ${time}`)
+        openModal({ title: '자동 배정 완료', message: `${day.date} ${time} 으로 배정되었습니다.`, type: 'success' })
         return
       }
     }
   }
 
-  alert('가능한 시간이 없습니다.')
+  openModal({ title: '배정 불가', message: '가능한 시간이 없습니다.', type: 'warning' })
 }
 
 const monthTitle = computed(() => {
@@ -577,18 +592,15 @@ const handleAutoAssign = ({
                       )
               )
 
-          alert(
-              `자동 배정 완료: ${room.name} / ${day.date}`
-          )
-
           showAutoModal.value = false
+          openModal({ title: '자동 배정 완료', message: `${room.name} / ${day.date} 으로 배정되었습니다.`, type: 'success' })
           return
         }
       }
     }
   }
 
-  alert('조건에 맞는 시간이 없습니다.')
+  openModal({ title: '배정 불가', message: '조건에 맞는 시간이 없습니다.', type: 'warning' })
 }
 
 
@@ -612,7 +624,7 @@ watch([selectedRoomId, interviewers, applicants], () => {
 
   if (total < min || total > max) {
 
-    alert('현재 인원으로는 이 회의실을 사용할 수 없습니다.')
+    openModal({ title: '회의실 변경', message: '현재 인원으로는 이 회의실을 사용할 수 없어 가능한 회의실로 자동 변경되었습니다.', type: 'warning' })
 
     // 자동으로 가능한 방으로 변경
     const available = rooms.value.find(r => {
@@ -827,6 +839,17 @@ watch([selectedRoomId, interviewers, applicants], () => {
       :open="showAutoModal"
       @close="showAutoModal = false"
       @submit="handleAutoAssign"
+  />
+
+  <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :type="modal.type"
+      :show-cancel="modal.showCancel"
+      :confirm-text="modal.confirmText"
+      @confirm="onModalConfirm"
+      @cancel="onModalCancel"
   />
 
 </template>
