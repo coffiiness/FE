@@ -24,6 +24,7 @@ const { organizations } = storeToRefs(organizationStore)
 // --- 상태 관리 ---
 const activeTab = ref('CALENDAR') // 'CALENDAR' | 'APPLICANTS'
 const applicantSearchQuery = ref('')
+const applicants = ref(applicantData) // Initialize applicants data
 const isInterviewerEditModalOpen = ref(false)
 const draggingCardId = ref(null)
 const draggingOverColumnId = ref(null)
@@ -85,21 +86,24 @@ const recruitment = computed(() => {
   }
 })
 
+// (Removed duplicate)
+
 const interviewers = ref([])
 
 // 조직도에서 전체 직원 가져오기
 const allEmployees = computed(() => {
+  if (!organizations.value) return []
   return organizations.value.flatMap(dept => dept.teams.flatMap(team => team.members))
 })
 
 // Initialize interviewers based on recruitment data
 watch([recruitment, allEmployees], ([newVal, employees]) => {
-  if (newVal && newVal.interviewers && employees.length > 0) {
+  if (newVal && newVal.id && newVal.interviewers && employees.length > 0) {
     interviewers.value = employees
       .filter(emp => newVal.interviewers.includes(emp.name))
       .map((emp, idx) => ({
         ...emp,
-        bgClass: 'bg-blue-600', // Default color logic
+        bgClass: 'bg-blue-600',
         borderClass: 'border-blue-700',
         badgeTextClass: 'text-blue-700',
         lightBgClass: 'bg-blue-50',
@@ -111,166 +115,22 @@ watch([recruitment, allEmployees], ([newVal, employees]) => {
 }, { immediate: true })
 
 const schedules = computed(() => {
+  if (!allSchedules.value) return []
   return allSchedules.value
     .filter(s => s.recruitmentId === jobId)
     .map(s => ({
-      ...s,
-      interviewerId: s.interviewerId, 
-      applicantName: s.applicantName,
-      location: s.description || '미정'
+      ...s
     }))
 })
 
-// 공고별 단계 정보
-const processes = computed(() => {
-    const job = jobs.value.find(j => j.id === jobId)
-    if (!job || !job.funnel) return []
-    return job.funnel.map(f => ({
-        id: f.step, // step 이름을 ID 처럼 사용 (간소화)
-        stageName: f.step,
-        count: f.count
-    }))
-})
-
-// 지원자 데이터 (applicant.json 필터링)
-const applicants = computed(() => {
-    return applicantData
-        .filter(a => a.recruitmentId === jobId)
-        .map(a => ({
-            ...a,
-            processId: a.stage // stage 이름을 processId로 매핑
-        }))
-})
-
-// --- Helper Functions ---
-const formatTime = (timeStr) => timeStr
-
-const getInterviewerColor = (interviewerId) => {
-  const interviewer = interviewers.value.find(i => i.id === interviewerId)
-  return interviewer?.color || '#94a3b8'
-}
-
-const getInterviewerName = (interviewerId) => {
-  const interviewer = interviewers.value.find(i => i.id === interviewerId)
-  return interviewer?.name || '미배정'
-}
-
-// --- Calendar Logic ---
-const monthStart = computed(() => new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth(), 1))
-const monthEnd = computed(() => new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() + 1, 0))
-
-const daysInMonth = computed(() => {
-  const days = []
-  const date = new Date(monthStart.value)
-  while (date <= monthEnd.value) {
-    days.push(new Date(date))
-    date.setDate(date.getDate() + 1)
-  }
-  return days
-})
-
-const calendarDays = computed(() => {
-  const firstDay = monthStart.value.getDay()
-  const empties = Array(firstDay).fill(null)
-  const days = [...empties, ...daysInMonth.value]
-  while (days.length < 35) {
-    days.push(null)
-  }
-  return days
-})
-
-const isSameDay = (d1, d2) => {
-  if (!d1 || !d2) return false
-  return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth() === d2.getMonth() &&
-         d1.getDate() === d2.getDate()
-}
-
-const isSameMonth = (d1, d2) => {
-  if (!d1 || !d2) return false
-  return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth() === d2.getMonth()
-}
-
-const toDateString = (date) => {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-const getBookingsForDay = (day) => {
-  if (!day) return []
-  const dateStr = toDateString(day)
-  
-  // 체크된 면접관 ID 목록
-  const checkedInterviewerIds = interviewers.value.filter(i => i.checked).map(i => i.id)
-
-  return schedules.value.filter(s => {
-    // 체크된 면접관의 일정만 필터링
-    if (!checkedInterviewerIds.includes(s.interviewerId)) return false
-    // 휴가(off) 제외
-    if (s.type === 'off') return false
-    return s.date === dateStr
-  })
-}
-
-const goPrev = () => {
-  if (currentView.value === 'MONTH') {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() - 1, 1)
-  } else if (currentView.value === 'WEEK') {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() - 7))
-  } else {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() - 1))
-    selectedDay.value = new Date(calendarState.currentMonth)
-  }
-}
-
-const goNext = () => {
-  if (currentView.value === 'MONTH') {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.getFullYear(), calendarState.currentMonth.getMonth() + 1, 1)
-  } else if (currentView.value === 'WEEK') {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() + 7))
-  } else {
-    calendarState.currentMonth = new Date(calendarState.currentMonth.setDate(calendarState.currentMonth.getDate() + 1))
-    selectedDay.value = new Date(calendarState.currentMonth)
-  }
-}
-
-const goToday = () => {
-  calendarState.currentMonth = new Date()
-  selectedDay.value = new Date()
-}
-
-const getDayColor = (index) => {
-  if (index === 0) return 'text-rose-500'
-  if (index === 6) return 'text-blue-500'
-  return 'text-slate-500'
-}
-
-// --- Interaction ---
-const openDayDetail = (day) => {
-  selectedDay.value = day
-  expandedBookingIds.value = new Set()
-}
-
-const closeDayDetail = () => {
-  selectedDay.value = null
-  expandedBookingIds.value = new Set()
-}
-
-const toggleBooking = (bookingId) => {
-  const next = new Set(expandedBookingIds.value)
-  if (next.has(bookingId)) next.delete(bookingId)
-  else next.add(bookingId)
-  expandedBookingIds.value = next
-}
+// ...
 
 const openInterviewDetail = (booking) => {
   selectedInterview.value = {
     ...booking,
     host: getInterviewerName(booking.interviewerId),
-    attendees: booking.applicantName ? [booking.applicantName] : [],
+    // Use store's attendees if available, otherwise allow modal to handle it or fallback
+    attendees: booking.attendees || (booking.applicantName ? [booking.applicantName] : []), 
   }
   isInterviewDetailModalOpen.value = true
 }
@@ -398,6 +258,86 @@ const goInterview = () => {
   })
 }
 
+// --- Calendar Logic ---
+const goToday = () => { calendarState.currentMonth = new Date() }
+const goPrev = () => {
+  const d = new Date(calendarState.currentMonth)
+  if (currentView.value === 'WEEK') d.setDate(d.getDate() - 7)
+  else if (currentView.value === 'DAY') d.setDate(d.getDate() - 1)
+  else d.setMonth(d.getMonth() - 1)
+  calendarState.currentMonth = d
+}
+const goNext = () => {
+  const d = new Date(calendarState.currentMonth)
+  if (currentView.value === 'WEEK') d.setDate(d.getDate() + 7)
+  else if (currentView.value === 'DAY') d.setDate(d.getDate() + 1)
+  else d.setMonth(d.getMonth() + 1)
+  calendarState.currentMonth = d
+}
+
+const isSameMonth = (d1, d2) => d1 && d2 && d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth()
+const isSameDay = (d1, d2) => d1 && d2 && d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()
+
+const calendarDays = computed(() => {
+  const curr = new Date(calendarState.currentMonth)
+  const year = curr.getFullYear()
+  const month = curr.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  
+  const days = []
+  const inputDate = new Date(firstDay)
+  while (inputDate.getDay() > 0) {
+    inputDate.setDate(inputDate.getDate() - 1)
+    days.unshift(new Date(inputDate))
+  }
+  
+  const currentMonthDays = []
+  for (let i = 1; i <= lastDay.getDate(); i++) {
+    currentMonthDays.push(new Date(year, month, i))
+  }
+  
+  const totalDays = [...days, ...currentMonthDays]
+  const remaining = 35 - totalDays.length
+  
+  const nextMonthDate = new Date(lastDay)
+  for (let i = 1; i <= remaining; i++) {
+    nextMonthDate.setDate(nextMonthDate.getDate() + 1)
+    totalDays.push(new Date(nextMonthDate))
+  }
+  
+  return totalDays
+})
+
+const getBookingsForDay = (date) => {
+  if (!date || !schedules.value) return []
+  const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return schedules.value.filter(s => s.date === dateStr).sort((a,b) => a.startTime.localeCompare(b.startTime))
+}
+
+const getInterviewerName = (id) => {
+  if (!id) return '미지정'
+  const emp = allEmployees.value.find(e => e.id === id)
+  return emp ? emp.name : 'Unknown'
+}
+
+const getInterviewerColor = (id) => {
+  // Simple hash for color
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+  return colors[id % colors.length] || '#64748b'
+}
+
+const openDayDetail = (day) => {
+  selectedDay.value = day
+}
+const closeDayDetail = () => {
+  selectedDay.value = null
+}
+const toggleBooking = (id) => {
+  if (expandedBookingIds.value.has(id)) expandedBookingIds.value.delete(id)
+  else expandedBookingIds.value.add(id)
+}
+
 const handleInterviewDelete = (interviewId) => {
   // TODO: 실제 면접 삭제 API 호출
   // axios.delete(`/recruitment/interviews/${interviewId}`)
@@ -407,10 +347,31 @@ const handleInterviewDelete = (interviewId) => {
     // 실제 데이터에서 제거하는 로직은 생략 (Mock)
   }, 300)
 }
+const formatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const [hour, min] = timeStr.split(':').map(Number)
+  const ampm = hour >= 12 ? '오후' : '오전'
+  // 12 -> 12, 13 -> 1, 0 -> 12
+  const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
+  return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
+}
+
+const getDayColor = (index) => {
+  if (index === 0) return 'text-rose-500' // Sunday
+  if (index === 6) return 'text-blue-500' // Saturday
+  return 'text-slate-500'
+}
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-4rem)] bg-slate-50 overflow-hidden relative">
+  <div v-if="!recruitment.id" class="flex h-screen items-center justify-center bg-slate-50">
+    <div class="text-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4"></div>
+      <p class="text-slate-500 font-bold">공고 정보를 불러오는 중입니다...</p>
+    </div>
+  </div>
+
+  <div v-else class="flex h-[calc(100vh-4rem)] bg-slate-50 overflow-hidden relative">
     
     <!-- Sidebar -->
     <aside class="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-none">
@@ -794,7 +755,7 @@ const handleInterviewDelete = (interviewId) => {
           </button>
         </div>
         <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-          <div v-for="intr in allInterviewers" :key="intr.id" 
+          <div v-for="intr in allEmployees" :key="intr.id" 
                @click="toggleInterviewerAssignment(intr)"
                class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
                :class="interviewers.some(i => i.id === intr.id) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
@@ -851,7 +812,7 @@ const handleInterviewDelete = (interviewId) => {
     <!-- 모달: 면접 상세 보기 -->
     <InterviewDetailModal 
       :show="isInterviewDetailModalOpen" 
-      :event="selectedInterview" 
+      :event="selectedInterview || {}" 
       @close="isInterviewDetailModalOpen = false"
       @delete="handleInterviewDelete"
     />

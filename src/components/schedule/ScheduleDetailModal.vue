@@ -72,9 +72,14 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </div>
             <div>
               <p class="text-sm font-bold text-slate-700">참석자</p>
-              <div class="flex -space-x-2 mt-1.5">
-                <div class="w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[9px] font-bold text-slate-600">나</div>
-                <div class="w-7 h-7 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-[9px] font-bold text-indigo-600">박</div>
+              <div class="flex flex-wrap gap-2 mt-1.5">
+                <div class="px-2 py-1 rounded-md bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                  나
+                </div>
+                <div v-for="att in event.attendees" :key="att" 
+                     class="px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-xs font-medium text-indigo-700">
+                  {{ att }}
+                </div>
               </div>
             </div>
           </div>
