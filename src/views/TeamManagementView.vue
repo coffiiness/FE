@@ -184,12 +184,8 @@ const getGroupColor = (groupName) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 p-8 font-sans text-slate-700">
-    <header class="flex justify-between items-end mb-12">
-      <div>
-        <h1 class="text-4xl font-display font-bold text-slate-900 tracking-tight">팀 관리</h1>
-        <p class="text-slate-500 mt-2 text-lg"> 사용자 정보와 활동 내역을 상세히 확인하세요.</p>
-      </div>
+  <div class="min-h-screen bg-slate-50 px-8 pt-2 pb-8 font-sans text-slate-700">
+    <header class="flex justify-end items-end mb-8">
       <div class="flex gap-3">
         <button @click="openGroupModal" class="px-5 py-3 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl transition-all shadow-sm font-medium">+ 그룹 추가</button>
         <button @click="openInviteModal" class="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow-lg shadow-teal-600/20 transition-all">멤버 초대</button>
