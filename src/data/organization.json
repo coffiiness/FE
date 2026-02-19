@@ -1,0 +1,182 @@
+[
+    {
+        "id": "dept_dev",
+        "name": "개발본부",
+        "teams": [
+            {
+                "id": "team_fe",
+                "name": "Frontend 팀",
+                "members": [
+                    {
+                        "id": 101,
+                        "name": "최프론트",
+                        "position": "팀장",
+                        "email": "choi.fe@nexus.ai"
+                    },
+                    {
+                        "id": 102,
+                        "name": "김하린",
+                        "position": "팀원",
+                        "email": "kim.harin@nexus.ai"
+                    },
+                    {
+                        "id": 103,
+                        "name": "박선우",
+                        "position": "팀원",
+                        "email": "park.sunwoo@nexus.ai"
+                    }
+                ]
+            },
+            {
+                "id": "team_be",
+                "name": "Backend 팀",
+                "members": [
+                    {
+                        "id": 104,
+                        "name": "김기술",
+                        "position": "리드",
+                        "email": "kim.tech@nexus.ai"
+                    },
+                    {
+                        "id": 105,
+                        "name": "정민수",
+                        "position": "팀원",
+                        "email": "jung.minsu@nexus.ai"
+                    },
+                    {
+                        "id": 106,
+                        "name": "윤태호",
+                        "position": "팀원",
+                        "email": "yoon.taeho@nexus.ai"
+                    }
+                ]
+            },
+            {
+                "id": "team_data",
+                "name": "Data 팀",
+                "members": [
+                    {
+                        "id": 107,
+                        "name": "한데이터",
+                        "position": "팀장",
+                        "email": "han.data@nexus.ai"
+                    },
+                    {
+                        "id": 108,
+                        "name": "최하늘",
+                        "position": "팀원",
+                        "email": "choi.sky@nexus.ai"
+                    }
+                ]
+            },
+            {
+                "id": "team_sec",
+                "name": "보안팀",
+                "members": [
+                    {
+                        "id": 109,
+                        "name": "송지훈",
+                        "position": "팀원",
+                        "email": "song.secure@nexus.ai"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "dept_hr",
+        "name": "인사본부",
+        "teams": [
+            {
+                "id": "team_hr",
+                "name": "인사팀",
+                "members": [
+                    {
+                        "id": 201,
+                        "name": "박인사",
+                        "position": "팀장",
+                        "email": "park.hr@nexus.ai"
+                    },
+                    {
+                        "id": 202,
+                        "name": "이영희",
+                        "position": "부장",
+                        "email": "lee.young@nexus.ai"
+                    }
+                ]
+            },
+            {
+                "id": "team_recruit",
+                "name": "채용팀",
+                "members": [
+                    {
+                        "id": 203,
+                        "name": "김채용",
+                        "position": "리드",
+                        "email": "kim.recruit@nexus.ai"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "dept_design",
+        "name": "디자인본부",
+        "teams": [
+            {
+                "id": "team_ux",
+                "name": "UX/UI 팀",
+                "members": [
+                    {
+                        "id": 301,
+                        "name": "이디자인",
+                        "position": "팀장",
+                        "email": "lee.design@nexus.ai"
+                    },
+                    {
+                        "id": 302,
+                        "name": "정지윤",
+                        "position": "디자이너",
+                        "email": "jung.jiyoon@nexus.ai"
+                    },
+                    {
+                        "id": 303,
+                        "name": "김태형",
+                        "position": "디자이너",
+                        "email": "kim.tae@nexus.ai"
+                    }
+                ]
+            },
+            {
+                "id": "team_brand",
+                "name": "브랜드 팀",
+                "members": [
+                    {
+                        "id": 304,
+                        "name": "박브랜드",
+                        "position": "마케터",
+                        "email": "park.brand@nexus.ai"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        "id": "dept_plan",
+        "name": "기획본부",
+        "teams": [
+            {
+                "id": "team_service",
+                "name": "서비스기획 팀",
+                "members": [
+                    {
+                        "id": 401,
+                        "name": "박상수",
+                        "position": "과장",
+                        "email": "park.plan@nexus.ai"
+                    }
+                ]
+            }
+        ]
+    }
+]

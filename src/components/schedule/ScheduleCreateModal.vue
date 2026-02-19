@@ -1,5 +1,8 @@
 <script setup>
-import { ref, watch, defineProps, defineEmits, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, defineProps, defineEmits, onMounted, onUnmounted } from 'vue'
+
+import { useOrganizationStore } from '@/stores/organization'
+import { storeToRefs } from 'pinia'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -8,6 +11,32 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
+
+const orgStore = useOrganizationStore()
+const { departments } = storeToRefs(orgStore)
+
+const selectedDeptId = ref(null)
+const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
+
+const toggleDept = (deptId) => {
+  selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
+}
+
+const toggleAttendee = (name) => {
+  if (form.value.attendees.includes(name)) {
+    form.value.attendees = form.value.attendees.filter(a => a !== name)
+  } else {
+    form.value.attendees.push(name)
+  }
+}
+
+const selectAllTeam = (team) => {
+  team.members.forEach(member => {
+    if (!form.value.attendees.includes(member.name)) {
+      form.value.attendees.push(member.name)
+    }
+  })
+}
 
 const form = ref({
   title: '',
@@ -22,7 +51,7 @@ const form = ref({
 const attendeeInput = ref('')
 
 const scheduleTypes = [
-  { value: 'INTERVIEW', label: '면접', activeClass: 'bg-brand-50 border-brand-200 text-brand-600' }, // [수정]
+  { value: 'INTERVIEW', label: '면접', activeClass: 'bg-brand-50 border-brand-200 text-brand-600' },
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
   { value: 'BUSINESS_TRIP', label: '외근/출장', activeClass: 'bg-emerald-50 border-emerald-200 text-emerald-600' },
   { value: 'OTHERS', label: '기타', activeClass: 'bg-slate-100 border-slate-300 text-slate-700' }
@@ -44,6 +73,7 @@ watch(() => props.isOpen, (newVal) => {
       }
     }
     attendeeInput.value = ''
+    selectedDeptId.value = null
   }
 })
 
@@ -57,7 +87,9 @@ const removeAttendee = (index) => { form.value.attendees.splice(index, 1) }
 
 const save = () => {
   if (!form.value.title) return alert('일정 제목을 입력해주세요.')
-  emit('save', { ...form.value })
+  // 타입 보정을 위해 복사본 생성
+  const payload = { ...form.value }
+  emit('save', payload)
 }
 
 const handleKeydown = (e) => { if (e.key === 'Escape' && props.isOpen) emit('close') }
@@ -70,9 +102,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
     <div v-if="isOpen" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="$emit('close')"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
+      <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden transform transition-all scale-100 max-h-[90vh] flex flex-col">
 
-        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
           <h3 class="text-lg font-bold text-slate-800">
             {{ initialData ? '일정 수정' : '새 일정 생성' }}
           </h3>
@@ -81,7 +113,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           </button>
         </div>
 
-        <div class="p-6 space-y-6">
+        <div class="p-6 space-y-6 overflow-y-auto custom-scrollbar">
 
           <div>
             <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">제목</label>
@@ -122,21 +154,75 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </div>
           </div>
 
+          <!-- 참석자 선택 -->
           <div>
-            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">참석자 (Enter로 추가)</label>
-            <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm"> <span v-for="(person, index) in form.attendees" :key="index"
-                                                                                                                                                                                                                                                   class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up"> {{ person }}
-                <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
-                  <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">참석자 선택</label>
+            
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 mb-3">
+              <!-- 1. 부서 선택 -->
+              <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                <button 
+                  v-for="dept in departments" 
+                  :key="dept.id"
+                  @click="toggleDept(dept.id)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
+                  :class="selectedDeptId === dept.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
+                >
+                  {{ dept.name }}
                 </button>
-              </span>
+              </div>
+
+              <!-- 2. 팀 및 멤버 목록 -->
+              <div v-if="currentDept" class="space-y-3 animate-fade-in-up">
+                <div v-for="team in currentDept.teams" :key="team.id">
+                  <h4 class="text-[11px] font-bold text-slate-400 mb-2 flex items-center gap-2">
+                    {{ team.name }}
+                    <button @click="selectAllTeam(team)" class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors">전체 선택</button>
+                  </h4>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button 
+                      v-for="member in team.members" 
+                      :key="member.id"
+                      @click="toggleAttendee(member.name)"
+                      class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
+                      :class="form.attendees.includes(member.name) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                    >
+                      <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                           :class="form.attendees.includes(member.name) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'">
+                        {{ member.name[0] }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-bold text-slate-700 truncate" :class="{'text-brand-700': form.attendees.includes(member.name)}">{{ member.name }}</p>
+                        <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
+                      </div>
+                      <div v-if="form.attendees.includes(member.name)" class="text-brand-600">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div v-else class="text-center py-6 text-slate-400 text-xs">
+                부서를 선택하여 팀원을 추가하세요.
+              </div>
+            </div>
+
+            <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm">
+                <span v-for="(person, index) in form.attendees" :key="index"
+                      class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up">
+                  {{ person }}
+                  <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </span>
 
               <input
                   v-model="attendeeInput"
                   @keydown.enter.prevent="addAttendee"
                   @keydown.backspace="attendeeInput === '' && form.attendees.pop()"
                   type="text"
-                  placeholder="이름 입력"
+                  placeholder="외부 이름 직접 입력"
                   class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
               >
             </div>

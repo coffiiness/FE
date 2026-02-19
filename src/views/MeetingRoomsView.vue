@@ -1,66 +1,15 @@
 <script setup>
 import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useRoomStore } from '@/stores/room'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
-const rooms = ref([
-  {
-    id: 'r1',
-    name: 'Orion-1',
-    capacity: 8,
-    floor: 7,
-    facilities: ['프로젝터', '화이트보드', 'WiFi'],
-    description: '채용 면접 전용 회의실',
-    color: '#14b8a6'
-  },
-  {
-    id: 'r2',
-    name: 'Nebula-3',
-    capacity: 6,
-    floor: 7,
-    facilities: ['모니터', '화상회의', '스피커'],
-    description: '디자인/기획 협업 공간',
-    color: '#10b981'
-  },
-  {
-    id: 'r3',
-    name: 'Astra-2',
-    capacity: 10,
-    floor: 3,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#6366f1'
-  },
-  {
-    id: 'r4',
-    name: 'Nova-5',
-    capacity: 12,
-    floor: 5,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#f59e0b'
-  },
-  {
-    id: 'r5',
-    name: 'Cosmo-1',
-    capacity: 4,
-    floor: 2,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#06b6d4'
-  },
-  {
-    id: 'r6',
-    name: 'Pulse-7',
-    capacity: 16,
-    floor: 9,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#ec4899'
-  }
-])
+const roomStore = useRoomStore()
+const { rooms } = storeToRefs(roomStore)
 
 const bookings = ref([
   {
@@ -106,6 +55,7 @@ const detailModalOpen = ref(false)
 const roomDetailOpen = ref(false)
 const createRoomOpen = ref(false)
 const editingRoom = ref(null)
+const successModalOpen = ref(false)
 
 const selectedRoom = ref(null)
 const selectedBooking = ref(null)
@@ -146,6 +96,7 @@ const handleBookingConfirm = (booking) => {
     ...booking
   })
   bookingModalOpen.value = false
+  successModalOpen.value = true
 }
 
 const handleBookingDelete = (bookingId) => {
@@ -244,6 +195,17 @@ const setDateValue = (value) => {
       :mode="editingRoom ? 'edit' : 'create'"
       @close="createRoomOpen = false; editingRoom = null"
       @confirm="editingRoom ? handleUpdateRoom : handleCreateRoom"
+    />
+
+    <ConfirmModal
+      :show="successModalOpen"
+      type="success"
+      title="예약 완료"
+      message="회의실 예약이 성공적으로 완료되었습니다."
+      confirmText="확인"
+      :showCancel="false"
+      @close="successModalOpen = false"
+      @confirm="successModalOpen = false"
     />
   </div>
 </template>
