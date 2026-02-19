@@ -137,13 +137,11 @@ const removeInterviewer = (id) => {
 /* 
   3. 지원자 데이터 (Mock + Store 연동 예시)
 */
-// 실제로는 Store나 API에서 가져와야 함. 여기서는 Mock 유지하되 구조만 맞춤.
-const applicants = ref([
-  { id: 101, name: '홍길동', email: 'hong@test.com', status: '서류 합격' },
-  { id: 102, name: '김하늘', email: 'kim@test.com', status: '1차 면접 예정' },
-  { id: 103, name: '박민준', email: 'park@test.com', status: '서류 합격' },
-  { id: 104, name: '이수진', email: 'lee@test.com', status: '과제 통과' },
-])
+import applicantData from '@/data/applicant.json'
+
+const applicants = computed(() => {
+  return applicantData.filter(a => a.recruitmentId === jobId)
+})
 
 const searchApplicant = ref('')
 const selectedApplicants = ref([])

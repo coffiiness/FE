@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useRecruitmentStore } from '@/Stores/recruitment'
+import { useRecruitmentStore } from '@/stores/recruitment'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const router = useRouter()
@@ -18,7 +18,12 @@ const form = ref({
   applicationTemplateId: '',
   contents: '',
   teamId: [],
-  interviewerIds: []
+  interviewerIds: [],
+  // Added fields
+  leadTeamId: '',
+  referenceTeamIds: [],
+  careerType: 'NEW',
+  experienceYears: { min: 0, max: 0 }
 })
 
 // --- 2. 채용 프로세스 데이터 ---
@@ -61,10 +66,10 @@ const interviewers = ref([
 // --- Search & Filter Logic ---
 const interviewerSearchQuery = ref('')
 
-// 선택된 팀에 속한 면접관들 (자동 추천)
+// 선택된 팀에 속한 면접관들 (자동 추천 - Lead Team 기준)
 const recommendedInterviewers = computed(() => {
-  if (form.value.teamId.length === 0) return []
-  return interviewers.value.filter(i => form.value.teamId.includes(i.teamId))
+  if (!form.value.leadTeamId) return []
+  return interviewers.value.filter(i => i.teamId === form.value.leadTeamId)
 })
 
 // 검색 결과 (추천된 사람 제외하고 검색어에 맞는 사람들)
@@ -137,7 +142,7 @@ const onDragEnd = () => {
 }
 
 const handleSubmit = async () => {
-  if (!form.value.title || !form.value.startDate || !form.value.endDate) {
+  if (!form.value.title || !form.value.startDate || !form.value.endDate || !form.value.leadTeamId) {
     alert('필수 정보를 모두 입력해주세요.')
     return
   }
@@ -145,21 +150,40 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    // 선택된 팀 이름 찾기
-    const selectedTeamNames = teams.value
-        .filter(t => form.value.teamId.includes(t.id))
+    // Lead Team Name
+    const leadTeam = teams.value.find(t => t.id === form.value.leadTeamId)
+    const leadTeamName = leadTeam ? leadTeam.name : 'Unknown'
+    
+    // Reference Team Names
+    const referenceTeamNames = teams.value
+        .filter(t => form.value.referenceTeamIds.includes(t.id))
         .map(t => t.name)
-        .join(', ')
 
-    // 선택된 면접관 이름 찾기
+    // Position String Construction
+    let positionStr = ''
+    if (form.value.careerType === 'NEW') {
+      positionStr = '신입'
+    } else if (form.value.careerType === 'EXPERIENCED') {
+        const min = form.value.experienceYears.min
+        const max = form.value.experienceYears.max
+        if (min > 0 && max > 0) positionStr = `경력 (${min}~${max}년)`
+        else if (min > 0) positionStr = `경력 (${min}년 이상)`
+        else positionStr = '경력'
+    } else {
+      positionStr = '경력 무관'
+    }
+
+    // Selected Interviewer Names
     const selectedInterviewerNames = interviewers.value
         .filter(i => form.value.interviewerIds.includes(i.id))
         .map(i => i.name)
 
     const payload = {
       ...form.value,
-      team: selectedTeamNames || '미지정', // UI 표시용
-      position: 'New Position', // UI 표시용 임시값
+      team: leadTeamName, // Backward compatibility for list view
+      leadTeamId: form.value.leadTeamId,
+      referenceTeamIds: form.value.referenceTeamIds, 
+      position: positionStr, 
       interviewers: selectedInterviewerNames,
       processes: processes.value.map((p, index) => ({
         stageName: p.stageName,
@@ -273,15 +297,66 @@ const handleSubmit = async () => {
           </h3>
 
           <div class="space-y-6">
-            <div>
-              <label class="block text-sm font-bold text-slate-700 mb-3">배정 팀 (중복 선택 가능)</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-2">경력 구분</label>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" v-model="form.careerType" value="NEW" class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                    <span class="text-sm font-medium text-slate-700">신입</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" v-model="form.careerType" value="EXPERIENCED" class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                    <span class="text-sm font-medium text-slate-700">경력</span>
+                  </label>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" v-model="form.careerType" value="IRRELEVANT" class="w-4 h-4 text-brand-600 focus:ring-brand-500">
+                    <span class="text-sm font-medium text-slate-700">무관</span>
+                  </label>
+                </div>
+              </div>
+
+              <div v-if="form.careerType === 'EXPERIENCED'">
+                <label class="block text-sm font-bold text-slate-700 mb-2">경력 연차 (년)</label>
+                <div class="flex items-center gap-2">
+                  <input v-model="form.experienceYears.min" type="number" min="0" placeholder="최소"
+                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-brand-500 transition-all shadow-sm">
+                  <span class="text-slate-500">~</span>
+                  <input v-model="form.experienceYears.max" type="number" min="0" placeholder="최대"
+                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-brand-500 transition-all shadow-sm">
+                </div>
+              </div>
+            </div>
+
+            <!-- (Existing Team Picker Replaced with Lead Team) -->
+             <div>
+              <label class="block text-sm font-bold text-slate-700 mb-3">담담 조직 (Lead Team)</label>
               <div class="flex flex-wrap gap-2">
                 <button v-for="team in teams" :key="team.id"
-                        @click="toggleSelection(form.teamId, team.id)"
+                        @click="form.leadTeamId = team.id"
                         type="button"
                         class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
-                        :class="form.teamId.includes(team.id)
-                          ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm'
+                        :class="form.leadTeamId === team.id
+                          ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm ring-1 ring-brand-500'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'">
+                  {{ team.name }}
+                </button>
+              </div>
+            </div>
+
+            <!-- (New Reference Teams) -->
+            <div>
+              <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  참조 조직 (Reference Team)
+                  <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-normal">조회 권한만 부여</span>
+              </label>
+              <div class="flex flex-wrap gap-2">
+                <button v-for="team in teams" :key="team.id + '_ref'"
+                        @click="toggleSelection(form.referenceTeamIds, team.id)"
+                        type="button"
+                        class="px-4 py-2 rounded-xl text-sm font-bold transition-all border"
+                        :class="form.referenceTeamIds.includes(team.id)
+                          ? 'bg-slate-100 border-slate-400 text-slate-700 shadow-sm'
                           : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'">
                   {{ team.name }}
                 </button>

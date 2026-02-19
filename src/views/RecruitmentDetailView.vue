@@ -2,9 +2,12 @@
 import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
-import { useRecruitmentStore } from '@/Stores/recruitment'
-import { useScheduleStore } from '@/Stores/schedule'
+// Stores
+import { useRecruitmentStore } from '@/stores/recruitment'
+import { useScheduleStore } from '@/stores/schedule'
+import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
+import applicantData from '@/data/applicant.json' // Import dummy data
 
 const route = useRoute()
 const router = useRouter()
@@ -12,8 +15,11 @@ const jobId = Number(route.params.id)
 
 const recruitmentStore = useRecruitmentStore()
 const scheduleStore = useScheduleStore()
+const organizationStore = useOrganizationStore()
+
 const { jobs } = storeToRefs(recruitmentStore)
 const { schedules: allSchedules } = storeToRefs(scheduleStore)
+const { organizations } = storeToRefs(organizationStore)
 
 // --- 상태 관리 ---
 const activeTab = ref('CALENDAR') // 'CALENDAR' | 'APPLICANTS'
@@ -68,53 +74,39 @@ const recruitment = computed(() => {
   return {
     id: job.id,
     title: job.title,
-    period: `${job.createdAt} ~ ${job.endDate ? job.endDate.split('T')[0] : '미정'}`,
+    period: `${job.createdAt.split('T')[0]} ~ ${job.endDate ? job.endDate.split('T')[0] : '미정'}`,
     status: job.status.toUpperCase(),
     dday: job.dday,
     totalApplicants: job.totalApplicants,
-    ongoingInterviews: 5, // Mock
-    completionRate: 1.71, // Mock
-    interviewers: job.interviewers || []
+    ongoingInterviews: job.ongoingInterviews, 
+    completionRate: job.completionRate,
+    interviewers: job.interviewers || [],
+    position: job.position || '직군 미정' // Added position field
   }
 })
 
 const interviewers = ref([])
 
-const allInterviewers = ref([
-  { id: 1, name: '김기술', position: '백엔드 리드' },
-  { id: 2, name: '박팀장', position: '인사 팀장' },
-  { id: 105, name: '이디자인', position: '프로덕트 디자이너' },
-  { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
-])
+// 조직도에서 전체 직원 가져오기
+const allEmployees = computed(() => {
+  return organizations.value.flatMap(dept => dept.teams.flatMap(team => team.members))
+})
 
 // Initialize interviewers based on recruitment data
-watch(recruitment, (newVal) => {
-  if (newVal && newVal.interviewers) {
-    interviewers.value = allInterviewers.value
-      .filter(ai => newVal.interviewers.includes(ai.name))
-      .map(ai => ({
-        ...ai,
+watch([recruitment, allEmployees], ([newVal, employees]) => {
+  if (newVal && newVal.interviewers && employees.length > 0) {
+    interviewers.value = employees
+      .filter(emp => newVal.interviewers.includes(emp.name))
+      .map((emp, idx) => ({
+        ...emp,
         bgClass: 'bg-blue-600', // Default color logic
         borderClass: 'border-blue-700',
         badgeTextClass: 'text-blue-700',
         lightBgClass: 'bg-blue-50',
         lightBorderClass: 'border-blue-100',
-        color: ai.id === 1 ? '#2563eb' : (ai.id === 2 ? '#10b981' : '#6366f1'),
+        color: idx % 3 === 0 ? '#2563eb' : (idx % 3 === 1 ? '#10b981' : '#6366f1'),
         checked: true
       }))
-    
-    // If no mapped interviewers found (e.g. newly created job with names not in allInterviewers), fallback
-    if (interviewers.value.length === 0 && newVal.interviewers.length > 0) {
-        newVal.interviewers.forEach((name, idx) => {
-            interviewers.value.push({
-                id: 900 + idx,
-                name: name,
-                position: '면접관',
-                color: '#64748b',
-                checked: true
-            })
-        })
-    }
   }
 }, { immediate: true })
 
@@ -123,25 +115,32 @@ const schedules = computed(() => {
     .filter(s => s.recruitmentId === jobId)
     .map(s => ({
       ...s,
-      interviewerId: s.id % 2 === 0 ? 2 : 1, // Mock mapping for interviewer ID since store doesn't have it explicitly
-      applicantName: '지원자 ' + s.id, // Mock
+      interviewerId: s.interviewerId, 
+      applicantName: s.applicantName,
       location: s.description || '미정'
     }))
 })
 
-const processes = ref([
-  { id: 101, stageName: '서류 전형', count: 12 },
-  { id: 102, stageName: '실무 면접', count: 5 },
-  { id: 103, stageName: '임원 면접', count: 2 },
-  { id: 104, stageName: '최종 합격', count: 1 }
-])
+// 공고별 단계 정보
+const processes = computed(() => {
+    const job = jobs.value.find(j => j.id === jobId)
+    if (!job || !job.funnel) return []
+    return job.funnel.map(f => ({
+        id: f.step, // step 이름을 ID 처럼 사용 (간소화)
+        stageName: f.step,
+        count: f.count
+    }))
+})
 
-const applicants = ref([
-  { id: 1, name: '한지훈', email: 'han@test.com', processId: 101, tags: ['Java'] },
-  { id: 2, name: '김민지', email: 'kim@test.com', processId: 101, tags: ['Node'] },
-  { id: 3, name: '이철수', email: 'lee@test.com', processId: 102, tags: ['Spring'], hasInterview: true },
-  { id: 4, name: '박영희', email: 'park@test.com', processId: 103, tags: ['Senior'], hasInterview: true },
-])
+// 지원자 데이터 (applicant.json 필터링)
+const applicants = computed(() => {
+    return applicantData
+        .filter(a => a.recruitmentId === jobId)
+        .map(a => ({
+            ...a,
+            processId: a.stage // stage 이름을 processId로 매핑
+        }))
+})
 
 // --- Helper Functions ---
 const formatTime = (timeStr) => timeStr
@@ -423,7 +422,8 @@ const handleInterviewDelete = (interviewId) => {
 
         <div>
           <h5 class="text-xs font-bold text-slate-500 mb-2">공고 상세 정보</h5>
-          <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-2">{{ recruitment.title }}</h1>
+          <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-1">{{ recruitment.title }}</h1>
+          <p class="text-sm font-bold text-brand-600 mb-2">{{ recruitment.position }}</p>
           <p class="text-xs text-slate-500 font-medium mb-4">기간: {{ recruitment.period }}</p>
           
           <button @click="copyRecruitmentLink" class="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-50 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold hover:bg-brand-100 transition-colors">
@@ -727,7 +727,7 @@ const handleInterviewDelete = (interviewId) => {
                         }">
                     {{ getInterviewerName(booking.interviewerId) }}
                   </span>
-                  <span class="text-[10px] text-slate-500 font-bold">{{ formatTime(booking.time) }} - {{ formatTime(booking.endTime || booking.time) }}</span>
+                  <span class="text-[10px] text-slate-500 font-bold">{{ booking.time }}</span>
                 </div>
                 <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
                 <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ getInterviewerName(booking.interviewerId) }}</p>
