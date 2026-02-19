@@ -320,10 +320,10 @@ const handleSubmit = async () => {
                 <label class="block text-sm font-bold text-slate-700 mb-2">경력 연차 (년)</label>
                 <div class="flex items-center gap-2">
                   <input v-model="form.experienceYears.min" type="number" min="0" placeholder="최소"
-                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all shadow-sm">
+                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-brand-500 transition-all shadow-sm">
                   <span class="text-slate-500">~</span>
                   <input v-model="form.experienceYears.max" type="number" min="0" placeholder="최대"
-                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-brand-500 transition-all shadow-sm">
+                         class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-bold focus:outline-none focus:border-brand-500 transition-all shadow-sm">
                 </div>
               </div>
             </div>

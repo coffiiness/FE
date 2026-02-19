@@ -4,9 +4,13 @@ import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/Stores/recruitment'
 import { storeToRefs } from 'pinia'
 
+import { useScheduleStore } from '@/stores/schedule'
+
 const router = useRouter()
 const store = useRecruitmentStore()
+const scheduleStore = useScheduleStore()
 const { jobs } = storeToRefs(store)
+const { schedules } = storeToRefs(scheduleStore)
 
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
@@ -14,12 +18,39 @@ const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 
-// --- 데이터 (Mock) ---
-const stats = ref([
-  { label: '진행 중인 공고', value: 5, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
-  { label: '이번 주 면접 예정', value: 12, unit: '명', color: 'text-brand-600', bg: 'bg-brand-50/50' },
-  { label: '조율 대기 (병목)', value: 3, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
-])
+// --- 데이터 (Computed) ---
+const stats = computed(() => {
+  // 1. 진행 중인 공고
+  const activeJobsCount = jobs.value.filter(j => j.status === 'active').length
+
+  // 2. 이번 주 면접 예정 (일~토 기준)
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() - dayOfWeek)
+  startOfWeek.setHours(0, 0, 0, 0)
+  
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  endOfWeek.setHours(23, 59, 59, 999)
+
+  const interviewsThisWeek = schedules.value.filter(s => {
+    if (!s.date) return false
+    const sDate = new Date(s.date)
+    return sDate >= startOfWeek && sDate <= endOfWeek && s.type === 'INTERVIEW' // Make sure it's an interview
+  }).length
+
+  // 3. 조율 대기 (병목) - 임시 로직 (Mock or Simple logic)
+  // 실제로는 지원자가 특정 단계에 오래 머물러 있는지 확인해야 함
+  // 여기서는 '서류' 단계에 있는 지원자 수 중 일부를 병목으로 가정하거나, 0으로 설정
+  const bottleneckCount = 0 
+
+  return [
+    { label: '진행 중인 공고', value: activeJobsCount, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
+    { label: '이번 주 면접 예정', value: interviewsThisWeek, unit: '명', color: 'text-brand-600', bg: 'bg-brand-50/50' },
+    { label: '조율 대기 (병목)', value: bottleneckCount, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
+  ]
+})
 
 // jobs ref removed in favor of store.jobs
 
