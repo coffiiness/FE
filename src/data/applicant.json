@@ -1,0 +1,308 @@
+[
+    {
+        "id": 1,
+        "recruitmentId": 1,
+        "name": "한지훈",
+        "email": "han.jihoon@example.com",
+        "phone": "010-1234-5678",
+        "status": "1차 면접 예정",
+        "stage": "1차 면접",
+        "date": "2026-02-20",
+        "tags": [
+            "Java",
+            "Spring Boot",
+            "JPA"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 2,
+        "recruitmentId": 1,
+        "name": "김민지",
+        "email": "kim.minji@example.com",
+        "phone": "010-2345-6789",
+        "status": "서류 합격",
+        "stage": "서류",
+        "date": "2026-02-18",
+        "tags": [
+            "Node.js",
+            "Express",
+            "AWS"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 3,
+        "recruitmentId": 1,
+        "name": "이철수",
+        "email": "lee.cs@example.com",
+        "phone": "010-3456-7890",
+        "status": "과제 제출 완료",
+        "stage": "과제",
+        "date": "2026-02-19",
+        "tags": [
+            "Python",
+            "Django",
+            "Docker"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 4,
+        "recruitmentId": 1,
+        "name": "박영희",
+        "email": "park.yh@example.com",
+        "phone": "010-4567-8901",
+        "status": "1차 면접 예정",
+        "stage": "1차 면접",
+        "date": "2026-02-21",
+        "tags": [
+            "Java",
+            "Kotlin",
+            "MSA"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 5,
+        "recruitmentId": 2,
+        "name": "최수민",
+        "email": "choi.sumin@example.com",
+        "phone": "010-5678-9012",
+        "status": "서류 심사 중",
+        "stage": "서류",
+        "date": "2026-02-15",
+        "tags": [
+            "Figma",
+            "Sketch",
+            "Prototyping"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 6,
+        "recruitmentId": 2,
+        "name": "정우성",
+        "email": "jung.ws@example.com",
+        "phone": "010-6789-0123",
+        "status": "포트폴리오 검토",
+        "stage": "포트폴리오",
+        "date": "2026-02-16",
+        "tags": [
+            "UX Research",
+            "UI Design"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 7,
+        "recruitmentId": 1,
+        "name": "강동원",
+        "email": "kang.dw@example.com",
+        "phone": "010-7890-1234",
+        "status": "2차 면접 대기",
+        "stage": "2차 면접",
+        "date": "2026-02-25",
+        "tags": [
+            "System Design",
+            "Redis",
+            "Kafka"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 8,
+        "recruitmentId": 3,
+        "name": "송혜교",
+        "email": "song.hk@example.com",
+        "phone": "010-8901-2345",
+        "status": "면접 예정",
+        "stage": "면접",
+        "date": "2026-02-22",
+        "tags": [
+            "Kubernetes",
+            "Jenkins",
+            "Terraform"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 9,
+        "recruitmentId": 3,
+        "name": "원빈",
+        "email": "won.bin@example.com",
+        "phone": "010-9012-3456",
+        "status": "서류 탈락",
+        "stage": "서류",
+        "date": "2026-02-10",
+        "tags": [
+            "AWS",
+            "Linux"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 10,
+        "recruitmentId": 1,
+        "name": "장동건",
+        "email": "jang.dk@example.com",
+        "phone": "010-0123-4567",
+        "status": "1차 면접 완료",
+        "stage": "1차 면접",
+        "date": "2026-02-14",
+        "tags": [
+            "Go",
+            "gRPC"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 11,
+        "recruitmentId": 4,
+        "name": "김태희",
+        "email": "kim.th@example.com",
+        "phone": "010-1234-1234",
+        "status": "최종 합격",
+        "stage": "종료",
+        "date": "2026-01-20",
+        "tags": [
+            "React",
+            "Vue",
+            "TypeScript"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 12,
+        "recruitmentId": 1,
+        "name": "전지현",
+        "email": "jun.jh@example.com",
+        "phone": "010-2345-2345",
+        "status": "서류 접수",
+        "stage": "서류",
+        "date": "2026-02-19",
+        "tags": [
+            "Java",
+            "Spring"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 13,
+        "recruitmentId": 1,
+        "name": "공유",
+        "email": "gong.yoo@example.com",
+        "phone": "010-3456-3456",
+        "status": "1차 면접 예정",
+        "stage": "1차 면접",
+        "date": "2026-02-23",
+        "tags": [
+            "Java",
+            "QueryDSL"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 14,
+        "recruitmentId": 2,
+        "name": "아이유",
+        "email": "iu@example.com",
+        "phone": "010-4567-4567",
+        "status": "서류 합격",
+        "stage": "서류",
+        "date": "2026-02-18",
+        "tags": [
+            "Adobe XD",
+            "Photoshop"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 15,
+        "recruitmentId": 5,
+        "name": "박서준",
+        "email": "park.sj@example.com",
+        "phone": "010-5678-5678",
+        "status": "서류 심사 중",
+        "stage": "서류",
+        "date": "2026-02-19",
+        "tags": [
+            "Communication",
+            "Jira"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 16,
+        "recruitmentId": 1,
+        "name": "수지",
+        "email": "suzy@example.com",
+        "phone": "010-6789-6789",
+        "status": "2차 면접 예정",
+        "stage": "2차 면접",
+        "date": "2026-02-26",
+        "tags": [
+            "Spring Security",
+            "OAuth"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 17,
+        "recruitmentId": 3,
+        "name": "현빈",
+        "email": "hyun.bin@example.com",
+        "phone": "010-7890-7890",
+        "status": "면접 대기",
+        "stage": "면접",
+        "date": "2026-02-24",
+        "tags": [
+            "Ansible",
+            "Docker Swarm"
+        ],
+        "hasInterview": true
+    },
+    {
+        "id": 18,
+        "recruitmentId": 5,
+        "name": "손예진",
+        "email": "son.yj@example.com",
+        "phone": "010-8901-8901",
+        "status": "서류 접수",
+        "stage": "서류",
+        "date": "2026-02-18",
+        "tags": [
+            "Roadmap",
+            "Data Analysis"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 19,
+        "recruitmentId": 1,
+        "name": "조정석",
+        "email": "cho.js@example.com",
+        "phone": "010-9012-9012",
+        "status": "불합격",
+        "stage": "서류",
+        "date": "2026-02-10",
+        "tags": [
+            "Java"
+        ],
+        "hasInterview": false
+    },
+    {
+        "id": 20,
+        "recruitmentId": 2,
+        "name": "김고은",
+        "email": "kim.ge@example.com",
+        "phone": "010-0123-0123",
+        "status": "면접 예정",
+        "stage": "면접",
+        "date": "2026-02-20",
+        "tags": [
+            "Interaction Design"
+        ],
+        "hasInterview": true
+    }
+]

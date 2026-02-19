@@ -23,14 +23,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     return `${year}-${month}-${day}`
   }
 
-  // JSON 데이터의 dayOffset을 실제 날짜로 변환하여 초기화
-  const initialSchedules = scheduleData.map(item => ({
-    ...item,
-    date: getRelativeDate(item.dayOffset)
-  }))
-
-  const schedules = ref(initialSchedules)
-
   // 유틸: 시간 포맷팅 (13:00 -> 오후 1:00)
   const formatTime = (timeStr) => {
     if (!timeStr) return ''
@@ -39,6 +31,15 @@ export const useScheduleStore = defineStore('schedule', () => {
     const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
     return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
   }
+
+  // JSON 데이터의 dayOffset을 실제 날짜로 변환하여 초기화
+  const initialSchedules = scheduleData.map(item => ({
+    ...item,
+    date: getRelativeDate(item.dayOffset),
+    time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
+  }))
+
+  const schedules = ref(initialSchedules)
 
   const addSchedule = (schedule) => {
     const formattedTimeStr = `${formatTime(schedule.startTime)} - ${formatTime(schedule.endTime)}`

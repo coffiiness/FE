@@ -1,45 +1,53 @@
 [
     {
         "id": 1,
-        "title": "Backend Server Developer",
+        "title": "Backend Server Developer (Junior)",
         "position": "Junior (1-3년)",
         "team": "Backend 팀",
         "status": "active",
         "dday": "D-30",
         "ddayValue": 30,
-        "createdAt": "2026-02-13",
-        "totalApplicants": 42,
+        "createdAt": "2026-02-13T09:00:00",
+        "endDate": "2026-03-15T18:00:00",
+        "totalApplicants": 12,
+        "ongoingInterviews": 4,
+        "completionRate": 15,
         "funnel": [
             {
+                "id": 101,
                 "step": "서류",
-                "count": 15,
+                "count": 5,
                 "active": false
             },
             {
+                "id": 102,
                 "step": "과제",
-                "count": 8,
+                "count": 1,
                 "active": false
             },
             {
+                "id": 103,
                 "step": "1차 면접",
                 "count": 4,
                 "active": true
             },
             {
+                "id": 104,
                 "step": "2차 면접",
                 "count": 2,
                 "active": false
             },
             {
-                "step": "처우",
-                "count": 1,
+                "id": 105,
+                "step": "처우 협의",
+                "count": 0,
                 "active": false
             }
         ],
         "interviewers": [
             "김기술",
-            "이디자인",
-            "Park"
+            "정민수",
+            "윤태호"
         ]
     },
     {
@@ -50,66 +58,79 @@
         "status": "urgent",
         "dday": "D-2",
         "ddayValue": 2,
-        "createdAt": "2026-02-10",
-        "totalApplicants": 28,
+        "createdAt": "2026-02-10T10:00:00",
+        "endDate": "2026-02-21T18:00:00",
+        "totalApplicants": 8,
+        "ongoingInterviews": 1,
+        "completionRate": 40,
         "funnel": [
             {
+                "id": 201,
                 "step": "서류",
-                "count": 5,
+                "count": 3,
                 "active": true
             },
             {
+                "id": 202,
                 "step": "포트폴리오",
-                "count": 2,
+                "count": 4,
                 "active": false
             },
             {
+                "id": 203,
                 "step": "면접",
-                "count": 0,
+                "count": 1,
                 "active": false
             },
             {
-                "step": "처우",
+                "id": 204,
+                "step": "처우 협의",
                 "count": 0,
                 "active": false
             }
         ],
         "interviewers": [
-            "최프론트",
+            "이디자인",
+            "정지윤",
             "박팀장"
         ]
     },
     {
         "id": 3,
         "title": "DevOps Engineer",
-        "position": "Mid-Level",
+        "position": "Mid-Level (3-5년)",
         "team": "Backend 팀",
         "status": "active",
         "dday": "D-12",
         "ddayValue": 12,
-        "createdAt": "2026-01-20",
-        "totalApplicants": 85,
+        "createdAt": "2026-01-20T11:00:00",
+        "endDate": "2026-03-03T18:00:00",
+        "totalApplicants": 5,
+        "ongoingInterviews": 2,
+        "completionRate": 10,
         "funnel": [
             {
+                "id": 301,
                 "step": "서류",
-                "count": 8,
+                "count": 3,
                 "active": false
             },
             {
+                "id": 302,
                 "step": "면접",
                 "count": 2,
                 "active": true
             },
             {
-                "step": "최종",
+                "id": 303,
+                "step": "최종 합격",
                 "count": 0,
                 "active": false
             }
         ],
         "interviewers": [
-            "Lee",
             "김기술",
-            "Park"
+            "송지훈"
         ]
     },
     {
@@ -120,17 +141,60 @@
         "status": "closed",
         "dday": "마감",
         "ddayValue": 999,
-        "createdAt": "2025-12-15",
+        "createdAt": "2025-12-15T09:00:00",
+        "endDate": "2026-01-15T18:00:00",
         "totalApplicants": 156,
+        "ongoingInterviews": 0,
+        "completionRate": 100,
         "funnel": [
             {
+                "id": 401,
                 "step": "종료",
                 "count": 156,
                 "active": false
             }
         ],
         "interviewers": [
-            "Park"
+            "최프론트",
+            "김하린"
+        ]
+    },
+    {
+        "id": 5,
+        "title": "Technical PM (Project Manager)",
+        "position": "Senior (5년 이상)",
+        "team": "서비스기획 팀",
+        "status": "active",
+        "dday": "D-20",
+        "ddayValue": 20,
+        "createdAt": "2026-02-18T14:00:00",
+        "endDate": "2026-03-10T18:00:00",
+        "totalApplicants": 2,
+        "ongoingInterviews": 0,
+        "completionRate": 0,
+        "funnel": [
+            {
+                "id": 501,
+                "step": "서류",
+                "count": 2,
+                "active": true
+            },
+            {
+                "id": 502,
+                "step": "1차 면접",
+                "count": 0,
+                "active": false
+            },
+            {
+                "id": 503,
+                "step": "2차 면접",
+                "count": 0,
+                "active": false
+            }
+        ],
+        "interviewers": [
+            "박상수",
+            "김기술"
         ]
     }
 ]
