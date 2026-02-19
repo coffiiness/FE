@@ -248,12 +248,17 @@ const confirmDeleteBooking = () => {
   detailModalOpen.value = false
 }
 
+const roomCreatedModalOpen = ref(false)
+const createdRoomName = ref('')
+
 const handleCreateRoom = (roomData) => {
   rooms.value.push({
     id: `r-${Date.now()}`,
     ...roomData
   })
   createRoomOpen.value = false
+  createdRoomName.value = roomData.name
+  roomCreatedModalOpen.value = true
 }
 
 const handleEditRoom = (room) => {
@@ -261,12 +266,17 @@ const handleEditRoom = (room) => {
   createRoomOpen.value = true
 }
 
+const roomUpdatedModalOpen = ref(false)
+const updatedRoomName = ref('')
+
 const handleUpdateRoom = (roomData) => {
   if (!editingRoom.value) return
   const idx = rooms.value.findIndex((r) => r.id === editingRoom.value.id)
   if (idx >= 0) rooms.value[idx] = { ...rooms.value[idx], ...roomData }
   editingRoom.value = null
   createRoomOpen.value = false
+  updatedRoomName.value = roomData.name
+  roomUpdatedModalOpen.value = true
 }
 
 const deleteRoomModalOpen = ref(false)
@@ -378,6 +388,28 @@ const openCreateRoom = () => {
       :showCancel="true"
       @confirm="confirmDeleteRoom"
       @cancel="deleteRoomModalOpen = false"
+    />
+
+    <ConfirmModal
+      :show="roomUpdatedModalOpen"
+      type="success"
+      title="회의실 수정 완료"
+      :message="`'${updatedRoomName}' 회의실 정보가 수정되었습니다.`"
+      confirmText="확인"
+      :showCancel="false"
+      @close="roomUpdatedModalOpen = false"
+      @confirm="roomUpdatedModalOpen = false"
+    />
+
+    <ConfirmModal
+      :show="roomCreatedModalOpen"
+      type="success"
+      title="회의실 등록 완료"
+      :message="`'${createdRoomName}' 회의실이 성공적으로 등록되었습니다.`"
+      confirmText="확인"
+      :showCancel="false"
+      @close="roomCreatedModalOpen = false"
+      @confirm="roomCreatedModalOpen = false"
     />
 
     <ConfirmModal
