@@ -47,7 +47,7 @@ const { acceptedSchedules } = storeToRefs(notificationStore)
 const upcomingEvents = computed(() => {
   const today = getToday()
   return allSchedules.value
-      .filter(e => e.date >= today) // 오늘 포함 미래 일정
+      .filter(e => e.date >= today && e.type === 'INTERVIEW') // 오늘 포함 미래의 면접 일정만 필터링
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
       .slice(0, 3) // 최대 3개
 })
