@@ -1,516 +1,565 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useRecruitmentStore } from '@/stores/recruitment'
+import { useOrganizationStore } from '@/stores/organization'
+import { storeToRefs } from 'pinia'
 
 const router = useRouter()
+const route = useRoute()
 
-/* 채용 정보 */
-const recruitment = {
-  title: '2024 상반기 백엔드 개발자 공개채용'
+// Stores
+const recruitmentStore = useRecruitmentStore()
+const organizationStore = useOrganizationStore()
+const { jobs } = storeToRefs(recruitmentStore)
+const { organizations: organization } = storeToRefs(organizationStore)
+
+// State
+const currentStep = ref(1) // 1: 단계, 2: 면접관, 3: 지원자
+const jobId = Number(route.query.jobId)
+
+/* 
+  1. 채용 공고 & 전형 단계 데이터
+*/
+const recruitment = computed(() => {
+  return jobs.value.find(j => j.id === jobId) || { title: '공고 정보를 불러올 수 없습니다.', funnel: [] }
+})
+
+// "면접" 키워드가 포함된 단계만 필터링
+const interviewSteps = computed(() => {
+  if (!recruitment.value.funnel) return []
+  return recruitment.value.funnel.filter(s => s.step && s.step.includes('면접'))
+})
+
+const selectedStep = ref(null)
+
+// 단계가 하나뿐이면 자동 선택
+watch(interviewSteps, (steps) => {
+  if (steps.length === 1 && !selectedStep.value) {
+    selectedStep.value = steps[0]
+  }
+}, { immediate: true })
+
+const selectStep = (step) => {
+  selectedStep.value = step
 }
 
-/* 면접관 */
-const interviewers = ref([
-  { id: 1, name: '김기술', dept: '개발팀', position: '부장' },
-  { id: 2, name: '정민수', dept: '개발팀', position: '차장' },
-  { id: 3, name: '박상수', dept: '기획팀', position: '과장' },
-  { id: 4, name: '이영희', dept: '인사팀', position: '부장' },
-  { id: 5, name: '최하늘', dept: '데이터팀', position: '대리' },
-  { id: 6, name: '송지훈', dept: '보안팀', position: '차장' }
-])
-
-/* 지원자 */
-const applicants = ref([
-  { id: 101, name: '홍길동', job: '백엔드' },
-  { id: 102, name: '김하늘', job: '프론트엔드' },
-  { id: 103, name: '박민준', job: '데브옵스' },
-  { id: 104, name: '이수진', job: 'AI' },
-  { id: 105, name: '최성훈', job: '데이터' },
-  { id: 106, name: '진희연', job: 'QA' }
-])
-
-/* 상태 */
+/* 
+  2. 면접관 데이터 (조직도 기반)
+*/
 const searchInterviewer = ref('')
-const searchApplicant = ref('')
-
 const selectedInterviewers = ref([])
-const selectedApplicants = ref([])
 
-/* 검색 */
-const filteredInterviewers = computed(() => {
-  const k = searchInterviewer.value.trim().toLowerCase()
-  if (!k) return interviewers.value
-  return interviewers.value.filter(i =>
-      `${i.name} ${i.dept} ${i.position}`.toLowerCase().includes(k)
-  )
+// 2-1. 팀 데이터 (필터용)
+const allTeams = computed(() => {
+  return organization.value.flatMap(dept => dept.teams)
 })
 
-const filteredApplicants = computed(() => {
-  const k = searchApplicant.value.trim().toLowerCase()
-  if (!k) return applicants.value
-  return applicants.value.filter(a =>
-      `${a.name} ${a.job}`.toLowerCase().includes(k)
-  )
-})
+const selectedFilterTeams = ref([])
 
-/* 선택 */
-const toggleInterviewer = (id) => {
-  if (selectedInterviewers.value.includes(id)) {
-    selectedInterviewers.value = selectedInterviewers.value.filter(v => v !== id)
+// 2-2. 팀 필터 토글
+const toggleTeamFilter = (teamId) => {
+  const idx = selectedFilterTeams.value.indexOf(teamId)
+  if (idx > -1) {
+    selectedFilterTeams.value.splice(idx, 1)
   } else {
-    selectedInterviewers.value.push(id)
+    selectedFilterTeams.value.push(teamId)
   }
 }
 
-const toggleApplicant = (id) => {
-  if (selectedApplicants.value.includes(id)) {
-    selectedApplicants.value = selectedApplicants.value.filter(v => v !== id)
+// 2-3. 초기 진입 시 공고 담당 팀 자동 선택
+watch(recruitment, (newVal) => {
+    if (newVal && newVal.team) {
+        // 공고의 팀 이름과 일치하는 팀 찾기
+        const teamObj = allTeams.value.find(t => t.name === newVal.team)
+        if (teamObj && selectedFilterTeams.value.length === 0) {
+            selectedFilterTeams.value.push(teamObj.id)
+        }
+    }
+}, { immediate: true })
+
+
+// 전체 직원 목록 Flatten (기존 유지)
+const allEmployees = computed(() => {
+  const employees = []
+  organization.value.forEach(dept => {
+    dept.teams.forEach(team => {
+      team.members.forEach(member => {
+        // 공고의 팀과 일치하는지 확인 (추천용)
+        const isRecomm = recruitment.value.team && recruitment.value.team === team.name
+        employees.push({
+          ...member,
+          deptName: dept.name,
+          teamName: team.name,
+          teamId: team.id, // 팀 ID 추가
+          isRecommended: isRecomm
+        })
+      })
+    })
+  })
+  // 추천 면접관이 상단에 오도록 정렬
+  return employees.sort((a, b) => (b.isRecommended ? 1 : 0) - (a.isRecommended ? 1 : 0))
+})
+
+const filteredInterviewers = computed(() => {
+  // 1. 팀 필터 적용
+  let filtered = allEmployees.value
+  
+  if (selectedFilterTeams.value.length > 0) {
+      filtered = filtered.filter(e => selectedFilterTeams.value.includes(e.teamId))
+  }
+
+  // 2. 검색어 필터 적용
+  const k = searchInterviewer.value.trim().toLowerCase()
+  if (!k) return filtered
+
+  return filtered.filter(e => 
+    e.name.toLowerCase().includes(k) || 
+    e.teamName.toLowerCase().includes(k) ||
+    e.position.toLowerCase().includes(k)
+  )
+})
+
+const toggleInterviewer = (member) => {
+  const idx = selectedInterviewers.value.findIndex(i => i.id === member.id)
+  if (idx > -1) {
+    selectedInterviewers.value.splice(idx, 1)
   } else {
-    selectedApplicants.value.push(id)
+    selectedInterviewers.value.push(member)
   }
 }
 
 const removeInterviewer = (id) => {
-  selectedInterviewers.value = selectedInterviewers.value.filter(v => v !== id)
+  const idx = selectedInterviewers.value.findIndex(i => i.id === id)
+  if (idx > -1) selectedInterviewers.value.splice(idx, 1)
+}
+
+/* 
+  3. 지원자 데이터 (Mock + Store 연동 예시)
+*/
+// 실제로는 Store나 API에서 가져와야 함. 여기서는 Mock 유지하되 구조만 맞춤.
+const applicants = ref([
+  { id: 101, name: '홍길동', email: 'hong@test.com', status: '서류 합격' },
+  { id: 102, name: '김하늘', email: 'kim@test.com', status: '1차 면접 예정' },
+  { id: 103, name: '박민준', email: 'park@test.com', status: '서류 합격' },
+  { id: 104, name: '이수진', email: 'lee@test.com', status: '과제 통과' },
+])
+
+const searchApplicant = ref('')
+const selectedApplicants = ref([])
+
+const filteredApplicants = computed(() => {
+  const k = searchApplicant.value.trim().toLowerCase()
+  if (!k) return applicants.value
+  return applicants.value.filter(a => 
+    a.name.toLowerCase().includes(k) ||
+    a.email.toLowerCase().includes(k)
+  )
+})
+
+const toggleApplicant = (applicant) => {
+  const idx = selectedApplicants.value.findIndex(a => a.id === applicant.id)
+  if (idx > -1) {
+    selectedApplicants.value.splice(idx, 1)
+  } else {
+    selectedApplicants.value.push(applicant)
+  }
 }
 
 const removeApplicant = (id) => {
-  selectedApplicants.value = selectedApplicants.value.filter(v => v !== id)
+  const idx = selectedApplicants.value.findIndex(a => a.id === id)
+  if (idx > -1) selectedApplicants.value.splice(idx, 1)
 }
 
-const resetInterviewers = () => (selectedInterviewers.value = [])
-const resetApplicants = () => (selectedApplicants.value = [])
 
-/* 다음 단계 */
-const canProceed = computed(() =>
-    selectedInterviewers.value.length > 0 && selectedApplicants.value.length > 0
-)
+/* 네비게이션 */
+const canProceed = computed(() => {
+  if (currentStep.value === 1) return !!selectedStep.value
+  if (currentStep.value === 2) return selectedInterviewers.value.length > 0
+  if (currentStep.value === 3) return selectedApplicants.value.length > 0
+  return false
+})
 
 const goNext = () => {
   if (!canProceed.value) return
-
-  const selectedInterviewerObjs = interviewers.value.filter(i =>
-      selectedInterviewers.value.includes(i.id)
-  )
-
-  const selectedApplicantObjs = applicants.value.filter(a =>
-      selectedApplicants.value.includes(a.id)
-  )
-
-  router.push({
-    path: '/recruitment/interview/schedule',
-    query: {
-      interviewers: JSON.stringify(selectedInterviewerObjs),
-      applicants: JSON.stringify(selectedApplicantObjs)
-    }
-  })
+  if (currentStep.value < 3) {
+    currentStep.value++
+  } else {
+    // 최종 완료 -> 일정 생성 페이지로 이동
+    router.push({
+      path: '/recruitment/interview/schedule',
+      query: {
+        recruitmentId: jobId,
+        stage: selectedStep.value.step,
+        interviewers: JSON.stringify(selectedInterviewers.value),
+        applicants: JSON.stringify(selectedApplicants.value)
+      }
+    })
+  }
 }
 
+const goPrev = () => {
+  if (currentStep.value > 1) {
+    currentStep.value--
+  } else {
+    router.back()
+  }
+}
 
-const goBack = () => router.back()
+/* 초기화 */
+onMounted(() => {
+  // 공고 ID가 없으면 돌아가기 등 예외처리
+  if (!jobId) {
+    // alert('잘못된 접근입니다.')
+    // router.back()
+  }
+})
 </script>
 
 <template>
   <div class="page">
-
-    <!-- 상단 -->
     <div class="header">
-      <h1 class="title">{{ recruitment.title }}</h1>
-    </div>
-
-    <div class="layout">
-
-      <!-- 면접관 -->
-      <div class="panel">
-
-        <div class="panel-header">
-          <h2 class="panel-title">면접관 선택</h2>
-          <button
-              class="reset"
-              :disabled="!selectedInterviewers.length"
-              @click="resetInterviewers"
-          >
-            초기화
-          </button>
-        </div>
-
-        <input
-            v-model="searchInterviewer"
-            class="search"
-            placeholder="이름 / 부서 / 직급 검색"
-        />
-
-        <div class="list">
-          <template v-if="filteredInterviewers.length">
-            <div
-                v-for="i in filteredInterviewers"
-                :key="i.id"
-                :class="['card', selectedInterviewers.includes(i.id) ? 'active' : '']"
-                @click="toggleInterviewer(i.id)"
-            >
-              <div class="left">
-                <strong class="name">{{ i.name }}</strong>
-                <span class="sub">· {{ i.dept }} / {{ i.position }}</span>
-              </div>
-
-              <span class="picked" v-if="selectedInterviewers.includes(i.id)">선택됨</span>
-            </div>
-          </template>
-
-          <p v-else class="empty">검색 결과가 없습니다.</p>
-        </div>
-
-        <div class="selected-box">
-          <div class="selected-header">
-            선택된 면접관 ({{ selectedInterviewers.length }}명)
-          </div>
-
-          <div class="chips" v-if="selectedInterviewers.length">
-            <span v-for="id in selectedInterviewers" :key="id" class="chip">
-              {{ interviewers.find(i => i.id === id)?.name }}
-              <button class="chip-x" @click.stop="removeInterviewer(id)">×</button>
-            </span>
-          </div>
-
-          <p v-else class="selected-empty">선택된 면접관이 없습니다.</p>
-        </div>
-
+      <div class="flex flex-col gap-1">
+        <span class="text-xs font-bold text-slate-500">면접 일정 생성</span>
+        <h1 class="title">{{ recruitment.title }}</h1>
       </div>
-
-      <!-- 지원자 -->
-      <div class="panel">
-
-        <div class="panel-header">
-          <h2 class="panel-title">지원자 선택</h2>
-          <button
-              class="reset"
-              :disabled="!selectedApplicants.length"
-              @click="resetApplicants"
+      
+      <!-- Progress Steps -->
+      <div class="flex items-center gap-2">
+        <div v-for="step in 3" :key="step" class="flex items-center">
+          <div 
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300"
+            :class="step <= currentStep ? 'bg-brand-600 text-white' : 'bg-slate-200 text-slate-500'"
           >
-            초기화
-          </button>
-        </div>
-
-        <input
-            v-model="searchApplicant"
-            class="search"
-            placeholder="이름 / 직무 검색"
-        />
-
-        <div class="list">
-          <template v-if="filteredApplicants.length">
-            <div
-                v-for="a in filteredApplicants"
-                :key="a.id"
-                :class="['card', selectedApplicants.includes(a.id) ? 'active' : '']"
-                @click="toggleApplicant(a.id)"
-            >
-              <div class="left">
-                <strong class="name">{{ a.name }}</strong>
-                <span class="sub">· {{ a.job }}</span>
-              </div>
-
-              <span class="picked" v-if="selectedApplicants.includes(a.id)">선택됨</span>
-            </div>
-          </template>
-
-          <p v-else class="empty">검색 결과가 없습니다.</p>
-        </div>
-
-        <div class="selected-box">
-          <div class="selected-header">
-            선택된 지원자 ({{ selectedApplicants.length }}명)
+            {{ step }}
           </div>
-
-          <div class="chips" v-if="selectedApplicants.length">
-            <span v-for="id in selectedApplicants" :key="id" class="chip">
-              {{ applicants.find(a => a.id === id)?.name }}
-              <button class="chip-x" @click.stop="removeApplicant(id)">×</button>
-            </span>
-          </div>
-
-          <p v-else class="selected-empty">선택된 지원자가 없습니다.</p>
+          <div v-if="step < 3" class="w-8 h-0.5 mx-2" :class="step < currentStep ? 'bg-brand-600' : 'bg-slate-200'"></div>
         </div>
-
       </div>
     </div>
 
-    <!-- 버튼 -->
-    <div class="actions">
-      <button class="prev" @click="goBack">이전 단계</button>
+    <div class="content-area">
+      
+      <!-- Step 1: 면접 단계 선택 -->
+      <div v-if="currentStep === 1" class="step-container animate-fade-in">
+        <h2 class="step-title">어떤 면접을 진행하시나요?</h2>
+        <p class="step-desc">진행할 면접 단계를 선택해주세요.</p>
 
-      <button
-          :class="['next', canProceed ? 'enabled' : '']"
-          :disabled="!canProceed"
-          @click="goNext"
-      >
-        다음 단계
-      </button>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-2xl">
+          <div 
+            v-for="(step, idx) in interviewSteps" 
+            :key="idx"
+            @click="selectStep(step)"
+            class="p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md flex items-center justify-between group"
+            :class="selectedStep?.step === step.step ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'border-slate-200 bg-white hover:border-brand-300'"
+          >
+            <div>
+              <h3 class="font-bold text-lg text-slate-800 group-hover:text-brand-700">{{ step.step }}</h3>
+              <p class="text-sm text-slate-500 mt-1">대기중인 지원자: <span class="font-bold text-slate-800">{{ step.count || 0 }}명</span></p>
+            </div>
+            <div 
+              class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+              :class="selectedStep?.step === step.step ? 'border-brand-600 bg-brand-600' : 'border-slate-300'"
+            >
+              <svg v-if="selectedStep?.step === step.step" class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="interviewSteps.length === 0" class="mt-8 p-8 bg-slate-50 rounded-xl border border-dotted border-slate-300 text-center">
+           <p class="text-slate-500 font-bold">이 공고에는 예정된 면접 단계가 없습니다.</p>
+           <p class="text-slate-400 text-sm mt-1">공고 관리에서 전형 단계를 수정해주세요.</p>
+        </div>
+      </div>
+
+      <!-- Step 2: 면접관 선택 -->
+      <div v-else-if="currentStep === 2" class="step-container animate-fade-in">
+        <h2 class="step-title">면접관을 선택해주세요</h2>
+        <p class="step-desc">참여할 팀을 선택하고 면접관을 지정해주세요.</p>
+
+        <!-- 팀 필터 -->
+        <div class="mt-4 mb-2">
+            <span class="text-xs font-bold text-slate-500 mb-2 block">팀 선택</span>
+            <div class="flex flex-wrap gap-2">
+                <button 
+                  v-for="team in allTeams" 
+                  :key="team.id"
+                  @click="toggleTeamFilter(team.id)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border"
+                  :class="selectedFilterTeams.includes(team.id) 
+                    ? 'bg-brand-600 border-brand-600 text-white shadow-md' 
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-brand-300 hover:text-brand-600'"
+                >
+                  {{ team.name }}
+                </button>
+            </div>
+        </div>
+
+        <div class="flex gap-6 mt-4 h-[500px]">
+          <!-- 왼쪽: 검색 및 목록 -->
+          <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div class="p-4 border-b border-slate-100 bg-slate-50">
+               <input 
+                 v-model="searchInterviewer" 
+                 class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:border-brand-500 text-sm"
+                 placeholder="이름, 직급으로 검색..."
+               >
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              <div 
+                v-for="member in filteredInterviewers" 
+                :key="member.id"
+                @click="toggleInterviewer(member)"
+                class="flex items-center p-3 rounded-lg cursor-pointer transition-colors"
+                :class="selectedInterviewers.find(i => i.id === member.id) ? 'bg-brand-50 border border-brand-200' : 'hover:bg-slate-50 border border-transparent'"
+              >
+                <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 mr-3">
+                  {{ member.name[0] }}
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                     <span class="font-bold text-sm text-slate-900">{{ member.name }}</span>
+                     <span v-if="member.isRecommended" class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">추천</span>
+                  </div>
+                  <div class="text-xs text-slate-500">{{ member.teamName }} · {{ member.position }}</div>
+                </div>
+                <div 
+                   class="w-5 h-5 rounded border flex items-center justify-center"
+                   :class="selectedInterviewers.find(i => i.id === member.id) ? 'bg-brand-600 border-brand-600' : 'border-slate-300'"
+                >
+                   <svg v-if="selectedInterviewers.find(i => i.id === member.id)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                   </svg>
+                </div>
+              </div>
+              
+              <!-- 필터 결과 없음 -->
+              <div v-if="filteredInterviewers.length === 0" class="h-40 flex flex-col items-center justify-center text-slate-400">
+                  <p class="text-xs">해당 팀/검색어에 맞는 면접관이 없습니다.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 오른쪽: 선택된 면접관 -->
+          <div class="w-80 flex flex-col bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+             <div class="p-4 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
+               <span>선택됨 ({{ selectedInterviewers.length }})</span>
+               <button 
+                 @click="selectedInterviewers = []" 
+                 class="text-xs text-rose-500 hover:text-rose-700" 
+                 :disabled="!selectedInterviewers.length"
+               >
+                 전체 해제
+               </button>
+             </div>
+             <div class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                <div v-if="selectedInterviewers.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
+                  <p>선택된 면접관이 없습니다.</p>
+                </div>
+                <div 
+                  v-for="member in selectedInterviewers" 
+                  :key="member.id" 
+                  class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between animate-fade-in-up"
+                >
+                   <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
+                        {{ member.name[0] }}
+                      </div>
+                      <div>
+                        <div class="font-bold text-sm text-slate-900">{{ member.name }}</div>
+                        <div class="text-xs text-slate-500">{{ member.teamName }}</div>
+                      </div>
+                   </div>
+                   <button @click="removeInterviewer(member.id)" class="text-slate-400 hover:text-slate-600 p-1">
+                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                   </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+
+       <!-- Step 3: 지원자 선택 -->
+       <div v-else class="step-container animate-fade-in">
+        <h2 class="step-title">지원자를 선택해주세요</h2>
+        <p class="step-desc">면접을 진행할 지원자를 선택해주세요.</p>
+
+        <div class="flex gap-6 mt-6 h-[500px]">
+          <!-- 왼쪽: 검색 및 목록 -->
+          <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <div class="p-4 border-b border-slate-100 bg-slate-50">
+               <input 
+                 v-model="searchApplicant" 
+                 class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:border-brand-500 text-sm"
+                 placeholder="이름, 이메일로 검색..."
+               >
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+              <div 
+                v-for="app in filteredApplicants" 
+                :key="app.id"
+                @click="toggleApplicant(app)"
+                class="flex items-center p-3 rounded-lg cursor-pointer transition-colors"
+                :class="selectedApplicants.find(a => a.id === app.id) ? 'bg-brand-50 border border-brand-200' : 'hover:bg-slate-50 border border-transparent'"
+              >
+                <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-600 mr-3">
+                  {{ app.name[0] }}
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2">
+                     <span class="font-bold text-sm text-slate-900">{{ app.name }}</span>
+                     <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">{{ app.status }}</span>
+                  </div>
+                  <div class="text-xs text-slate-500">{{ app.email }}</div>
+                </div>
+                <div 
+                   class="w-5 h-5 rounded border flex items-center justify-center"
+                   :class="selectedApplicants.find(a => a.id === app.id) ? 'bg-brand-600 border-brand-600' : 'border-slate-300'"
+                >
+                   <svg v-if="selectedApplicants.find(a => a.id === app.id)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                   </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 오른쪽: 선택된 지원자 -->
+          <div class="w-80 flex flex-col bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+             <div class="p-4 border-b border-slate-200 font-bold text-slate-700 flex justify-between items-center">
+               <span>선택됨 ({{ selectedApplicants.length }})</span>
+               <button 
+                 @click="selectedApplicants = []" 
+                 class="text-xs text-rose-500 hover:text-rose-700" 
+                 :disabled="!selectedApplicants.length"
+               >
+                 전체 해제
+               </button>
+             </div>
+             <div class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                <div v-if="selectedApplicants.length === 0" class="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
+                  <p>선택된 지원자가 없습니다.</p>
+                </div>
+                <div 
+                  v-for="app in selectedApplicants" 
+                  :key="app.id" 
+                  class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between animate-fade-in-up"
+                >
+                   <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center text-xs font-bold text-amber-600">
+                        {{ app.name[0] }}
+                      </div>
+                      <div>
+                        <div class="font-bold text-sm text-slate-900">{{ app.name }}</div>
+                        <div class="text-xs text-slate-500">{{ app.email }}</div>
+                      </div>
+                   </div>
+                   <button @click="removeApplicant(app.id)" class="text-slate-400 hover:text-slate-600 p-1">
+                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                   </button>
+                </div>
+             </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
+    <div class="footer">
+       <button @click="goPrev" class="px-6 py-3 rounded-xl border border-slate-300 text-slate-600 font-bold hover:bg-slate-50 md:w-auto w-full">
+         {{ currentStep === 1 ? '취소' : '이전 단계' }}
+       </button>
+       <button 
+         @click="goNext" 
+         :disabled="!canProceed"
+         class="px-8 py-3 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all disabled:opacity-50 disabled:shadow-none md:w-auto w-full"
+       >
+         {{ currentStep === 3 ? '일정 생성하기' : '다음 단계' }}
+       </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
-
 .page {
-  /* 컬러 변수 여기로 이동 (중요) */
-  --brand: #0d9488;
-
-  --text-main: #020617;
-  --text-sub: #334155;
-
-  --bg: #f8fafc;
-  --white: #ffffff;
-
-  --border: #e2e8f0;
-  --border-dark: #cbd5e1;
-
-
-  padding: 40px;
-  background: var(--bg);
-  color: var(--text-main);
-  min-height: 100vh;
-}
-
-.header h1 {
-  font-size: 28px;
-  font-weight: 900;
-  color: var(--text-main);
-}
-
-.layout {
+  max-width: 1000px;
+  margin: 0 auto;
+  min-height: 500px; /* 최소 높이 완화 */
+  padding: 40px 20px;
   display: flex;
-  gap: 28px;
-  margin-top: 20px;
+  flex-direction: column;
 }
 
-.panel {
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.step-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.step-desc {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.content-area {
   flex: 1;
-  background: var(--white);
-  border-radius: 16px;
-  padding: 22px;
-
-  border: 1px solid var(--border);
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.panel-title {
-  font-size: 18px;
-  font-weight: 900;
-  color: var(--text-main);
-}
-
-.reset {
-  font-size: 13px;
-  font-weight: 800;
-  color: #dc2626;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.reset:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.search {
-  margin-top: 12px;
-  width: 100%;
-
-  padding: 12px 14px;
-
-  border-radius: 10px;
-  border: 2px solid var(--border-dark);
-
-  background: white;
-
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.search::placeholder {
-  color: #475569;
-  font-weight: 600;
-}
-
-.search:focus {
-  outline: none;
-  border-color: var(--brand);
-}
-
-.list {
-  margin-top: 14px;
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.card {
-  padding: 14px 16px;
-  border-radius: 12px;
-
-  border: 1px solid var(--border);
-  background: white;
-
-  margin-bottom: 10px;
-  cursor: pointer;
-
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  transition: all 0.15s ease;
-}
-
-.card:hover {
-  background: #ecfeff;
-  border-color: var(--brand);
-}
-
-
-/* 이름 */
-
-.name {
-  font-size: 15px;
-  font-weight: 900;
-  color: var(--text-main);
-}
-
-
-/* 부서 */
-
-.sub {
-  margin-left: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-sub);
-}
-
-
-/* 선택됨 */
-
-.picked {
-  font-size: 13px;
-  font-weight: 900;
-  color: var(--brand);
-}
-
-.card.active {
-  background: var(--brand);
-  border-color: var(--brand);
-}
-
-.card.active .name,
-.card.active .sub,
-.card.active .picked {
-  color: white;
-}
-
-.empty {
-  text-align: center;
-  color: #334155;
-  font-weight: 800;
-  padding: 16px;
-}
-
-.selected-empty {
-  color: #475569;
-  font-weight: 700;
-}
-
-.selected-box {
-  margin-top: 18px;
-  padding-top: 14px;
-
-  border-top: 1px dashed var(--border);
-}
-
-.selected-header {
-  font-size: 14px;
-  font-weight: 900;
-  color: var(--text-main);
-  margin-bottom: 10px;
-}
-
-.chips {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  background: var(--brand);
-  color: white;
-
-  padding: 6px 12px;
-  border-radius: 999px;
-
-  font-size: 13px;
-  font-weight: 800;
-
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.chip-x {
-  background: rgba(255,255,255,0.3);
-  border: none;
-  color: white;
-
-  width: 18px;
-  height: 18px;
-
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.actions {
-  margin-top: 26px;
+.footer {
+  margin-top: 40px;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 24px;
 }
 
-.prev {
-  background: white;
-  color: var(--text-main);
-
-  border: 1px solid var(--border-dark);
-
-  padding: 12px 22px;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 10px;
-
-  font-weight: 800;
-  cursor: pointer;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.next {
-  background: #e2e8f0;
-  color: #64748b;
-
-  border: none;
-
-  padding: 12px 22px;
-  border-radius: 10px;
-
-  font-weight: 800;
-  cursor: not-allowed;
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
 }
 
-.next.enabled {
-  background: var(--brand);
-  color: white;
-  cursor: pointer;
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
+.animate-fade-in-up {
+  animation: fade-in-up 0.2s ease-out forwards;
+}
 </style>
 
 

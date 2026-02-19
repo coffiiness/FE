@@ -3,7 +3,7 @@
         "id": 1,
         "title": "Backend Server Developer",
         "position": "Junior (1-3년)",
-        "team": "Platform Team",
+        "team": "Backend 팀",
         "status": "active",
         "dday": "D-30",
         "ddayValue": 30,
@@ -21,9 +21,14 @@
                 "active": false
             },
             {
-                "step": "면접",
+                "step": "1차 면접",
                 "count": 4,
                 "active": true
+            },
+            {
+                "step": "2차 면접",
+                "count": 2,
+                "active": false
             },
             {
                 "step": "처우",
@@ -41,7 +46,7 @@
         "id": 2,
         "title": "Product Designer (UX/UI)",
         "position": "Senior (5년 이상)",
-        "team": "Design Group",
+        "team": "UX/UI 팀",
         "status": "urgent",
         "dday": "D-2",
         "ddayValue": 2,
@@ -78,7 +83,7 @@
         "id": 3,
         "title": "DevOps Engineer",
         "position": "Mid-Level",
-        "team": "Infra Unit",
+        "team": "Backend 팀",
         "status": "active",
         "dday": "D-12",
         "ddayValue": 12,
@@ -111,7 +116,7 @@
         "id": 4,
         "title": "Frontend Developer",
         "position": "All Levels",
-        "team": "Web Core",
+        "team": "Frontend 팀",
         "status": "closed",
         "dday": "마감",
         "ddayValue": 999,
