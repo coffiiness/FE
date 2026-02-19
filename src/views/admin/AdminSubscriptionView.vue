@@ -152,6 +152,14 @@ const formatWon = (v) => {
   if (v === 0) return '무료'
   return '₩' + v.toLocaleString('ko-KR')
 }
+
+const selectedSub = ref(null)
+const showDetailModal = ref(false)
+
+const openDetail = (sub) => {
+  selectedSub.value = sub
+  showDetailModal.value = true
+}
 </script>
 
 <template>
@@ -247,7 +255,7 @@ const formatWon = (v) => {
                 <span class="font-semibold" :class="sub.statusColor">{{ sub.status }}</span>
               </td>
               <td class="px-6 py-4">
-                <button class="text-brand-500 hover:text-brand-700 text-sm font-medium">상세 →</button>
+                <button class="text-brand-500 hover:text-brand-700 text-sm font-medium" @click="openDetail(sub)">상세 →</button>
               </td>
             </tr>
           </tbody>
@@ -271,4 +279,59 @@ const formatWon = (v) => {
       </div>
     </div>
   </div>
+
+  <!-- 구독 상세 모달 -->
+  <teleport to="body">
+    <div v-if="showDetailModal && selectedSub" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showDetailModal = false">
+      <div class="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[90vw] animate-modal-in">
+        <div class="flex items-center justify-between px-8 pt-8 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" :class="selectedSub.initialColor">
+              {{ selectedSub.initial }}
+            </div>
+            <div>
+              <h2 class="text-xl font-bold text-gray-900">{{ selectedSub.company }}</h2>
+              <p class="text-xs text-gray-400">{{ selectedSub.domain }}</p>
+            </div>
+          </div>
+          <button class="text-gray-400 hover:text-gray-600 transition-colors" @click="showDetailModal = false">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="px-8 pb-8 space-y-0 divide-y divide-gray-100">
+          <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">요금제</span>
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold" :class="selectedSub.planColor">{{ selectedSub.plan }}</span>
+          </div>
+          <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">상태</span>
+            <span class="text-sm font-semibold" :class="selectedSub.statusColor">{{ selectedSub.status }}</span>
+          </div>
+          <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">사용자 수</span>
+            <span class="text-sm font-semibold text-gray-900">{{ selectedSub.users }}명</span>
+          </div>
+          <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">구독 시작일</span>
+            <span class="text-sm font-semibold text-gray-900">{{ selectedSub.startDate }}</span>
+          </div>
+          <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">월 청구액</span>
+            <span class="text-sm font-semibold text-gray-900">{{ formatWon(selectedSub.monthlyCharge) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </teleport>
 </template>
+
+<style scoped>
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-modal-in { animation: modal-in 0.25s ease-out; }
+</style>
