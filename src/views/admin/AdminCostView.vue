@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const CATEGORY_CONFIG = [
   { id: '인건비',    cardName: '인건비',           color: 'bg-blue-500',   barColor: 'bg-blue-500',   tagColor: 'bg-blue-100 text-blue-700' },
@@ -91,9 +92,19 @@ const handleAddCost = () => {
     trendEntry.amount += Number(addForm.value.amount)
   }
 
+  const registeredName = addForm.value.name.trim()
+  const registeredAmount = Number(addForm.value.amount)
+
   showAddModal.value = false
   addForm.value = { category: '인건비', name: '', amount: '', month: '2025.02', note: '' }
   amountError.value = ''
+
+  modal.value = {
+    show: true,
+    title: '비용 등록 완료',
+    message: `'${registeredName}' 항목 ${formatWon(registeredAmount)}이 등록되었습니다.`,
+    type: 'success',
+  }
 }
 
 const closeAddModal = () => {
@@ -101,6 +112,10 @@ const closeAddModal = () => {
   addForm.value = { category: '인건비', name: '', amount: '', month: '2025.02', note: '' }
   amountError.value = ''
 }
+
+// ── 공통 알림 모달 ─────────────────────────────────────────────────────────
+const modal = ref({ show: false, title: '', message: '', type: 'success' })
+const closeModal = () => { modal.value.show = false }
 </script>
 
 <template>
@@ -305,6 +320,17 @@ const closeAddModal = () => {
       </div>
     </div>
   </teleport>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="false"
+    confirm-text="확인"
+    @confirm="closeModal"
+    @cancel="closeModal"
+  />
 </template>
 
 <style scoped>

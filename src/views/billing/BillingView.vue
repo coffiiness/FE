@@ -1,5 +1,15 @@
 <script setup>
 import { ref, computed } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+
+// ── 공통 알림 모달 ─────────────────────────────────────────────────────────
+const modal = ref({
+  show: false, title: '', message: '', type: 'success', showCancel: false, confirmText: '확인',
+})
+const openModal = (opts) => {
+  modal.value = { show: true, showCancel: false, confirmText: '확인', ...opts }
+}
+const closeModal = () => { modal.value.show = false }
 
 const showSubscriptionModal = ref(false)
 const showCardModal = ref(false)
@@ -81,6 +91,13 @@ const handlePlanChange = (planId) => {
   }
 
   showSubscriptionModal.value = false
+
+  const planName = plans.find(p => p.id === planId)?.name
+  openModal({
+    title: '요금제 변경 완료',
+    message: `요금제가 ${planName}으로 변경되었습니다.`,
+    type: 'success',
+  })
 }
 
 const maskCardNumber = (number) => {
@@ -96,12 +113,23 @@ const handleCardRegister = () => {
   }
   showCardModal.value = false
   cardForm.value = { cardNumber: '', expiry: '', bizNumber: '', password: '' }
+  openModal({
+    title: '결제 카드 등록 완료',
+    message: '결제 카드가 성공적으로 등록되었습니다.',
+    type: 'success',
+  })
 }
 
 const handleEmailRegister = () => {
-  registeredEmail.value = emailForm.value.email
+  const email = emailForm.value.email
+  registeredEmail.value = email
   showEmailModal.value = false
   emailForm.value = { email: '' }
+  openModal({
+    title: '이메일 등록 완료',
+    message: `${email} 주소로 결제 확인 이메일이 발송됩니다.`,
+    type: 'success',
+  })
 }
 </script>
 
@@ -462,6 +490,17 @@ const handleEmailRegister = () => {
       </div>
     </teleport>
   </div>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    @confirm="closeModal"
+    @cancel="closeModal"
+  />
 </template>
 
 <style scoped>

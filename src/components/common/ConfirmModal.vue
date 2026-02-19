@@ -37,20 +37,20 @@ const emit = defineEmits(['confirm', 'cancel'])
 
 const iconColor = computed(() => {
   const colors = {
-    danger: 'text-red-600 bg-red-100',
+    danger:  'text-red-600 bg-red-100',
     warning: 'text-amber-600 bg-amber-100',
-    info: 'text-blue-600 bg-blue-100',
-    success: 'text-blue-600 bg-blue-100' // Using blue for success as requested
+    info:    'text-blue-600 bg-blue-100',
+    success: 'text-emerald-600 bg-emerald-100',
   }
   return colors[props.type]
 })
 
 const confirmButtonStyle = computed(() => {
   const styles = {
-    danger: 'bg-red-600 hover:bg-red-700 focus:ring-red-500',
+    danger:  'bg-red-600 hover:bg-red-700 focus:ring-red-500',
     warning: 'bg-amber-600 hover:bg-amber-700 focus:ring-amber-500',
-    info: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
-    success: 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+    info:    'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500',
+    success: 'bg-teal-600 hover:bg-teal-700 focus:ring-teal-500',
   }
   return styles[props.type]
 })
