@@ -242,7 +242,8 @@ const handleSubmit = () => {
         </div>
       </div>
       <div class="px-6 py-4 border-t flex justify-end gap-2 bg-white">
-        <button class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700" @click="handleSubmit">예약 확정</button>
+        <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors" @click="emit('close')">취소</button>
+        <button class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200" @click="handleSubmit">예약 확정</button>
       </div>
     </div>
   </div>

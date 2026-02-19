@@ -6,6 +6,7 @@ import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const roomStore = useRoomStore()
 const { rooms } = storeToRefs(roomStore)
@@ -54,6 +55,7 @@ const detailModalOpen = ref(false)
 const roomDetailOpen = ref(false)
 const createRoomOpen = ref(false)
 const editingRoom = ref(null)
+const successModalOpen = ref(false)
 
 const selectedRoom = ref(null)
 const selectedBooking = ref(null)
@@ -94,6 +96,7 @@ const handleBookingConfirm = (booking) => {
     ...booking
   })
   bookingModalOpen.value = false
+  successModalOpen.value = true
 }
 
 const handleBookingDelete = (bookingId) => {
@@ -192,6 +195,17 @@ const setDateValue = (value) => {
       :mode="editingRoom ? 'edit' : 'create'"
       @close="createRoomOpen = false; editingRoom = null"
       @confirm="editingRoom ? handleUpdateRoom : handleCreateRoom"
+    />
+
+    <ConfirmModal
+      :show="successModalOpen"
+      type="success"
+      title="예약 완료"
+      message="회의실 예약이 성공적으로 완료되었습니다."
+      confirmText="확인"
+      :showCancel="false"
+      @close="successModalOpen = false"
+      @confirm="successModalOpen = false"
     />
   </div>
 </template>

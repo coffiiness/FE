@@ -167,7 +167,7 @@ const cancelDelete = () => {
       <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
         <button
           @click="handleDelete"
-          class="px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+          class="px-4 py-2 text-sm font-bold text-rose-600 border border-rose-200 hover:bg-rose-50 rounded-lg transition-colors"
         >
           {{ labels.delete }}
         </button>
