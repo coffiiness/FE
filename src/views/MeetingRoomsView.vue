@@ -1,11 +1,22 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 
-const rooms = ref([
+const ROOMS_KEY = 'meeting_rooms'
+const BOOKINGS_KEY = 'meeting_bookings'
+
+const handleRoomConfirm = (roomData) => {
+  if (editingRoom.value) {
+    handleUpdateRoom(roomData)
+  } else {
+    handleCreateRoom(roomData)
+  }
+}
+
+const defaultRooms = [
   {
     id: 'r1',
     name: 'Orion-1',
@@ -60,9 +71,9 @@ const rooms = ref([
     description: '대형 회의 및 발표 공간',
     color: '#ec4899'
   }
-])
+]
 
-const bookings = ref([
+const defaultBookings = [
   {
     id: 'b1',
     roomId: 'r1',
@@ -96,7 +107,10 @@ const bookings = ref([
     startTime: new Date('2026-02-10T14:00:00'),
     endTime: new Date('2026-02-10T15:00:00')
   }
-])
+]
+
+const rooms = ref([...defaultRooms])
+const bookings = ref([...defaultBookings])
 
 const dateValue = ref('2026-02-10')
 const hours = Array.from({ length: 13 }, (_, i) => i + 8)
@@ -112,6 +126,70 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 
+const safeJsonParse = (raw, fallback) => {
+  try {
+    const v = JSON.parse(raw)
+    return v ?? fallback
+  } catch (e) {
+    return fallback
+  }
+}
+
+const reviveBookingDates = (list) => {
+  if (!Array.isArray(list)) return []
+  return list.map((b) => ({
+    ...b,
+    startTime: b?.startTime ? new Date(b.startTime) : null,
+    endTime: b?.endTime ? new Date(b.endTime) : null
+  }))
+}
+
+const loadState = () => {
+  const savedRoomsRaw = localStorage.getItem(ROOMS_KEY)
+  if (savedRoomsRaw) {
+    const parsed = safeJsonParse(savedRoomsRaw, null)
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      rooms.value = parsed
+    } else {
+      rooms.value = [...defaultRooms] 
+    }
+  }
+
+  const savedBookingsRaw = localStorage.getItem(BOOKINGS_KEY)
+  if (savedBookingsRaw) {
+    const parsed = safeJsonParse(savedBookingsRaw, null)
+    if (Array.isArray(parsed)) {
+      bookings.value = reviveBookingDates(parsed)
+    }
+  }
+}
+
+const saveRooms = () => {
+  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms.value))
+}
+const saveBookings = () => {
+  localStorage.setItem(BOOKINGS_KEY, JSON.stringify(bookings.value))
+}
+
+onMounted(() => {
+  loadState()
+})
+
+watch(
+    rooms,
+    () => {
+      saveRooms()
+    },
+    { deep: true }
+)
+
+watch(
+    bookings,
+    () => {
+      saveBookings()
+    },
+    { deep: true }
+)
 
 const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
@@ -137,7 +215,10 @@ const handleBookRoomClick = (room) => {
   selectedDate.value = new Date(dateValue.value)
   selectedHour.value = 9
   roomDetailOpen.value = false
-  bookingModalOpen.value = true
+
+  setTimeout(() => {
+    bookingModalOpen.value = true
+  }, 0)
 }
 
 const handleBookingConfirm = (booking) => {
@@ -168,6 +249,7 @@ const handleEditRoom = (room) => {
 }
 
 const handleUpdateRoom = (roomData) => {
+  if (!editingRoom.value) return
   const idx = rooms.value.findIndex((r) => r.id === editingRoom.value.id)
   if (idx >= 0) rooms.value[idx] = { ...rooms.value[idx], ...roomData }
   editingRoom.value = null
@@ -178,6 +260,9 @@ const handleDeleteRoom = (roomId) => {
   if (!confirm('이 회의실을 삭제하시겠습니까?')) return
   const idx = rooms.value.findIndex((r) => r.id === roomId)
   if (idx >= 0) rooms.value.splice(idx, 1)
+
+  // 해당 회의실 예약도 같이 제거 (원하면 제거 안 해도 됨)
+  bookings.value = bookings.value.filter((b) => b.roomId !== roomId)
 }
 
 const handleDateClick = (date) => {
@@ -187,18 +272,23 @@ const handleDateClick = (date) => {
 const setDateValue = (value) => {
   dateValue.value = value
 }
+
+const openCreateRoom = () => {
+  editingRoom.value = null
+  createRoomOpen.value = true
+}
 </script>
 
 <template>
   <div class="space-y-6">
     <router-view v-slot="{ Component }">
       <component
-        :is="Component"
-        :rooms="rooms"
-        :bookings="bookings"
-        :hours="hours"
-        :dateValue="dateValue"
-        :handlers="{
+          :is="Component"
+          :rooms="rooms"
+          :bookings="bookings"
+          :hours="hours"
+          :dateValue="dateValue"
+          :handlers="{
           handleTimeSlotClick,
           handleBookingClick,
           handleRoomClick,
@@ -207,43 +297,43 @@ const setDateValue = (value) => {
           setDateValue,
           handleEditRoom,
           handleDeleteRoom,
-          openCreateRoom: () => (createRoomOpen = true)
+          openCreateRoom
         }"
       />
     </router-view>
 
     <BookingModal
-      :open="bookingModalOpen"
-      :room="selectedRoom"
-      :selectedDate="selectedDate"
-      :selectedHour="selectedHour"
-      @close="bookingModalOpen = false"
-      @confirm="handleBookingConfirm"
+        :open="bookingModalOpen"
+        :room="selectedRoom"
+        :selectedDate="selectedDate"
+        :selectedHour="selectedHour"
+        @close="bookingModalOpen = false"
+        @confirm="handleBookingConfirm"
     />
 
     <BookingDetailModal
-      :open="detailModalOpen"
-      :booking="selectedBooking"
-      :room="selectedRoom"
-      @close="detailModalOpen = false"
-      @delete="handleBookingDelete"
+        :open="detailModalOpen"
+        :booking="selectedBooking"
+        :room="selectedRoom"
+        @close="detailModalOpen = false"
+        @delete="handleBookingDelete"
     />
 
     <RoomDetailModal
-      :open="roomDetailOpen"
-      :room="selectedRoom"
-      :bookings="bookings"
-      @close="roomDetailOpen = false"
-      @bookRoom="handleBookRoomClick"
-      @bookingClick="handleBookingClick"
+        :open="roomDetailOpen"
+        :room="selectedRoom"
+        :bookings="bookings"
+        @close="roomDetailOpen = false"
+        @bookRoom="handleBookRoomClick"
+        @bookingClick="handleBookingClick"
     />
 
     <CreateRoomModal
-      :open="createRoomOpen"
-      :room="editingRoom"
-      :mode="editingRoom ? 'edit' : 'create'"
-      @close="createRoomOpen = false; editingRoom = null"
-      @confirm="editingRoom ? handleUpdateRoom : handleCreateRoom"
+        :open="createRoomOpen"
+        :room="editingRoom"
+        :mode="editingRoom ? 'edit' : 'create'"
+        @close="createRoomOpen = false; editingRoom = null"
+        @confirm="handleRoomConfirm"
     />
   </div>
 </template>

@@ -7,7 +7,7 @@ defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
-const useTimeRange = ref(true)
+const useStartTime = ref(true)
 const useMaxHour = ref(true)
 
 const hourOptions = computed(() => {
@@ -24,25 +24,21 @@ const hourOptions = computed(() => {
 })
 
 const startHour = ref(9)
-const endHour = ref(11)
 
-/* 기본값 1시간, 최대 6 */
 const maxHour = ref(1)
 
 const submit = () => {
 
-  const options = {
-    useTimeRange: useTimeRange.value,
-    start: startHour.value,
-    end: endHour.value,
+    const options = {
+      useStartTime: useStartTime.value,
+      start: startHour.value,
 
-    useMaxHour: useMaxHour.value,
+      useMaxHour: useMaxHour.value,
+      hours: maxHour.value
+    }
 
-    hours: maxHour.value
-  }
-
-  emit('submit', options)
-  emit('close')
+    emit('submit', options)
+    emit('close')
 }
 
 </script>
@@ -73,27 +69,6 @@ const submit = () => {
         </select>
 
       </div>
-
-      <div class="row">
-
-        <label class="checkLabel">
-          <input type="checkbox" v-model="useTimeRange" />
-          종료 시간
-        </label>
-
-        <select
-            v-model="maxHour"
-            :disabled="!useMaxHour"
-            class="cleanSelect"
-        >
-          <option v-for="h in hourOptions" :key="h.value" :value="h.value">
-            {{ h.label }}
-          </option>
-        </select>
-
-      </div>
-
-
       <div class="row">
 
         <label class="checkLabel">
@@ -196,7 +171,6 @@ const submit = () => {
   margin-top: 26px;
 }
 
-/* 취소 버튼 */
 .cancel {
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
@@ -211,7 +185,6 @@ const submit = () => {
   background: #e2e8f0;
 }
 
-/* 자동배정 버튼 */
 .confirm {
   background: #0D9488;
   color: white;
@@ -235,7 +208,6 @@ const submit = () => {
   font-weight: 700;
 }
 
-/* 체크 라벨 */
 .checkLabel {
   display: flex;
   align-items: center;
@@ -255,7 +227,6 @@ const submit = () => {
   color: #0f172a;
 }
 
-/* 비활성 상태 */
 .cleanSelect:disabled {
   background: #f1f5f9;
   color: #94a3b8;
