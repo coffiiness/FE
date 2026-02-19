@@ -20,8 +20,8 @@ const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 
 // --- 데이터 (Computed) ---
 const stats = computed(() => {
-  // 1. 진행 중인 공고
-  const activeJobsCount = jobs.value.filter(j => j.status === 'active').length
+  // 1. 진행 중인 공고 (active + urgent)
+  const activeJobsCount = jobs.value.filter(j => j.status === 'active' || j.status === 'urgent').length
 
   // 2. 이번 주 면접 예정 (일~토 기준)
   const today = new Date()
