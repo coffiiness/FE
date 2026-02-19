@@ -3,8 +3,10 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/Stores/recruitment'
 import { storeToRefs } from 'pinia'
-
 import { useScheduleStore } from '@/stores/schedule'
+
+import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
+import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
 
 const router = useRouter()
 const store = useRecruitmentStore()
@@ -18,12 +20,13 @@ const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 
-// --- 데이터 (Computed) ---
-const stats = computed(() => {
-  // 1. 진행 중인 공고 (active + urgent)
-  const activeJobsCount = jobs.value.filter(j => j.status === 'active' || j.status === 'urgent').length
+// --- 면접 일정 관련 상태 ---
+const showWeeklyModal = ref(false)
+const showDetailModal = ref(false)
+const selectedInterview = ref(null)
 
-  // 2. 이번 주 면접 예정 (일~토 기준)
+// --- 데이터 (Computed) ---
+const weeklySchedules = computed(() => {
   const today = new Date()
   const dayOfWeek = today.getDay()
   const startOfWeek = new Date(today)
@@ -34,25 +37,50 @@ const stats = computed(() => {
   endOfWeek.setDate(startOfWeek.getDate() + 6)
   endOfWeek.setHours(23, 59, 59, 999)
 
-  const interviewsThisWeek = schedules.value.filter(s => {
+  return schedules.value.filter(s => {
     if (!s.date) return false
     const sDate = new Date(s.date)
-    return sDate >= startOfWeek && sDate <= endOfWeek && s.type === 'INTERVIEW' // Make sure it's an interview
-  }).length
+    return sDate >= startOfWeek && sDate <= endOfWeek && s.type === 'INTERVIEW'
+  })
+})
 
-  // 3. 조율 대기 (병목) - 임시 로직 (Mock or Simple logic)
-  // 실제로는 지원자가 특정 단계에 오래 머물러 있는지 확인해야 함
-  // 여기서는 '서류' 단계에 있는 지원자 수 중 일부를 병목으로 가정하거나, 0으로 설정
+const stats = computed(() => {
+  // 1. 진행 중인 공고 (active + urgent)
+  const activeJobsCount = jobs.value.filter(j => j.status === 'active' || j.status === 'urgent').length
+
+  // 2. 이번 주 면접 예정 (일~토 기준)
+  const interviewsThisWeek = weeklySchedules.value.length
+
+  // 3. 조율 대기 (병목) - 임시 로직
   const bottleneckCount = 0 
 
   return [
     { label: '진행 중인 공고', value: activeJobsCount, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
-    { label: '이번 주 면접 예정', value: interviewsThisWeek, unit: '명', color: 'text-brand-600', bg: 'bg-brand-50/50' },
+    { 
+      label: '이번 주 면접 예정', 
+      value: interviewsThisWeek, 
+      unit: '명', 
+      color: 'text-brand-600', 
+      bg: 'bg-brand-50/50 cursor-pointer hover:bg-brand-100 transition-colors', // Clickable style
+      onClick: () => { showWeeklyModal.value = true } 
+    },
     { label: '조율 대기 (병목)', value: bottleneckCount, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
   ]
 })
 
-// jobs ref removed in favor of store.jobs
+const openInterviewDetail = (schedule) => {
+  selectedInterview.value = schedule
+  showDetailModal.value = true
+  // showWeeklyModal.value = false // Keep weekly list open behind? Or close? User said "reuse modal", implies standard detailed view. 
+  // Stacking modals is okay if z-index is managed. 
+  // Let's close weekly modal for cleaner UX on mobile, or keep it. 
+  // Actually, let's keep it open so user can go back easily by closing detail.
+}
+
+// ... existing code ...
+
+const isInterviewerModalOpen = ref(false)
+// ...
 
 // --- Helper Functions ---
 const getStatusColor = (status) => {
@@ -151,7 +179,6 @@ const allInterviewers = [
   { id: 110, name: '강인사', position: '인사 담당자' },
 ]
 
-const isInterviewerModalOpen = ref(false)
 const editingJob = ref(null)
 const interviewerSearchQuery = ref('')
 
@@ -203,6 +230,7 @@ const saveInterviewers = () => {
 }
 </script>
 
+
 <template>
   <div class="space-y-8 animate-fade-in-up p-2 relative">
 
@@ -225,14 +253,25 @@ const saveInterviewers = () => {
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-0">
       <div v-for="(stat, idx) in stats" :key="idx"
-           :class="['relative overflow-hidden border rounded-2xl p-6 transition-all hover:shadow-md', stat.bg, 'border-slate-200 shadow-sm']">
+           @click="stat.onClick && stat.onClick()"
+           :class="['relative overflow-hidden border rounded-2xl p-6 transition-all hover:shadow-md group/stat', stat.bg, 'border-slate-200 shadow-sm']">
         <div v-if="stat.glow" class="absolute -right-4 -top-4 w-24 h-24 bg-rose-100 rounded-full blur-2xl pointer-events-none"></div>
         <p class="text-sm text-slate-500 font-medium mb-1">{{ stat.label }}</p>
-        <div class="flex items-baseline">
+        <div class="flex items-baseline mb-2">
           <span :class="['text-4xl font-display font-bold', stat.color]">
             {{ stat.value }}
           </span>
           <span class="ml-2 text-slate-400 font-medium">{{ stat.unit }}</span>
+        </div>
+        
+        <!-- Detail View Button for Clickable Stats -->
+        <div v-if="stat.onClick" class="absolute bottom-4 right-4 opacity-0 group-hover/stat:opacity-100 transition-opacity">
+          <button class="flex items-center text-xs font-bold text-slate-400 hover:text-brand-600 bg-white/50 hover:bg-white px-2 py-1 rounded-lg transition-all backdrop-blur-sm">
+            상세보기
+            <svg class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -367,6 +406,21 @@ const saveInterviewers = () => {
 
     </div>
   </div>
+
+  <WeeklyInterviewListModal
+    :show="showWeeklyModal"
+    :schedules="weeklySchedules"
+    @close="showWeeklyModal = false"
+    @click-schedule="openInterviewDetail"
+  />
+
+  <InterviewDetailModal
+    :show="showDetailModal"
+    :event="selectedInterview"
+    @close="showDetailModal = false"
+  />
+
+
 
   <Transition name="fade">
     <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
