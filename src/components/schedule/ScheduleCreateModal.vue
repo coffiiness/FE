@@ -51,9 +51,9 @@ const form = ref({
 const attendeeInput = ref('')
 
 const scheduleTypes = [
-  { value: 'INTERVIEW', label: '면접', activeClass: 'bg-brand-50 border-brand-200 text-brand-600' },
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
   { value: 'BUSINESS_TRIP', label: '외근/출장', activeClass: 'bg-emerald-50 border-emerald-200 text-emerald-600' },
+  { value: 'VACATION', label: '휴가', activeClass: 'bg-rose-50 border-rose-200 text-rose-600' },
   { value: 'OTHERS', label: '기타', activeClass: 'bg-slate-100 border-slate-300 text-slate-700' }
 ]
 
@@ -67,7 +67,7 @@ watch(() => props.isOpen, (newVal) => {
         date: props.initialDate || new Date().toISOString().split('T')[0],
         startTime: '13:00',
         endTime: '14:00',
-        type: 'INTERVIEW',
+        type: 'MEETING',
         description: '',
         attendees: []
       }

@@ -25,6 +25,7 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}
 const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
+const isSuccessModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
 
 // Store
@@ -47,7 +48,7 @@ const { acceptedSchedules } = storeToRefs(notificationStore)
 const upcomingEvents = computed(() => {
   const today = getToday()
   return allSchedules.value
-      .filter(e => e.date >= today) // 오늘 포함 미래 일정
+      .filter(e => e.date >= today && e.type === 'INTERVIEW') // 오늘 포함 미래의 면접 일정만 필터링
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
       .slice(0, 3) // 최대 3개
 })
@@ -203,6 +204,37 @@ const getEventStyle = (event) => {
   }
 }
 
+const getEventClass = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
+    case 'MEETING': return 'bg-amber-50 text-amber-700 border-amber-100'
+    case 'BUSINESS_TRIP': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    case 'VACATION': return 'bg-rose-50 text-rose-700 border-rose-100'
+    default: return 'bg-slate-50 text-slate-700 border-slate-200'
+  }
+}
+
+const getEventClassWeek = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-600 text-white border-indigo-800'
+    case 'MEETING': return 'bg-amber-100 text-amber-800 border-amber-400'
+    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
+    case 'VACATION': return 'bg-rose-100 text-rose-800 border-rose-400'
+    default: return 'bg-slate-100 text-slate-800 border-slate-400'
+  }
+}
+
+const getEventClassList = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-100 text-indigo-600'
+    case 'MEETING': return 'bg-amber-100 text-amber-600'
+    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-600'
+    case 'VACATION': return 'bg-rose-100 text-rose-600'
+    default: return 'bg-slate-100 text-slate-600'
+  }
+}
+
+
 // --- [Events] ---
 
 const handleDateClick = (date) => {
@@ -259,6 +291,9 @@ const handleSave = (formData) => {
     scheduleStore.addSchedule(formData)
   }
   isFormModalOpen.value = false
+  setTimeout(() => {
+    isSuccessModalOpen.value = true
+  }, 300)
 }
 
 const openDeleteConfirm = (id) => {
@@ -365,7 +400,7 @@ const getRoomInfo = (schedule) => {
                  </span>
               </div>
               <div v-if="cell.events.length" class="mt-2 space-y-1.5">
-                <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="evt.type === 'INTERVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'">
+                <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="getEventClass(evt.type)">
                   {{ evt.startTime }} {{ evt.title }}
                 </div>
                 <div v-if="cell.events.length > 2" class="text-[10px] font-bold text-slate-400 pl-1">+ {{ cell.events.length - 2 }}개</div>
@@ -423,7 +458,7 @@ const getRoomInfo = (schedule) => {
                   <div v-for="evt in getEventsForDate(day.fullDate)" :key="evt.id"
                        @click.stop="openDetailModal(evt)"
                        class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
-                       :class="evt.type === 'INTERVIEW' ? 'bg-indigo-600 text-white border-indigo-800' : 'bg-amber-100 text-amber-800 border-amber-400'"
+                       :class="getEventClassWeek(evt.type)"
                        :style="getEventStyle(evt)">
                     <p class="text-[10px] font-bold opacity-90">{{ evt.startTime }}</p>
                     <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
@@ -486,7 +521,7 @@ const getRoomInfo = (schedule) => {
 
               <div class="flex-1 min-w-0">
                 <span class="inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-3"
-                      :class="evt.type === 'INTERVIEW' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'">
+                      :class="getEventClassList(evt.type)">
                   {{ evt.type }}
                 </span>
                 <h4 class="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">{{ evt.title }}</h4>
@@ -577,6 +612,7 @@ const getRoomInfo = (schedule) => {
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
+    <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
   </div>
 </template>
 <style scoped>
