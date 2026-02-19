@@ -1,15 +1,23 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useRecruitmentStore } from '@/Stores/recruitment'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { storeToRefs } from 'pinia'
 
 const route = useRoute()
 const router = useRouter()
-const jobId = route.params.id // URL에서 수정할 공고 ID 가져오기
+const jobId = Number(route.params.id) // URL에서 수정할 공고 ID 가져오기
 const loading = ref(false)
 const dataLoading = ref(true) // 초기 데이터 로딩 상태
+const showSuccessModal = ref(false)
+
+const store = useRecruitmentStore()
+const { jobs } = storeToRefs(store)
 
 // --- 1. 기본 정보 데이터 ---
 const form = ref({
+  id: null,
   title: '',
   status: 'ACTIVE', // 수정 화면에만 존재하는 필드
   targetCount: 1,
@@ -26,9 +34,9 @@ const processes = ref([])
 
 // 옵션 데이터
 const statusOptions = [
-  { label: '진행 중 (ACTIVE)', value: 'ACTIVE' },
-  { label: '시작 대기 (WAITING)', value: 'WAITING' },
-  { label: '마감됨 (CLOSED)', value: 'CLOSED' },
+  { label: '진행 중 (ACTIVE)', value: 'active' },
+  { label: '시작 대기 (WAITING)', value: 'waiting' },
+  { label: '마감됨 (CLOSED)', value: 'closed' },
 ]
 
 const stageTypes = [
@@ -96,29 +104,60 @@ const toggleSelection = (list, id) => {
 // 기존 데이터 불러오기 (Mock API)
 const fetchJobDetail = async () => {
   dataLoading.value = true
-  // TODO: 실제 API 호출 -> axios.get(`/recruitment/jobs/${jobId}`)
   
-  // 시뮬레이션 데이터
-  setTimeout(() => {
-    form.value = {
-      title: '2026년 상반기 백엔드 개발자 채용',
-      status: 'ACTIVE',
-      targetCount: 3,
-      startDate: '2026-03-01T09:00',
-      endDate: '2026-03-31T18:00',
-      applicationTemplateId: 1,
-      contents: '백엔드 개발자를 모십니다. 주요 업무는...',
-      teamId: [10, 13],
-      interviewerIds: [101, 102, 105]
+  const job = jobs.value.find(j => j.id === jobId)
+  
+  if (job) {
+    // 팀 ID 역추적 (Mock 데이터에 팀 이름만 있고 ID는 없어서 임시 매핑)
+    const teamNameMap = {
+        '디자인팀': [1],
+        'Design Group': [1],
+        '개발본부': [2],
+        'Platform Team': [2],
+        'Web Core': [2],
+        '마케팅': [3],
+        '플랫폼팀': [10],
+        'Infra Unit': [13],
+        '인프라팀': [13]
     }
-    processes.value = [
-      { stageName: '서류 전형', stageType: 'DOCUMENT', stageStep: 1 },
-      { stageName: '코딩 테스트', stageType: 'TEST', stageStep: 2 },
-      { stageName: '실무 면접', stageType: 'INTERVIEW', stageStep: 3 },
-      { stageName: '최종 합격', stageType: 'PASS', stageStep: 4 }
-    ]
-    dataLoading.value = false
-  }, 500)
+    
+    // 면접관 ID 역추적
+    const interviewerNameMap = {}
+    interviewers.value.forEach(i => interviewerNameMap[i.name] = i.id)
+
+    form.value = {
+      id: job.id,
+      title: job.title,
+      status: job.status,
+      targetCount: job.targetCount || 1, // Store에 없을 수 있음
+      startDate: job.createdAt + 'T09:00', // 임시
+      endDate: job.endDate || '',
+      applicationTemplateId: job.applicationTemplateId || 1,
+      contents: job.contents || '',
+      teamId: teamNameMap[job.team] || [], // 이름으로 매핑 시도
+      interviewerIds: job.interviewers ? job.interviewers.map(name => interviewerNameMap[name]).filter(id => id) : []
+    }
+    
+    // 프로세스 복원
+    if (job.funnel) {
+        processes.value = job.funnel.map((f, idx) => ({
+            stageName: f.step,
+            stageType: 'INTERVIEW', // 기본값
+            stageStep: idx + 1
+        }))
+    } else {
+         processes.value = [
+          { stageName: '서류 전형', stageType: 'DOCUMENT', stageStep: 1 },
+          { stageName: '실무 면접', stageType: 'INTERVIEW', stageStep: 2 },
+          { stageName: '최종 합격', stageType: 'PASS', stageStep: 3 }
+        ]
+    }
+  } else {
+    alert('공고를 찾을 수 없습니다.')
+    router.push('/recruitment')
+  }
+
+  dataLoading.value = false
 }
 
 const addStage = () => {
@@ -172,22 +211,38 @@ const handleUpdate = async () => {
   
   loading.value = true
   try {
+    // 선택된 팀 이름 찾기
+    const selectedTeamNames = teams.value
+        .filter(t => form.value.teamId.includes(t.id))
+        .map(t => t.name)
+        .join(', ')
+
+    // 선택된 면접관 이름 찾기
+    const selectedInterviewerNames = interviewers.value
+        .filter(i => form.value.interviewerIds.includes(i.id))
+        .map(i => i.name)
+
     const payload = {
       ...form.value,
-      processes: processes.value.map((p, index) => ({
-        ...p,
-        stageStep: index + 1
+      team: selectedTeamNames || '미지정',
+      interviewers: selectedInterviewerNames,
+      funnel: processes.value.map((p, index) => ({
+        step: p.stageName,
+        count: 0, // 초기화 혹은 기존 유지 로직 필요 (여기선 단순화)
+        active: false
       }))
     }
-    console.log('수정 요청 데이터:', payload)
     
-    // TODO: axios.put(`/recruitment/jobs/${jobId}`, payload)
+    // Store 업데이트
+    store.updateJob(payload)
     
     setTimeout(() => {
-      alert('공고가 수정되었습니다.')
-      router.push(`/recruitment/jobs/${jobId}`) // 상세 페이지로 이동
-    }, 1000)
+      // alert('공고가 수정되었습니다.')
+      // router.push('/recruitment') // 목록으로 이동
+      showSuccessModal.value = true
+    }, 500)
   } catch (e) {
+    console.error(e)
     alert('수정 중 오류가 발생했습니다.')
   } finally {
     loading.value = false
@@ -486,6 +541,17 @@ onMounted(() => {
 
     </div>
   </div>
+
+  <ConfirmModal
+    :show="showSuccessModal"
+    title="공고 수정 완료"
+    message="공고가 수정되었습니다."
+    confirm-text="목록으로 이동"
+    :show-cancel="false"
+    type="info"
+    @confirm="router.push('/recruitment')"
+    @cancel="showSuccessModal = false"
+  />
 </template>
 
 <style scoped>

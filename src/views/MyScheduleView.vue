@@ -6,6 +6,7 @@ import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRoute } from 'vue-router'
 import { useNotificationStore } from '@/Stores/notification'
+import { useScheduleStore } from '@/Stores/schedule'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 
@@ -25,24 +26,10 @@ const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
 
-// [유틸] 오늘 날짜 구하기 (YYYY-MM-DD)
-const getToday = () => {
-  const d = new Date()
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-// [유틸] 오늘 기준 N일 후 날짜 구하기 (데이터 생성용)
-const getRelativeDate = (offset) => {
-  const d = new Date()
-  d.setDate(d.getDate() + offset)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// Store
+const scheduleStore = useScheduleStore()
+const { schedules: allSchedules } = storeToRefs(scheduleStore)
+const { getToday } = scheduleStore
 
 // 초기값: 진짜 오늘 날짜로 설정
 const selectedDate = ref(getToday())
@@ -53,69 +40,7 @@ const route = useRoute()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 
-// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임)
-const allSchedules = ref([
-  {
-    id: 101,
-    type: 'INTERVIEW',
-    title: '기술 면접: 박지원',
-    date: getRelativeDate(0), // 오늘
-    startTime: '13:00',
-    endTime: '14:30',
-    description: '1층 미팅룸 A',
-    time: '오후 1:00 - 2:30'
-  },
-  {
-    id: 102,
-    type: 'INTERVIEW',
-    title: '임원 면접 대기',
-    date: getRelativeDate(0), // 오늘
-    startTime: '15:00',
-    endTime: '16:00',
-    description: '화상 면접 링크 확인',
-    time: '오후 3:00 - 4:00'
-  },
-  {
-    id: 103,
-    type: 'MEETING',
-    title: '주간 회의',
-    date: getRelativeDate(0), // 오늘
-    startTime: '16:00',
-    endTime: '17:00',
-    description: '상반기 공고 마감 관련',
-    time: '오후 4:00 - 5:00'
-  },
-  {
-    id: 104,
-    type: 'MEETING',
-    title: '팀 점심 회식',
-    date: getRelativeDate(1), // 내일
-    startTime: '12:00',
-    endTime: '13:30',
-    description: '맛집 탐방',
-    time: '오후 12:00 - 1:30'
-  },
-  {
-    id: 105,
-    type: 'INTERVIEW',
-    title: '최종 면접: 김인사',
-    date: getRelativeDate(2), // 모레
-    startTime: '14:00',
-    endTime: '15:00',
-    description: '인사팀 참관',
-    time: '오후 2:00 - 3:00'
-  },
-  {
-    id: 106,
-    type: 'OTHERS',
-    title: '서류 검토',
-    date: getRelativeDate(-1), // 어제 (지난 일정 테스트용)
-    startTime: '10:00',
-    endTime: '12:00',
-    description: '신입 공채 서류',
-    time: '오전 10:00 - 12:00'
-  }
-])
+// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임) - Store로 이동됨
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
 const upcomingEvents = computed(() => {
@@ -292,7 +217,7 @@ const openDetailModal = (event) => {
 const mergeAcceptedSchedules = (items) => {
   items.forEach((item) => {
     if (!allSchedules.value.some((e) => e.id === item.id)) {
-      allSchedules.value.push({ ...item })
+      scheduleStore.addSchedule(item)
     }
   })
 }
@@ -326,10 +251,9 @@ const openEditForm = (event) => {
 
 const handleSave = (formData) => {
   if (formData.id) {
-    const idx = allSchedules.value.findIndex(e => e.id === formData.id)
-    if (idx !== -1) allSchedules.value[idx] = { ...allSchedules.value[idx], ...formData }
+    scheduleStore.updateSchedule(formData)
   } else {
-    allSchedules.value.push({ ...formData, id: Date.now() })
+    scheduleStore.addSchedule(formData)
   }
   isFormModalOpen.value = false
 }
@@ -342,7 +266,7 @@ const openDeleteConfirm = (id) => {
 
 const confirmDelete = () => {
   if (targetDeleteId.value) {
-    allSchedules.value = allSchedules.value.filter(e => e.id !== targetDeleteId.value)
+    scheduleStore.deleteSchedule(targetDeleteId.value)
   }
   isDeleteModalOpen.value = false
   isFormModalOpen.value = false

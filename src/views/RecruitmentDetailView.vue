@@ -1,10 +1,19 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
+import { useRecruitmentStore } from '@/Stores/recruitment'
+import { useScheduleStore } from '@/Stores/schedule'
+import { storeToRefs } from 'pinia'
 
 const route = useRoute()
 const router = useRouter()
+const jobId = Number(route.params.id)
+
+const recruitmentStore = useRecruitmentStore()
+const scheduleStore = useScheduleStore()
+const { jobs } = storeToRefs(recruitmentStore)
+const { schedules: allSchedules } = storeToRefs(scheduleStore)
 
 // --- 상태 관리 ---
 const activeTab = ref('CALENDAR') // 'CALENDAR' | 'APPLICANTS'
@@ -20,7 +29,7 @@ const showCopyModal = ref(false) // 링크 복사 모달
 
 // --- Calendar State (New) ---
 const calendarState = reactive({
-  currentMonth: new Date(2024, 1, 14), // 2024년 2월
+  currentMonth: new Date(), // 현재 날짜로 초기화
 })
 
 const currentView = ref('MONTH')
@@ -52,44 +61,24 @@ const labels = {
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 
-// --- Mock Data ---
-const recruitment = ref({
-  id: 1,
-  title: '2024 상반기 백엔드 개발자 공개채용',
-  period: '2024.02.01 ~ 2024.02.28',
-  status: 'ACTIVE',
-  dday: 'D-15',
-  totalApplicants: 42,
-  ongoingInterviews: 5,
-  completionRate: 1.71,
+// --- Mock Data (Stores) ---
+const recruitment = computed(() => {
+  const job = jobs.value.find(j => j.id === jobId)
+  if (!job) return {}
+  return {
+    id: job.id,
+    title: job.title,
+    period: `${job.createdAt} ~ ${job.endDate ? job.endDate.split('T')[0] : '미정'}`,
+    status: job.status.toUpperCase(),
+    dday: job.dday,
+    totalApplicants: job.totalApplicants,
+    ongoingInterviews: 5, // Mock
+    completionRate: 1.71, // Mock
+    interviewers: job.interviewers || []
+  }
 })
 
-const interviewers = ref([
-  { 
-    id: 1, 
-    name: '김기술', 
-    position: '백엔드 리드',
-    bgClass: 'bg-blue-600', 
-    borderClass: 'border-blue-700',
-    badgeTextClass: 'text-blue-700',
-    lightBgClass: 'bg-blue-50',
-    lightBorderClass: 'border-blue-100',
-    color: '#2563eb', // blue-600
-    checked: true 
-  },
-  { 
-    id: 2, 
-    name: '박팀장', 
-    position: '인사 팀장',
-    bgClass: 'bg-emerald-500', 
-    borderClass: 'border-emerald-600',
-    badgeTextClass: 'text-emerald-700',
-    lightBgClass: 'bg-emerald-50',
-    lightBorderClass: 'border-emerald-100',
-    color: '#10b981', // emerald-500
-    checked: true 
-  },
-])
+const interviewers = ref([])
 
 const allInterviewers = ref([
   { id: 1, name: '김기술', position: '백엔드 리드' },
@@ -98,36 +87,47 @@ const allInterviewers = ref([
   { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
 ])
 
-const schedules = ref([
-  { 
-    id: 1, date: '2024-02-08', time: '14:00', endTime: '15:00', title: '김지원 면접', interviewerId: 1, 
-    applicantName: '김지원', location: '1층 미팅룸 A', description: '기술 면접 (1시간)'
-  },
-  { 
-    id: 2, date: '2024-02-09', time: '14:00', endTime: '15:00', title: '이수민 면접', interviewerId: 1,
-    applicantName: '이수민', location: '1층 미팅룸 B', description: '포트폴리오 리뷰 및 인성 면접'
-  },
-  { 
-    id: 3, date: '2024-02-14', time: '10:00', endTime: '11:00', title: '최진우 면접', interviewerId: 1,
-    applicantName: '최진우', location: '2층 회의실', description: '코딩 테스트 리뷰'
-  },
-  { 
-    id: 4, date: '2024-02-14', time: '14:00', endTime: '15:00', title: '박동현 면접', interviewerId: 2,
-    applicantName: '박동현', location: '2층 회의실', description: '실무 면접'
-  },
-  { 
-    id: 5, date: '2024-02-15', time: '09:00', endTime: '18:00', title: '박팀장 휴가', interviewerId: 2, type: 'off',
-    applicantName: '-', location: '-', description: '연차 휴가'
-  },
-  { 
-    id: 6, date: '2024-02-16', time: '14:00', endTime: '15:00', title: '정하늘 면접', interviewerId: 1,
-    applicantName: '정하늘', location: '1층 미팅룸 A', description: '기술 면접'
-  },
-  { 
-    id: 10, date: '2024-02-16', time: '15:00', endTime: '16:00', title: '강민수 면접', interviewerId: 2,
-    applicantName: '강민수', location: '1층 미팅룸 B', description: '임원 면접'
-  },
-])
+// Initialize interviewers based on recruitment data
+watch(recruitment, (newVal) => {
+  if (newVal && newVal.interviewers) {
+    interviewers.value = allInterviewers.value
+      .filter(ai => newVal.interviewers.includes(ai.name))
+      .map(ai => ({
+        ...ai,
+        bgClass: 'bg-blue-600', // Default color logic
+        borderClass: 'border-blue-700',
+        badgeTextClass: 'text-blue-700',
+        lightBgClass: 'bg-blue-50',
+        lightBorderClass: 'border-blue-100',
+        color: ai.id === 1 ? '#2563eb' : (ai.id === 2 ? '#10b981' : '#6366f1'),
+        checked: true
+      }))
+    
+    // If no mapped interviewers found (e.g. newly created job with names not in allInterviewers), fallback
+    if (interviewers.value.length === 0 && newVal.interviewers.length > 0) {
+        newVal.interviewers.forEach((name, idx) => {
+            interviewers.value.push({
+                id: 900 + idx,
+                name: name,
+                position: '면접관',
+                color: '#64748b',
+                checked: true
+            })
+        })
+    }
+  }
+}, { immediate: true })
+
+const schedules = computed(() => {
+  return allSchedules.value
+    .filter(s => s.recruitmentId === jobId)
+    .map(s => ({
+      ...s,
+      interviewerId: s.id % 2 === 0 ? 2 : 1, // Mock mapping for interviewer ID since store doesn't have it explicitly
+      applicantName: '지원자 ' + s.id, // Mock
+      location: s.description || '미정'
+    }))
+})
 
 const processes = ref([
   { id: 101, stageName: '서류 전형', count: 12 },
