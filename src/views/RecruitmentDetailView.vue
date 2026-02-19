@@ -727,7 +727,7 @@ const handleInterviewDelete = (interviewId) => {
                         }">
                     {{ getInterviewerName(booking.interviewerId) }}
                   </span>
-                  <span class="text-[10px] text-slate-500 font-bold">{{ formatTime(booking.time) }} - {{ formatTime(booking.endTime || booking.time) }}</span>
+                  <span class="text-[10px] text-slate-500 font-bold">{{ booking.time }}</span>
                 </div>
                 <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
                 <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ getInterviewerName(booking.interviewerId) }}</p>
