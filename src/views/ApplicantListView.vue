@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import * as XLSX from 'xlsx'
 
 const router = useRouter()
 
@@ -101,14 +102,30 @@ const goToDetail = (applicantId) => {
 
 // 엑셀 다운로드
 const exportToExcel = () => {
-  const params = new URLSearchParams()
-  if (searchQuery.value) params.append('search', searchQuery.value)
-  if (selectedJob.value) params.append('job', selectedJob.value)
-  if (selectedStatus.value) params.append('status', selectedStatus.value)
+  // 1) 엑셀에 들어갈 데이터 준비 (현재 필터링된 전체 데이터)
+  const excelData = filteredApplicants.value.map(applicant => ({
+    '이름': applicant.name,
+    '이메일': applicant.email,
+    '지원 공고': applicant.job,
+    '진행 상태': applicant.status,
+    '다음 일정': applicant.nextSchedule || '-',
+    '지원일': applicant.appliedDate
+  }))
 
-  // 백엔드 API 호출하여 파일 다운로드
-  const queryString = params.toString()
-  window.location.href = `/api/applicants/export${queryString ? '?' + queryString : ''}`
+  // 데이터가 없을 경우 처리
+  if (excelData.length === 0) {
+    alert('다운로드할 지원자 데이터가 없습니다.')
+    return
+  }
+
+  // 2) 엑셀 워크시트(Sheet)와 워크북(파일) 생성
+  const worksheet = XLSX.utils.json_to_sheet(excelData)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '지원자 목록')
+
+  // 3) 파일명에 오늘 날짜 붙여서 다운로드 실행
+  const today = new Date().toISOString().split('T')[0] // 예: 2024-02-20
+  XLSX.writeFile(workbook, `지원자_목록_${today}.xlsx`)
 }
 </script>
 
