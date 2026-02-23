@@ -1,26 +1,34 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { workspaceApi } from '@/api/workspace'
 
 const router = useRouter()
 
-// 폼 데이터 (필요에 따라 API로 전송할 값들)
 const teamName = ref('')
 const contact = ref('')
 const employeeCount = ref('1 ~ 10명')
 const role = ref('인사 담당자')
 
+const error = ref('')
 const loading = ref(false)
 
 const handleStart = async () => {
+  error.value = ''
   loading.value = true
 
-  // API 호출 시뮬레이션
-  setTimeout(() => {
-    loading.value = false
-    // 대시보드로 이동
+  try {
+    await workspaceApi.createWorkspace({
+      name: teamName.value,
+      contactPhone: contact.value,
+      employeeScale: employeeCount.value
+    })
     router.push({ name: 'Dashboard' })
-  }, 1000)
+  } catch (e) {
+    error.value = e.response?.data?.error?.message || '워크스페이스 생성에 실패했습니다.'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -144,6 +152,10 @@ const handleStart = async () => {
                     </div>
                 </div>
              </div>
+          </div>
+
+          <div v-if="error" class="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-100">
+            {{ error }}
           </div>
 
           <div class="pt-4">

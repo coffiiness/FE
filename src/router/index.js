@@ -240,25 +240,16 @@ const router = createRouter({
   routes
 })
 
-// router.beforeEach((to, from, next) => {
-//
-//   const token = localStorage.getItem('accessToken')
-//
-//   if (to.meta.requiresAuth && !token) {
-//     next('login')
-//   }
-//
-//   else if (
-//     (to.name === 'Login' || to.name === 'Signup') &&
-//     token
-//   ) {
-//     next('/dashboard')
-//   }
-//
-//   else {
-//     next()
-//   }
-//
-// })
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('accessToken')
+
+  if (to.meta.requiresAuth && !token) {
+    next('/login')
+  } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    next('/dashboard')
+  } else {
+    next()
+  }
+})
 
 export default router

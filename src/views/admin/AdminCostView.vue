@@ -245,7 +245,7 @@ const closeModal = () => { modal.value.show = false }
             <label class="block text-sm font-semibold text-gray-900 mb-2">카테고리</label>
             <select
               v-model="addForm.category"
-              class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
+              class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
             >
               <option v-for="cat in CATEGORY_CONFIG" :key="cat.id" :value="cat.id">{{ cat.id }}</option>
             </select>
@@ -258,7 +258,7 @@ const closeModal = () => { modal.value.show = false }
               v-model="addForm.name"
               type="text"
               placeholder="항목명을 입력해 주세요."
-              class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
             >
           </div>
 
@@ -270,7 +270,7 @@ const closeModal = () => { modal.value.show = false }
               type="number"
               min="1"
               placeholder="금액을 입력해 주세요."
-              class="w-full px-4 py-3 border rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              class="w-full px-4 py-3 border rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
               :class="amountError ? 'border-rose-400' : 'border-gray-200'"
               @blur="validateAmount"
             >
@@ -285,7 +285,7 @@ const closeModal = () => { modal.value.show = false }
             <label class="block text-sm font-semibold text-gray-900 mb-2">발생월</label>
             <select
               v-model="addForm.month"
-              class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
+              class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
             >
               <option v-for="t in monthlyTrend" :key="t.monthKey" :value="t.monthKey">{{ t.monthKey }} ({{ t.month }})</option>
             </select>
@@ -298,7 +298,7 @@ const closeModal = () => { modal.value.show = false }
               v-model="addForm.note"
               type="text"
               placeholder="비고를 입력해 주세요."
-              class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
             >
           </div>
         </div>
