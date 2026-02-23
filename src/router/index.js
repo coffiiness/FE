@@ -12,6 +12,16 @@ const routes = [
     component: () => import('@/views/CareersListView.vue')
   },
   {
+    path: '/careers/:companySlug/login',
+    name: 'CareersLogin',
+    component: () => import('@/views/CareersLoginView.vue')
+  },
+  {
+    path: '/careers/:companySlug/signup',
+    name: 'CareersSignup',
+    component: () => import('@/views/CareersSignupView.vue')
+  },
+  {
     path: '/careers/:companySlug/:jobId/apply',
     name: 'Apply',
     component: () => import('@/views/CareersApplyView.vue')
