@@ -18,11 +18,15 @@ const handleStart = async () => {
   loading.value = true
 
   try {
-    await workspaceApi.createWorkspace({
+    const res = await workspaceApi.createWorkspace({
       name: teamName.value,
       contactPhone: contact.value,
       employeeScale: employeeCount.value
     })
+    const workspace = res.data.data
+    if (workspace?.workspaceId) {
+      localStorage.setItem('workspaceId', workspace.workspaceId)
+    }
     router.push({ name: 'Dashboard' })
   } catch (e) {
     error.value = e.response?.data?.error?.message || '워크스페이스 생성에 실패했습니다.'

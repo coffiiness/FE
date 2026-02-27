@@ -8,12 +8,16 @@ const isAuthenticated = computed(() => !!user.value)
 export function useAuth() {
   const login = async (email, password) => {
     const response = await authApi.login({ email, password })
-    const { accessToken, refreshToken, user: userData } = response.data.data
+    const { accessToken, refreshToken, user: userData, workspaceId } = response.data.data
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
     localStorage.setItem('user', JSON.stringify(userData))
     user.value = userData
+
+    if (workspaceId) {
+      localStorage.setItem('workspaceId', workspaceId)
+    }
 
     return response.data.data
   }
@@ -27,6 +31,7 @@ export function useAuth() {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
+    localStorage.removeItem('workspaceId')
     user.value = null
     router.push('/login')
   }
