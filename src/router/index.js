@@ -47,6 +47,11 @@ const routes = [
     component: () => import('@/views/WorkspaceView.vue')
   },
   {
+    path: '/invitations/:token',
+    name: 'InvitationAccept',
+    component: () => import('@/views/InvitationAcceptView.vue')
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     meta: { requiresAuth: true },
