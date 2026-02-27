@@ -47,6 +47,11 @@ const routes = [
     component: () => import('@/views/WorkspaceView.vue')
   },
   {
+    path: '/auth/callback',
+    name: 'GoogleCallback',
+    component: () => import('@/views/GoogleCallbackView.vue')
+  },
+  {
     path: '/invitations/:token',
     name: 'InvitationAccept',
     component: () => import('@/views/InvitationAcceptView.vue')
@@ -109,9 +114,9 @@ const routes = [
         component: () => import('@/views/ApplicantDetailView.vue')
       },
       {
-            path: 'recruitment/jobs/:id/edit',
-            name: 'RecruitmentEdit',
-            component: () => import('@/views/RecruitmentEditView.vue')
+        path: 'recruitment/jobs/:id/edit',
+        name: 'RecruitmentEdit',
+        component: () => import('@/views/RecruitmentEditView.vue')
       },
       {
         path: 'recruitment/templates',
@@ -186,25 +191,25 @@ const routes = [
         path: 'recruitment/interview/select',
         name: 'InterviewSelect',
         component: () =>
-            import('@/views/interview/InterviewSelectView.vue'),
+          import('@/views/interview/InterviewSelectView.vue'),
         meta: { requiresAuth: true }
       },
 
-        {
-            path: 'recruitment/interview/schedule',
-            name: 'InterviewScheduleCreate',
-            component: () =>
-                import('@/views/interview/InterviewScheduleCreateView.vue'),
-            meta: { requiresAuth: true }
-        },
+      {
+        path: 'recruitment/interview/schedule',
+        name: 'InterviewScheduleCreate',
+        component: () =>
+          import('@/views/interview/InterviewScheduleCreateView.vue'),
+        meta: { requiresAuth: true }
+      },
 
-        {
-            path: 'recruitment/interview/response',
-            name: 'InterviewResponse',
-            component: () =>
-                import('@/views/interview/InterviewResponse.vue'),
-            meta: { requiresAuth: true }
-        }
+      {
+        path: 'recruitment/interview/response',
+        name: 'InterviewResponse',
+        component: () =>
+          import('@/views/interview/InterviewResponse.vue'),
+        meta: { requiresAuth: true }
+      }
     ]
   },
 

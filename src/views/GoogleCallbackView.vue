@@ -27,13 +27,16 @@ onMounted(async () => {
   
   try {
     // 백엔드로 토큰 발급을 위한 인증 코드 전송
-    await api.post('/calendars/google/connect', {
+    const response = await api.post('/calendars/google/connect', {
       authCode: code,
       redirectUri: window.location.origin + '/auth/callback'
     })
     
+    const connectedEmail = response.data?.data || '알 수 없는 계정'
+    
     // 연동 성공 결과 저장
     localStorage.setItem('isGoogleCalendarConnected', 'true')
+    localStorage.setItem('googleCalendarEmail', connectedEmail)
     isSuccessModalOpen.value = true
   } catch (error) {
     console.error('구글 캘린더 연동 실패:', error)

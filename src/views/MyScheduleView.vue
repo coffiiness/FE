@@ -333,6 +333,7 @@ const getRoomInfo = (schedule) => {
 
 // Google Calendar 연동
 const isGoogleConnected = ref(localStorage.getItem('isGoogleCalendarConnected') === 'true')
+const googleConnectedEmail = ref(localStorage.getItem('googleCalendarEmail') || '')
 
 const connectGoogleCalendar = () => {
   const clientId = '553048700196-ojj8o5cgbq8d76q18khbkfh4t191mvoc.apps.googleusercontent.com'
@@ -350,7 +351,9 @@ const disconnectGoogleCalendar = () => {
 
 const confirmDisconnectGoogleCalendar = () => {
   localStorage.removeItem('isGoogleCalendarConnected')
+  localStorage.removeItem('googleCalendarEmail')
   isGoogleConnected.value = false
+  googleConnectedEmail.value = ''
   isDisconnectConfirmModalOpen.value = false
   setTimeout(() => {
     isDisconnectSuccessModalOpen.value = true
@@ -605,6 +608,9 @@ const confirmDisconnectGoogleCalendar = () => {
               <p class="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" class="w-5 h-5">
                 Google Calendar
+              </p>
+              <p v-if="isGoogleConnected && googleConnectedEmail" class="text-[11px] text-slate-500 font-medium mt-1 truncate max-w-[160px]">
+                {{ googleConnectedEmail }}
               </p>
             </div>
             <span v-if="isGoogleConnected" class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
