@@ -27,6 +27,8 @@ const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const isSuccessModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
+const isDisconnectConfirmModalOpen = ref(false)
+const isDisconnectSuccessModalOpen = ref(false)
 
 // Store
 const scheduleStore = useScheduleStore()
@@ -328,6 +330,33 @@ const getRoomInfo = (schedule) => {
   }
   return null
 }
+
+// Google Calendar 연동
+const isGoogleConnected = ref(localStorage.getItem('isGoogleCalendarConnected') === 'true')
+
+const connectGoogleCalendar = () => {
+  const clientId = '553048700196-ojj8o5cgbq8d76q18khbkfh4t191mvoc.apps.googleusercontent.com'
+  const redirectUri = window.location.origin + '/auth/callback'
+  const scope = 'https://www.googleapis.com/auth/calendar openid email profile'
+  
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`
+  
+  window.location.href = googleAuthUrl
+}
+
+const disconnectGoogleCalendar = () => {
+  isDisconnectConfirmModalOpen.value = true
+}
+
+const confirmDisconnectGoogleCalendar = () => {
+  localStorage.removeItem('isGoogleCalendarConnected')
+  isGoogleConnected.value = false
+  isDisconnectConfirmModalOpen.value = false
+  setTimeout(() => {
+    isDisconnectSuccessModalOpen.value = true
+  }, 300)
+}
+
 </script>
 
 <template>
@@ -578,24 +607,32 @@ const getRoomInfo = (schedule) => {
                 Google Calendar
               </p>
             </div>
-            <span class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          연동됨
-        </span>
+            <span v-if="isGoogleConnected" class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              연동됨
+            </span>
+            <span v-else class="px-2 py-1 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200 flex items-center gap-1">
+              미연동
+            </span>
           </div>
 
           <div class="relative z-10">
-            <p class="text-xs text-slate-500 mb-4 font-medium">
-              마지막 동기화: <span class="text-slate-700 font-bold">방금 전</span><br>
-              계정: <span class="text-slate-700">recruiter@company.com</span>
-            </p>
-
-            <button class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn">
-              <svg class="w-4 h-4 text-slate-400 group-hover/btn:text-brand-500 group-hover/btn:rotate-180 transition-all duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              지금 동기화하기
-            </button>
+            <template v-if="isGoogleConnected">
+              <p class="text-xs text-slate-500 mb-4 font-medium">
+                일정이 구글 캘린더와<br>자동으로 동기화됩니다.
+              </p>
+              <button @click="disconnectGoogleCalendar" class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
+                연동 해제
+              </button>
+            </template>
+            <template v-else>
+              <p class="text-xs text-slate-500 mb-4 font-medium">
+                구글 캘린더와 연동하여<br>일정을 간편하게 관리하세요.
+              </p>
+              <button @click="connectGoogleCalendar" class="w-full py-3 rounded-lg bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
+                구글 캘린더 연동하기
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -613,6 +650,27 @@ const getRoomInfo = (schedule) => {
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
     <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
+    
+    <!-- 구글 캘린더 연동 해제 모달 -->
+    <ConfirmModal 
+      :show="isDisconnectConfirmModalOpen" 
+      title="연동 해제" 
+      message="정말로 구글 캘린더 연동을 해제하시겠습니까?" 
+      confirmText="해제하기" 
+      type="danger" 
+      @confirm="confirmDisconnectGoogleCalendar" 
+      @cancel="isDisconnectConfirmModalOpen = false" 
+    />
+    <ConfirmModal 
+      :show="isDisconnectSuccessModalOpen" 
+      title="해제 완료" 
+      message="구글 캘린더 연동이 성공적으로 해제되었습니다." 
+      confirmText="확인" 
+      type="success" 
+      :showCancel="false" 
+      @confirm="isDisconnectSuccessModalOpen = false" 
+      @cancel="isDisconnectSuccessModalOpen = false" 
+    />
   </div>
 </template>
 <style scoped>
