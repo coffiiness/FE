@@ -27,6 +27,23 @@ const routes = [
     component: () => import('@/views/CareersApplyView.vue')
   },
   {
+    path: '/applicants/login',
+    name: 'ApplicantsLogin',
+    component: () => import('@/views/ApplicantsLoginView.vue'),
+    beforeEnter: (to, from, next) => {
+      if (!to.query.redirect && from.fullPath && from.fullPath !== to.fullPath) {
+        next({ path: to.path, query: { ...to.query, redirect: from.fullPath } })
+        return
+      }
+      next()
+    }
+  },
+  {
+    path: '/applicants/signup',
+    name: 'ApplicantsSignup',
+    component: () => import('@/views/ApplicantsSignupView.vue')
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/LoginView.vue')

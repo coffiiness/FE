@@ -1,17 +1,17 @@
-<script setup>
+﻿<script setup>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useApplicantAuth } from '@/composables/useApplicantAuth'
 
 const route = useRoute()
 const router = useRouter()
+const { isAuthenticated, logout } = useApplicantAuth()
 
 const companySlug = computed(() => route.params.companySlug)
 
-// 검색 및 필터
 const searchQuery = ref('')
 const selectedCategory = ref('')
 
-// 더미 회사 정보
 const companyInfo = {
   naver: { name: 'NAVER', logo: 'N' },
   kakao: { name: 'Kakao', logo: 'K' },
@@ -22,7 +22,7 @@ const company = computed(() => companyInfo[companySlug.value] || { name: company
 // 직무 카테고리
 const categories = ['개발', '기획', '디자인', '마케팅', '경영지원']
 
-// 더미 채용 공고
+// 샘플 채용 공고
 const jobs = ref([
   { id: 1, title: '백엔드 개발자', category: '개발', tags: ['Java', 'Spring', 'MSA'], deadline: '2024.03.15', templateId: 'tpl-1' },
   { id: 2, title: '프론트엔드 개발자', category: '개발', tags: ['Vue.js', 'TypeScript', 'React'], deadline: '2024.03.20', templateId: 'tpl-2' },
@@ -31,7 +31,7 @@ const jobs = ref([
   { id: 5, title: 'UI/UX 디자이너', category: '디자인', tags: ['Figma', '모바일', '웹'], deadline: '2024.03.22', templateId: 'tpl-3' },
 ])
 
-// 필터링
+// ?꾪꽣留?
 const filteredJobs = computed(() => {
   return jobs.value.filter(job => {
     const matchesSearch = !searchQuery.value ||
@@ -42,20 +42,26 @@ const filteredJobs = computed(() => {
   })
 })
 
-// 지원하기
 const goToApply = (jobId) => {
   router.push(`/careers/${companySlug.value}/${jobId}/apply`)
 }
 
-// 카테고리 선택
 const toggleCategory = (category) => {
   selectedCategory.value = selectedCategory.value === category ? '' : category
+}
+
+const handleAuthAction = () => {
+  if (isAuthenticated.value) {
+    logout()
+    router.push(`/careers/${companySlug.value}`)
+  } else {
+    router.push({ path: '/applicants/login', query: { redirect: route.fullPath } })
+  }
 }
 </script>
 
 <template>
   <div class="min-h-screen bg-white">
-    <!-- 헤더 -->
     <header class="border-b border-gray-200">
       <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -69,26 +75,23 @@ const toggleCategory = (category) => {
             <span class="text-gray-900 font-medium border-b-2 border-gray-900 pb-1">APPLY</span>
           </nav>
           <button
-            @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
+            @click="handleAuthAction"
             class="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors"
           >
-            로그인
+            {{ isAuthenticated ? '로그아웃' : '로그인' }}
           </button>
         </div>
       </div>
     </header>
 
-    <!-- 메인 컨텐츠 -->
     <div class="max-w-6xl mx-auto px-6 py-8">
       <div class="flex gap-8">
-        <!-- 사이드바 필터 -->
         <aside class="w-56 flex-shrink-0">
           <div class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
+            <h3 class="text-sm font-semibold text-gray-900 mb-4">필터</h3>
 
-            <!-- 직무 카테고리 -->
             <div class="mb-6">
-              <h4 class="text-sm font-medium text-gray-700 mb-3">지원 직무</h4>
+              <h4 class="text-sm font-medium text-gray-700 mb-3">직무</h4>
               <div class="space-y-2">
                 <label
                   v-for="category in categories"
@@ -108,9 +111,7 @@ const toggleCategory = (category) => {
           </div>
         </aside>
 
-        <!-- 공고 목록 -->
         <main class="flex-1">
-          <!-- 검색 및 카운트 -->
           <div class="flex items-center justify-between mb-6">
             <p class="text-gray-600">
               총 <span class="font-semibold text-gray-900">{{ filteredJobs.length }}</span>개의 채용공고가 있습니다.
@@ -119,7 +120,7 @@ const toggleCategory = (category) => {
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="키워드 검색"
+                placeholder="검색어를 입력하세요"
                 class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 w-64"
               />
               <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -128,7 +129,6 @@ const toggleCategory = (category) => {
             </div>
           </div>
 
-          <!-- 공고 리스트 -->
           <div class="space-y-4">
             <div
               v-for="job in filteredJobs"
@@ -156,7 +156,6 @@ const toggleCategory = (category) => {
               </div>
             </div>
 
-            <!-- 빈 상태 -->
             <div v-if="filteredJobs.length === 0" class="text-center py-12 text-gray-500">
               검색 결과가 없습니다.
             </div>
@@ -166,3 +165,6 @@ const toggleCategory = (category) => {
     </div>
   </div>
 </template>
+
+
+
