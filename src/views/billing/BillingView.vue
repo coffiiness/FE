@@ -1,8 +1,20 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import {
+  getTossConfig,
+  registerBillingKey,
+  upgradeToEnterprise,
+  downgradeToFree,
+  getRegisteredCard,
+  getSubscription,
+  getPaymentHistory
+} from '@/api/payment'
 
-// ── 공통 알림 모달 ─────────────────────────────────────────────────────────
+const route = useRoute()
+
 const modal = ref({
   show: false, title: '', message: '', type: 'success', showCancel: false, confirmText: '확인',
 })
@@ -11,9 +23,8 @@ const openModal = (opts) => {
 }
 const closeModal = () => { modal.value.show = false }
 
+const loading = ref(false)
 const showSubscriptionModal = ref(false)
-const showCardModal = ref(false)
-const showEmailModal = ref(false)
 
 const plans = [
   {
@@ -22,15 +33,15 @@ const plans = [
     price: '무료',
     priceUnit: '',
     billingLabel: '예정된 결제 없음',
-    badge: '7일간 무료 이용',
+    badge: '기본 요금제',
     iconBg: 'bg-slate-800',
     features: ['최대 50명 사용자', '채용 관리 전체 기능', '회의실 예약 관리', '이메일 지원'],
   },
   {
     id: 'enterprise',
     name: '엔터프라이즈',
-    price: '₩19,000',
-    priceUnit: '월 (사용자당)',
+    price: '₩19,900',
+    priceUnit: '월',
     billingLabel: '월간 청구',
     badge: '모든 기능 무제한',
     iconBg: 'bg-amber-500',
@@ -38,104 +49,229 @@ const plans = [
   }
 ]
 
-const currentPlanId = ref('business')
+const subscription = ref(null)
+const registeredCard = ref(null)
+const paymentHistory = ref([])
+
+const currentPlanId = computed(() => {
+  if (!subscription.value) return 'business'
+  const plan = subscription.value.planType
+  if (plan === 'ENTERPRISE' && ['ACTIVE', 'TRIAL'].includes(subscription.value.subscriptionStatus)) {
+    return 'enterprise'
+  }
+  return 'business'
+})
 const currentPlanData = computed(() => plans.find(p => p.id === currentPlanId.value))
 
-const registeredCard = ref(null)
-const registeredEmail = ref('')
-
-const cardType = ref('corporate')
-const cardForm = ref({ cardNumber: '', expiry: '', bizNumber: '', password: '' })
-const emailForm = ref({ email: '' })
-
-const subscriptionHistory = ref([])
-
-const activeSub = computed(() => subscriptionHistory.value.find(h => h.status === '활성'))
-const currentPeriod = computed(() => {
-  if (!activeSub.value) return '구독기간 없음'
-  return `${activeSub.value.startDate} ~ ${activeSub.value.endDate}`
+const subscriptionStatusLabel = computed(() => {
+  if (!subscription.value) return '없음'
+  const map = { ACTIVE: '활성', TRIAL: '트라이얼', CANCELLED: '취소됨', SUSPENDED: '중단됨' }
+  return map[subscription.value.subscriptionStatus] || subscription.value.subscriptionStatus
 })
 
-const formatDate = (date) => {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}.${m}.${d}`
+const currentPeriod = computed(() => {
+  if (!subscription.value) return '구독기간 없음'
+  const start = subscription.value.startDate || '-'
+  const end = subscription.value.endDate || '진행 중'
+  return `${start} ~ ${end}`
+})
+
+const paymentStatusLabel = (status) => {
+  const map = { SUCCESS: '성공', FAILED: '실패', RETRY: '재시도', CANCELLED: '취소' }
+  return map[status] || status
 }
 
-const handlePlanChange = (planId) => {
-  if (planId === currentPlanId.value) return
+const paymentStatusClass = (status) => {
+  const map = {
+    SUCCESS: 'bg-green-100 text-green-700',
+    FAILED: 'bg-red-100 text-red-700',
+    RETRY: 'bg-yellow-100 text-yellow-700',
+    CANCELLED: 'bg-gray-100 text-gray-600',
+  }
+  return map[status] || 'bg-gray-100 text-gray-600'
+}
 
-  currentPlanId.value = planId
+const formatDateTime = (dt) => {
+  if (!dt) return '-'
+  return new Date(dt).toLocaleString('ko-KR', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
 
-  if (planId === 'business') {
-    subscriptionHistory.value = []
-  } else {
-    const now = new Date()
-    const nextMonth = new Date(now)
-    nextMonth.setMonth(nextMonth.getMonth() + 1)
+const formatAmount = (amount) => {
+  if (!amount) return '-'
+  return `₩${amount.toLocaleString()}`
+}
 
-    subscriptionHistory.value = subscriptionHistory.value.map(h =>
-      h.status === '활성' ? { ...h, status: '만료', endDate: formatDate(now) } : h
-    )
+const fetchData = async () => {
+  try {
+    const [subRes, cardRes, historyRes] = await Promise.all([
+      getSubscription(),
+      getRegisteredCard(),
+      getPaymentHistory()
+    ])
+    subscription.value = subRes.data.data
+    registeredCard.value = cardRes.data.data
+    paymentHistory.value = historyRes.data.data || []
+  } catch (e) {
+    console.error('결제 정보 조회 실패:', e)
+  }
+}
 
-    const plan = plans.find(p => p.id === planId)
-    const newId = `SUB-${String(subscriptionHistory.value.length + 1).padStart(3, '0')}`
-    subscriptionHistory.value.push({
-      id: newId,
-      plan: plan.name,
-      startDate: formatDate(now),
-      endDate: formatDate(nextMonth),
-      status: '활성'
+const handleTossCallback = async () => {
+  const authKey = Array.isArray(route.query.authKey) ? route.query.authKey[0] : route.query.authKey
+  const customerKey = Array.isArray(route.query.customerKey) ? route.query.customerKey[0] : route.query.customerKey
+
+  // 카드 등록 취소/실패로 돌아온 경우
+  if (route.query.error) {
+    openModal({
+      title: '카드 등록 취소',
+      message: route.query.message || '카드 등록이 취소되었습니다.',
+      type: 'warning'
     })
+    window.history.replaceState({}, '', '/billing')
+    return
   }
 
+  if (authKey && customerKey) {
+    try {
+      loading.value = true
+      await registerBillingKey({ customerKey, authKey })
+      openModal({ title: '카드 등록 완료', message: '카드가 성공적으로 등록되었습니다.', type: 'success' })
+
+      const pendingUpgrade = localStorage.getItem('pendingUpgrade')
+      if (pendingUpgrade === 'true') {
+        localStorage.removeItem('pendingUpgrade')
+        await doUpgrade()
+      }
+
+      await fetchData()
+    } catch (e) {
+      openModal({
+        title: '카드 등록 실패',
+        message: e.response?.data?.error?.message || '카드 등록에 실패했습니다.',
+        type: 'danger'
+      })
+    } finally {
+      loading.value = false
+      window.history.replaceState({}, '', '/billing')
+    }
+  }
+}
+
+onMounted(async () => {
+  await fetchData()
+  await handleTossCallback()
+})
+
+const openTossBillingAuth = async () => {
+  try {
+    loading.value = true
+    const res = await getTossConfig()
+    const { clientKey, customerKey } = res.data.data
+
+    const tossPayments = await loadTossPayments(clientKey)
+    const payment = tossPayments.payment({ customerKey })
+
+    await payment.requestBillingAuth({
+      method: 'CARD',
+      successUrl: window.location.origin + '/billing',
+      failUrl: window.location.origin + '/billing?error=true',
+    })
+  } catch (e) {
+    console.error('Toss SDK 오류:', e)
+    openModal({ title: '오류', message: '카드 등록을 시작할 수 없습니다.', type: 'danger' })
+  } finally {
+    loading.value = false
+  }
+}
+
+const handlePlanChange = async (planId) => {
+  if (planId === currentPlanId.value) return
   showSubscriptionModal.value = false
 
-  const planName = plans.find(p => p.id === planId)?.name
-  openModal({
-    title: '요금제 변경 완료',
-    message: `요금제가 ${planName}으로 변경되었습니다.`,
-    type: 'success',
-  })
-}
-
-const maskCardNumber = (number) => {
-  const cleaned = number.replace(/\D/g, '')
-  const last4 = cleaned.slice(-4).padEnd(4, '*')
-  return `●●●● ●●●● ●●●● ${last4}`
-}
-
-const handleCardRegister = () => {
-  registeredCard.value = {
-    maskedNumber: maskCardNumber(cardForm.value.cardNumber),
-    type: cardType.value === 'corporate' ? '법인카드' : '개인카드'
+  if (planId === 'enterprise') {
+    if (!registeredCard.value) {
+      localStorage.setItem('pendingUpgrade', 'true')
+      openModal({
+        title: '카드 등록 필요',
+        message: 'Enterprise 업그레이드를 위해 결제 카드를 먼저 등록해주세요. 카드 등록 화면으로 이동합니다.',
+        type: 'success',
+      })
+      setTimeout(() => {
+        closeModal()
+        openTossBillingAuth()
+      }, 1500)
+      return
+    }
+    await doUpgrade()
+  } else {
+    await doDowngrade()
   }
-  showCardModal.value = false
-  cardForm.value = { cardNumber: '', expiry: '', bizNumber: '', password: '' }
-  openModal({
-    title: '결제 카드 등록 완료',
-    message: '결제 카드가 성공적으로 등록되었습니다.',
-    type: 'success',
-  })
 }
 
-const handleEmailRegister = () => {
-  const email = emailForm.value.email
-  registeredEmail.value = email
-  showEmailModal.value = false
-  emailForm.value = { email: '' }
-  openModal({
-    title: '이메일 등록 완료',
-    message: `${email} 주소로 결제 확인 이메일이 발송됩니다.`,
-    type: 'success',
-  })
+const doUpgrade = async () => {
+  try {
+    loading.value = true
+    const res = await upgradeToEnterprise()
+    const result = res.data.data
+    if (!result) {
+      // 이번 달 이미 결제 완료 → 구독만 활성화됨
+      openModal({ title: '업그레이드 완료', message: '이번 달 이미 결제된 내역이 있어 추가 결제 없이 업그레이드되었습니다.', type: 'success' })
+    } else if (result.status === 'SUCCESS') {
+      openModal({ title: '업그레이드 완료', message: 'Enterprise 요금제로 업그레이드되었습니다.', type: 'success' })
+    } else {
+      openModal({
+        title: '결제 실패',
+        message: result.failReason || '결제에 실패했습니다. 3일 후 재시도됩니다.',
+        type: 'danger'
+      })
+    }
+    await fetchData()
+  } catch (e) {
+    openModal({
+      title: '업그레이드 실패',
+      message: e.response?.data?.error?.message || '업그레이드에 실패했습니다.',
+      type: 'danger'
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+const doDowngrade = async () => {
+  try {
+    loading.value = true
+    await downgradeToFree()
+    openModal({ title: '다운그레이드 완료', message: 'Business(무료) 요금제로 변경되었습니다.', type: 'success' })
+    await fetchData()
+  } catch (e) {
+    openModal({
+      title: '다운그레이드 실패',
+      message: e.response?.data?.error?.message || '다운그레이드에 실패했습니다.',
+      type: 'danger'
+    })
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
 <template>
   <div class="max-w-7xl mx-auto px-4">
     <h1 class="text-2xl font-bold text-gray-900 mb-8">구독 및 결제</h1>
+
+    <!-- 로딩 오버레이 -->
+    <div v-if="loading" class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/20">
+      <div class="bg-white rounded-xl px-8 py-6 shadow-lg flex items-center gap-3">
+        <svg class="animate-spin w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        <span class="text-sm font-medium text-gray-700">처리 중...</span>
+      </div>
+    </div>
 
     <!-- 사용 중인 요금제 -->
     <section class="mb-10">
@@ -158,6 +294,10 @@ const handleEmailRegister = () => {
                 <p class="text-sm text-gray-500 mb-1">구독 기간</p>
                 <p class="text-sm font-semibold text-gray-900">{{ currentPeriod }}</p>
               </div>
+              <div>
+                <p class="text-sm text-gray-500 mb-1">상태</p>
+                <p class="text-sm font-semibold text-gray-900">{{ subscriptionStatusLabel }}</p>
+              </div>
             </div>
           </div>
           <button
@@ -179,32 +319,16 @@ const handleEmailRegister = () => {
           <div class="flex items-center gap-4">
             <span class="text-sm font-semibold text-gray-900 w-28">결제 카드</span>
             <span v-if="registeredCard" class="text-sm text-gray-700">
-              {{ registeredCard.maskedNumber }}
-              <span class="ml-2 text-xs text-gray-400">({{ registeredCard.type }})</span>
+              {{ registeredCard.cardCompany }} {{ registeredCard.cardNumber }}
+              <span class="ml-2 text-xs text-gray-400">({{ registeredCard.ownerType === 'PERSONAL' ? '개인' : '법인' }})</span>
             </span>
             <span v-else class="text-sm text-gray-500">등록된 카드가 없습니다.</span>
           </div>
           <button
             class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
-            @click="showCardModal = true"
+            @click="openTossBillingAuth"
           >
             {{ registeredCard ? '변경하기' : '등록하기' }}
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
-        <div class="flex items-center justify-between px-6 py-5">
-          <div class="flex items-center gap-4">
-            <span class="text-sm font-semibold text-gray-900 w-28">결제 확인 이메일</span>
-            <span v-if="registeredEmail" class="text-sm text-gray-700">{{ registeredEmail }}</span>
-            <span v-else class="text-sm text-gray-500">등록된 이메일이 없습니다.</span>
-          </div>
-          <button
-            class="text-sm font-medium text-gray-700 hover:text-brand-600 transition-colors flex items-center gap-1"
-            @click="showEmailModal = true"
-          >
-            {{ registeredEmail ? '변경하기' : '등록하기' }}
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
@@ -213,44 +337,42 @@ const handleEmailRegister = () => {
       </div>
     </section>
 
-    <!-- 구독 내역 -->
+    <!-- 결제 내역 -->
     <section>
-      <h2 class="text-lg font-bold text-gray-900 mb-4">구독 내역</h2>
+      <h2 class="text-lg font-bold text-gray-900 mb-4">결제 내역</h2>
 
       <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-gray-200 bg-gray-50/50">
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 ID</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">요금제</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 시작일</th>
-              <th class="text-left px-6 py-3 font-semibold text-gray-600">구독 종료일</th>
+              <th class="text-left px-6 py-3 font-semibold text-gray-600">주문번호</th>
+              <th class="text-left px-6 py-3 font-semibold text-gray-600">금액</th>
+              <th class="text-left px-6 py-3 font-semibold text-gray-600">결제일시</th>
               <th class="text-left px-6 py-3 font-semibold text-gray-600">상태</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in subscriptionHistory" :key="item.id">
-              <td class="px-6 py-4 text-gray-900">{{ item.id }}</td>
-              <td class="px-6 py-4 text-gray-900">{{ item.plan }}</td>
-              <td class="px-6 py-4 text-gray-500">{{ item.startDate }}</td>
-              <td class="px-6 py-4 text-gray-500">{{ item.endDate }}</td>
+            <tr v-for="item in paymentHistory" :key="item.id" class="border-b border-gray-50">
+              <td class="px-6 py-4 text-gray-900 font-mono text-xs">{{ item.orderId }}</td>
+              <td class="px-6 py-4 text-gray-900">{{ formatAmount(item.amount) }}</td>
+              <td class="px-6 py-4 text-gray-500">{{ formatDateTime(item.paidAt) }}</td>
               <td class="px-6 py-4">
                 <span
                   class="inline-flex px-2 py-1 text-xs font-medium rounded-full"
-                  :class="item.status === '활성' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
+                  :class="paymentStatusClass(item.status)"
                 >
-                  {{ item.status }}
+                  {{ paymentStatusLabel(item.status) }}
                 </span>
               </td>
             </tr>
           </tbody>
         </table>
 
-        <div v-if="subscriptionHistory.length === 0" class="flex flex-col items-center justify-center py-16 text-gray-400">
+        <div v-if="paymentHistory.length === 0" class="flex flex-col items-center justify-center py-16 text-gray-400">
           <svg class="w-12 h-12 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <p class="text-sm">내역 없음</p>
+          <p class="text-sm">결제 내역 없음</p>
         </div>
       </div>
     </section>
@@ -287,12 +409,7 @@ const handleEmailRegister = () => {
               </div>
               <h3 class="text-lg font-bold text-gray-900">비즈니스</h3>
               <p class="text-2xl font-bold text-gray-900 mb-1">무료</p>
-              <p class="text-xs text-brand-600 mb-4 flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                7일간 무료 이용
-              </p>
+              <p class="text-xs text-brand-600 mb-4 flex items-center gap-1">기본 요금제</p>
               <ul class="space-y-2 mb-6">
                 <li v-for="f in plans[0].features" :key="f" class="flex items-center text-sm text-gray-700">
                   <svg class="w-4 h-4 mr-2 text-brand-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
@@ -323,8 +440,8 @@ const handleEmailRegister = () => {
               </div>
               <h3 class="text-lg font-bold text-gray-900">엔터프라이즈</h3>
               <p class="text-2xl font-bold text-gray-900 mb-0">
-                ₩89,000
-                <span class="text-sm font-normal text-gray-500">월 (사용자당)</span>
+                ₩19,900
+                <span class="text-sm font-normal text-gray-500">월</span>
               </p>
               <p class="text-xs text-brand-600 mb-4">모든 기능 무제한</p>
               <ul class="space-y-2 mb-6">
@@ -347,144 +464,7 @@ const handleEmailRegister = () => {
           </div>
 
           <div class="px-8 pb-8">
-            <p class="text-xs text-gray-400">※ 요금제 변경 시 차이액은 다음 결제일에 정산됩니다. 자세한 내용은 요금제 가이드를 참고해주세요.</p>
-          </div>
-        </div>
-      </div>
-    </teleport>
-
-    <!-- 결제 카드 등록 모달 -->
-    <teleport to="body">
-      <div v-if="showCardModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showCardModal = false">
-        <div class="bg-white rounded-2xl shadow-2xl w-[480px] max-w-[90vw] animate-modal-in">
-          <div class="flex items-center justify-between px-8 pt-8 pb-4">
-            <h2 class="text-xl font-bold text-gray-900">결제 카드 등록</h2>
-            <button class="text-gray-400 hover:text-gray-600 transition-colors" @click="showCardModal = false">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div class="px-8">
-            <div class="flex border border-gray-200 rounded-lg overflow-hidden mb-6">
-              <button
-                class="flex-1 py-2.5 text-sm font-medium transition-colors"
-                :class="cardType === 'corporate' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                @click="cardType = 'corporate'"
-              >
-                법인카드
-              </button>
-              <button
-                class="flex-1 py-2.5 text-sm font-medium transition-colors"
-                :class="cardType === 'personal' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                @click="cardType = 'personal'"
-              >
-                개인카드
-              </button>
-            </div>
-
-            <div class="space-y-5">
-              <div>
-                <label class="block text-sm font-semibold text-gray-900 mb-2">
-                  {{ cardType === 'corporate' ? '법인 카드 번호' : '카드 번호' }}
-                </label>
-                <input
-                  v-model="cardForm.cardNumber"
-                  type="text"
-                  :placeholder="cardType === 'corporate' ? '결제할 법인 카드 번호를 입력해 주세요.' : '결제할 카드 번호를 입력해 주세요.'"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                >
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-900 mb-2">
-                  {{ cardType === 'corporate' ? '법인 카드 유효 기간' : '카드 유효 기간' }}
-                </label>
-                <input
-                  v-model="cardForm.expiry"
-                  type="text"
-                  placeholder="유효기간(MMYY)"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                >
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-900 mb-2">사업자 등록 번호</label>
-                <input
-                  v-model="cardForm.bizNumber"
-                  type="text"
-                  placeholder="사업자 등록번호를 입력해 주세요."
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                >
-              </div>
-              <div>
-                <label class="block text-sm font-semibold text-gray-900 mb-2">카드 비밀번호 앞 두자리</label>
-                <input
-                  v-model="cardForm.password"
-                  type="password"
-                  placeholder="비밀번호 앞 두자리를 입력해 주세요."
-                  maxlength="2"
-                  class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-                >
-              </div>
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-3 px-8 py-6">
-            <button
-              class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              @click="showCardModal = false"
-            >
-              취소
-            </button>
-            <button
-              class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
-              @click="handleCardRegister"
-            >
-              등록하기
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
-
-    <!-- 결제 확인 이메일 등록 모달 -->
-    <teleport to="body">
-      <div v-if="showEmailModal" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showEmailModal = false">
-        <div class="bg-white rounded-2xl shadow-2xl w-[480px] max-w-[90vw] animate-modal-in">
-          <div class="flex items-center justify-between px-8 pt-8 pb-4">
-            <h2 class="text-xl font-bold text-gray-900">결제 확인 이메일 등록</h2>
-            <button class="text-gray-400 hover:text-gray-600 transition-colors" @click="showEmailModal = false">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div class="px-8">
-            <div>
-              <label class="block text-sm font-semibold text-gray-900 mb-2">이메일</label>
-              <input
-                v-model="emailForm.email"
-                type="email"
-                placeholder="결제 확인 정보를 받을 이메일을 입력해 주세요."
-                class="w-full px-4 py-3 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
-              >
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-3 px-8 py-6">
-            <button
-              class="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              @click="showEmailModal = false"
-            >
-              취소
-            </button>
-            <button
-              class="px-5 py-2.5 text-sm font-medium text-white bg-brand-600 rounded-lg hover:bg-brand-500 transition-colors"
-              @click="handleEmailRegister"
-            >
-              등록하기
-            </button>
+            <p class="text-xs text-gray-400">※ Enterprise 업그레이드 시 즉시 ₩19,900이 결제됩니다. 이후 매월 1일에 자동 결제됩니다.</p>
           </div>
         </div>
       </div>
