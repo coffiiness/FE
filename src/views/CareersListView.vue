@@ -64,9 +64,17 @@ const toggleCategory = (category) => {
           </div>
           <span class="text-xl font-bold text-gray-900">{{ company.name }} Careers</span>
         </div>
-        <nav class="flex items-center gap-6">
-          <span class="text-gray-900 font-medium border-b-2 border-gray-900 pb-1">APPLY</span>
-        </nav>
+        <div class="flex items-center gap-6">
+          <nav class="flex items-center gap-6">
+            <span class="text-gray-900 font-medium border-b-2 border-gray-900 pb-1">APPLY</span>
+          </nav>
+          <button
+            @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
+            class="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            로그인
+          </button>
+        </div>
       </div>
     </header>
 

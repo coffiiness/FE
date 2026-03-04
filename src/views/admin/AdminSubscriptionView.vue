@@ -1,152 +1,64 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { adminApi } from '@/api/admin'
+
+const PLAN_LABEL = { ENTERPRISE: '엔터프라이즈', BUSINESS: '비즈니스', STARTER: '스타터' }
+const PLAN_COLOR = { ENTERPRISE: 'bg-brand-100 text-brand-700', BUSINESS: 'bg-blue-100 text-blue-700', STARTER: 'bg-gray-100 text-gray-700' }
+const STATUS_LABEL = { ACTIVE: '활성', TRIAL: '체험 중', CANCELLED: '해지' }
+const STATUS_COLOR = { ACTIVE: 'text-brand-600', TRIAL: 'text-amber-600', CANCELLED: 'text-rose-500' }
+const TAB_STATUS = { '전체': null, '활성': 'ACTIVE', '체험 중': 'TRIAL', '해지': 'CANCELLED' }
 
 const searchQuery = ref('')
 const activeTab = ref('전체')
 const currentPage = ref(1)
 const itemsPerPage = 8
 
-const tabs = [
-  { name: '전체', count: 47 },
-  { name: '활성', count: 35 },
-  { name: '체험 중', count: 3 },
-  { name: '해지', count: 9 }
-]
+const subscriptions = ref([])
+const totalCount = ref(0)
+const loading = ref(false)
 
-// Mock data — 추후 adminApi.getSubscriptions() 로 교체
-const subscriptions = ref([
-  {
-    company: '스타트업허브',
-    domain: 'startuphub.kr',
-    initial: '스',
-    initialColor: 'bg-purple-500',
-    plan: '엔터프라이즈',
-    planColor: 'bg-brand-100 text-brand-700',
-    users: 10,
-    startDate: '2024.08.15',
-    monthlyCharge: 890000,
-    status: '활성',
-    statusColor: 'text-brand-600'
-  },
-  {
-    company: '넥스트코드',
-    domain: 'nextcode.io',
-    initial: '넥',
-    initialColor: 'bg-blue-500',
-    plan: '엔터프라이즈',
-    planColor: 'bg-brand-100 text-brand-700',
-    users: 5,
-    startDate: '2024.06.01',
-    monthlyCharge: 445000,
-    status: '활성',
-    statusColor: 'text-brand-600'
-  },
-  {
-    company: '디지털웍스',
-    domain: 'digitalworks.kr',
-    initial: '디',
-    initialColor: 'bg-indigo-500',
-    plan: '비즈니스',
-    planColor: 'bg-blue-100 text-blue-700',
-    users: 8,
-    startDate: '2025.02.03',
-    monthlyCharge: 0,
-    status: '체험 중',
-    statusColor: 'text-amber-600'
-  },
-  {
-    company: '테크밸리',
-    domain: 'techvalley.com',
-    initial: '테',
-    initialColor: 'bg-emerald-500',
-    plan: '엔터프라이즈',
-    planColor: 'bg-brand-100 text-brand-700',
-    users: 15,
-    startDate: '2024.03.10',
-    monthlyCharge: 1335000,
-    status: '활성',
-    statusColor: 'text-brand-600'
-  },
-  {
-    company: '퓨처랩',
-    domain: 'futurelab.co.kr',
-    initial: '퓨',
-    initialColor: 'bg-violet-500',
-    plan: '비즈니스',
-    planColor: 'bg-blue-100 text-blue-700',
-    users: 3,
-    startDate: '2025.01.15',
-    monthlyCharge: 0,
-    status: '활성',
-    statusColor: 'text-brand-600'
-  },
-  {
-    company: '클라우드나인',
-    domain: 'cloud9.co.kr',
-    initial: '클',
-    initialColor: 'bg-sky-500',
-    plan: '엔터프라이즈',
-    planColor: 'bg-brand-100 text-brand-700',
-    users: 15,
-    startDate: '2024.01.20',
-    monthlyCharge: 1335000,
-    status: '해지 예정',
-    statusColor: 'text-rose-500'
-  },
-  {
-    company: '그린테크',
-    domain: 'greentech.kr',
-    initial: '그',
-    initialColor: 'bg-teal-500',
-    plan: '비즈니스',
-    planColor: 'bg-blue-100 text-blue-700',
-    users: 4,
-    startDate: '2025.01.21',
-    monthlyCharge: 0,
-    status: '만료',
-    statusColor: 'text-gray-400'
-  },
-  {
-    company: '인피니티소프트',
-    domain: 'infinitysoft.co.kr',
-    initial: '인',
-    initialColor: 'bg-rose-500',
-    plan: '엔터프라이즈',
-    planColor: 'bg-brand-100 text-brand-700',
-    users: 22,
-    startDate: '2024.05.01',
-    monthlyCharge: 1958000,
-    status: '활성',
-    statusColor: 'text-brand-600'
-  }
+const tabs = computed(() => [
+  { name: '전체', count: totalCount.value },
+  { name: '활성', count: 0 },
+  { name: '체험 중', count: 0 },
+  { name: '해지', count: 0 }
 ])
 
-const filteredSubscriptions = computed(() => {
-  let result = subscriptions.value
-  if (activeTab.value !== '전체') {
-    if (activeTab.value === '해지') {
-      result = result.filter(s => s.status === '해지 예정' || s.status === '만료')
-    } else {
-      result = result.filter(s => s.status === activeTab.value)
+const fetchSubscriptions = async () => {
+  loading.value = true
+  try {
+    const params = {
+      page: currentPage.value - 1,
+      size: itemsPerPage,
+      search: searchQuery.value || undefined,
+      status: TAB_STATUS[activeTab.value] || undefined
     }
+    const res = await adminApi.getSubscriptions(params)
+    const list = res.data.data || []
+    subscriptions.value = list.map(sub => ({
+      ...sub,
+      plan: PLAN_LABEL[sub.planType] || sub.planType,
+      planColor: PLAN_COLOR[sub.planType] || 'bg-gray-100 text-gray-700',
+      statusLabel: STATUS_LABEL[sub.subscriptionStatus] || sub.subscriptionStatus,
+      statusColor: STATUS_COLOR[sub.subscriptionStatus] || 'text-gray-500',
+      initial: (sub.workspaceId || '?')[0].toUpperCase(),
+      initialColor: 'bg-slate-500',
+      startDate: sub.startDate,
+      monthlyCharge: sub.monthlyAmount || 0
+    }))
+    totalCount.value = list.length
+  } catch (e) {
+    console.error('구독 목록 로드 실패', e)
+  } finally {
+    loading.value = false
   }
-  if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase()
-    result = result.filter(s =>
-      s.company.toLowerCase().includes(q) || s.domain.toLowerCase().includes(q)
-    )
-  }
-  return result
-})
+}
 
-const totalPages = computed(() =>
-  Math.ceil(filteredSubscriptions.value.length / itemsPerPage) || 1
-)
+onMounted(fetchSubscriptions)
+watch([activeTab, searchQuery], () => { currentPage.value = 1; fetchSubscriptions() })
+watch(currentPage, fetchSubscriptions)
 
-const paginatedSubscriptions = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredSubscriptions.value.slice(start, start + itemsPerPage)
-})
+const totalPages = computed(() => Math.ceil(totalCount.value / itemsPerPage) || 1)
 
 const formatWon = (v) => {
   if (v === 0) return '무료'
@@ -156,8 +68,22 @@ const formatWon = (v) => {
 const selectedSub = ref(null)
 const showDetailModal = ref(false)
 
-const openDetail = (sub) => {
-  selectedSub.value = sub
+const openDetail = async (sub) => {
+  try {
+    const res = await adminApi.getSubscriptionDetail(sub.id)
+    const d = res.data.data
+    selectedSub.value = {
+      ...sub,
+      ...d,
+      plan: PLAN_LABEL[d.planType] || d.planType,
+      planColor: PLAN_COLOR[d.planType] || 'bg-gray-100 text-gray-700',
+      statusLabel: STATUS_LABEL[d.subscriptionStatus] || d.subscriptionStatus,
+      statusColor: STATUS_COLOR[d.subscriptionStatus] || 'text-gray-500',
+      monthlyCharge: d.monthlyAmount || 0
+    }
+  } catch {
+    selectedSub.value = sub
+  }
   showDetailModal.value = true
 }
 </script>
@@ -204,7 +130,7 @@ const openDetail = (sub) => {
               ? 'bg-brand-500 text-white border-brand-500'
               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
           "
-          @click="activeTab = tab.name; currentPage = 1"
+          @click="activeTab = tab.name"
         >
           {{ tab.name }} {{ tab.count }}
         </button>
@@ -217,9 +143,8 @@ const openDetail = (sub) => {
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-gray-500 border-b border-gray-100 bg-slate-50/50">
-              <th class="px-6 py-3.5 font-medium">회사명</th>
+              <th class="px-6 py-3.5 font-medium">워크스페이스 ID</th>
               <th class="px-6 py-3.5 font-medium">요금제</th>
-              <th class="px-6 py-3.5 font-medium">사용자 수</th>
               <th class="px-6 py-3.5 font-medium">구독 시작일</th>
               <th class="px-6 py-3.5 font-medium">월 청구액</th>
               <th class="px-6 py-3.5 font-medium">상태</th>
@@ -227,9 +152,16 @@ const openDetail = (sub) => {
             </tr>
           </thead>
           <tbody>
+            <tr v-if="loading">
+              <td colspan="6" class="px-6 py-8 text-center text-gray-400">로딩 중...</td>
+            </tr>
+            <tr v-else-if="!subscriptions.length">
+              <td colspan="6" class="px-6 py-8 text-center text-gray-400">구독 데이터가 없습니다.</td>
+            </tr>
             <tr
-              v-for="sub in paginatedSubscriptions"
-              :key="sub.company"
+              v-else
+              v-for="sub in subscriptions"
+              :key="sub.id"
               class="border-b border-gray-50 hover:bg-slate-50/50 transition-colors"
             >
               <td class="px-6 py-4">
@@ -237,10 +169,7 @@ const openDetail = (sub) => {
                   <div class="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" :class="sub.initialColor">
                     {{ sub.initial }}
                   </div>
-                  <div>
-                    <p class="font-semibold text-gray-900">{{ sub.company }}</p>
-                    <p class="text-xs text-gray-400">{{ sub.domain }}</p>
-                  </div>
+                  <p class="font-mono text-xs text-gray-600 max-w-[160px] truncate">{{ sub.workspaceId }}</p>
                 </div>
               </td>
               <td class="px-6 py-4">
@@ -248,11 +177,10 @@ const openDetail = (sub) => {
                   {{ sub.plan }}
                 </span>
               </td>
-              <td class="px-6 py-4 text-gray-600">{{ sub.users }}명</td>
               <td class="px-6 py-4 text-gray-500">{{ sub.startDate }}</td>
               <td class="px-6 py-4 text-gray-700 font-medium">{{ formatWon(sub.monthlyCharge) }}</td>
               <td class="px-6 py-4">
-                <span class="font-semibold" :class="sub.statusColor">{{ sub.status }}</span>
+                <span class="font-semibold" :class="sub.statusColor">{{ sub.statusLabel }}</span>
               </td>
               <td class="px-6 py-4">
                 <button class="text-brand-500 hover:text-brand-700 text-sm font-medium" @click="openDetail(sub)">상세 →</button>
@@ -264,7 +192,7 @@ const openDetail = (sub) => {
 
       <!-- Pagination -->
       <div class="px-6 py-4 flex items-center justify-between border-t border-gray-100">
-        <p class="text-sm text-gray-500">총 {{ filteredSubscriptions.length }}개 중 {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredSubscriptions.length) }}</p>
+        <p class="text-sm text-gray-500">총 {{ totalCount }}개</p>
         <div class="flex items-center gap-1">
           <button
             v-for="page in totalPages"
@@ -285,15 +213,7 @@ const openDetail = (sub) => {
     <div v-if="showDetailModal && selectedSub" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="showDetailModal = false">
       <div class="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[90vw] animate-modal-in">
         <div class="flex items-center justify-between px-8 pt-8 pb-4">
-          <div class="flex items-center gap-3">
-            <div class="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-sm" :class="selectedSub.initialColor">
-              {{ selectedSub.initial }}
-            </div>
-            <div>
-              <h2 class="text-xl font-bold text-gray-900">{{ selectedSub.company }}</h2>
-              <p class="text-xs text-gray-400">{{ selectedSub.domain }}</p>
-            </div>
-          </div>
+          <h2 class="text-xl font-bold text-gray-900">구독 상세</h2>
           <button class="text-gray-400 hover:text-gray-600 transition-colors" @click="showDetailModal = false">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -303,16 +223,16 @@ const openDetail = (sub) => {
 
         <div class="px-8 pb-8 space-y-0 divide-y divide-gray-100">
           <div class="flex items-center justify-between py-4">
+            <span class="text-sm text-gray-500">워크스페이스 ID</span>
+            <span class="text-xs font-mono text-gray-600 max-w-[240px] truncate">{{ selectedSub.workspaceId }}</span>
+          </div>
+          <div class="flex items-center justify-between py-4">
             <span class="text-sm text-gray-500">요금제</span>
             <span class="px-2.5 py-1 rounded-full text-xs font-semibold" :class="selectedSub.planColor">{{ selectedSub.plan }}</span>
           </div>
           <div class="flex items-center justify-between py-4">
             <span class="text-sm text-gray-500">상태</span>
-            <span class="text-sm font-semibold" :class="selectedSub.statusColor">{{ selectedSub.status }}</span>
-          </div>
-          <div class="flex items-center justify-between py-4">
-            <span class="text-sm text-gray-500">사용자 수</span>
-            <span class="text-sm font-semibold text-gray-900">{{ selectedSub.users }}명</span>
+            <span class="text-sm font-semibold" :class="selectedSub.statusColor">{{ selectedSub.statusLabel }}</span>
           </div>
           <div class="flex items-center justify-between py-4">
             <span class="text-sm text-gray-500">구독 시작일</span>

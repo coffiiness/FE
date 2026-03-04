@@ -10,8 +10,12 @@
         "endTime": "15:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_a",
-        "applicantName": "한지훈"
+        "roomId": "r1",
+        "applicantName": "한지훈",
+        "attendeeIds": [
+            104,
+            201
+        ]
     },
     {
         "id": 2,
@@ -24,8 +28,12 @@
         "endTime": "11:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_b",
-        "applicantName": "박영희"
+        "roomId": "r2",
+        "applicantName": "박영희",
+        "attendeeIds": [
+            301,
+            101
+        ]
     },
     {
         "id": 3,
@@ -38,8 +46,11 @@
         "endTime": "17:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 1차 기술 면접",
-        "roomId": "room_c",
-        "applicantName": "공유"
+        "roomId": "r3",
+        "applicantName": "공유",
+        "attendeeIds": [
+            201
+        ]
     },
     {
         "id": 4,
@@ -52,8 +63,12 @@
         "endTime": "15:00",
         "type": "INTERVIEW",
         "description": "Backend Junior 포지션 2차 임원 면접",
-        "roomId": "room_a",
-        "applicantName": "수지"
+        "roomId": "r1",
+        "applicantName": "수지",
+        "attendeeIds": [
+            201,
+            101
+        ]
     },
     {
         "id": 5,
@@ -66,8 +81,11 @@
         "endTime": "12:00",
         "type": "INTERVIEW",
         "description": "DevOps Engineer 포지션 면접",
-        "roomId": "room_b",
-        "applicantName": "송혜교"
+        "roomId": "r2",
+        "applicantName": "송혜교",
+        "attendeeIds": [
+            109
+        ]
     },
     {
         "id": 6,
@@ -78,10 +96,15 @@
         "dayOffset": 0,
         "startTime": "09:30",
         "endTime": "10:30",
-        "type": "OTHERS",
+        "type": "MEETING",
         "description": "백엔드 팀 주간 업무 공유",
-        "roomId": "room_l",
-        "applicantName": ""
+        "roomId": "r3",
+        "applicantName": "",
+        "attendeeIds": [
+            104,
+            105,
+            106
+        ]
     },
     {
         "id": 7,
@@ -94,8 +117,11 @@
         "endTime": "16:00",
         "type": "INTERVIEW",
         "description": "Product Designer 포지션 면접",
-        "roomId": "room_c",
-        "applicantName": "김고은"
+        "roomId": "r3",
+        "applicantName": "김고은",
+        "attendeeIds": [
+            201
+        ]
     },
     {
         "id": 8,
@@ -106,9 +132,10 @@
         "dayOffset": 5,
         "startTime": "09:00",
         "endTime": "18:00",
-        "type": "off",
+        "type": "VACATION",
         "description": "개인 사정",
         "roomId": "",
-        "applicantName": ""
+        "applicantName": "",
+        "attendeeIds": []
     }
 ]

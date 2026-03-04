@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useRecruitmentStore } from '@/stores/recruitment'
 
 const router = useRouter()
 const route = useRoute()
+const recruitmentStore = useRecruitmentStore()
 
 // 편집 모드 여부
 const templateId = computed(() => route.params.id)
@@ -48,21 +50,7 @@ onMounted(async () => {
 const loadTemplate = async () => {
   loading.value = true
   try {
-    // TODO: API 연동 - GET /api/v1/recruitment/templates/{templateId}
-    // 더미 데이터로 시뮬레이션
-    const dummyData = {
-      1: { title: '백엔드 개발자 지원서', customFields: [
-        { id: 'intro', label: '자기소개', type: 'long_text', required: true },
-        { id: 'portfolio', label: '포트폴리오 URL', type: 'short_text', required: false },
-      ]},
-      2: { title: '프론트엔드 개발자 지원서', customFields: [
-        { id: 'intro', label: '자기소개', type: 'long_text', required: true },
-        { id: 'github', label: 'GitHub', type: 'short_text', required: false },
-        { id: 'blog', label: '기술 블로그', type: 'short_text', required: false },
-      ]},
-    }
-
-    const data = dummyData[templateId.value]
+    const data = recruitmentStore.templates.find(t => t.id === Number(templateId.value))
     if (data) {
       templateTitle.value = data.title
       customFields.value = data.customFields || []
@@ -102,17 +90,14 @@ const handleCancel = () => {
 const handleSave = async () => {
   const payload = {
     title: templateTitle.value,
-    fields: [...defaultFields.value, ...customFields.value],
+    customFields: customFields.value,
   }
 
   if (isEditMode.value) {
-    // TODO: API 연동 - PUT /api/v1/recruitment/templates/{templateId}
-    console.log('Template updated:', templateId.value, payload)
+    recruitmentStore.updateTemplate({ id: Number(templateId.value), ...payload })
   } else {
-    // TODO: API 연동 - POST /api/v1/recruitment/templates
-    console.log('Template created:', payload)
+    recruitmentStore.addTemplate(payload)
   }
-
   router.push('/recruitment/templates')
 }
 
@@ -145,19 +130,19 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
 
       <!-- 템플릿 제목 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <label class="block text-sm font-semibold text-gray-700 mb-2">제목</label>
+        <label class="block text-sm font-bold text-gray-900 mb-2">제목</label>
         <input
-          v-model="templateTitle"
-          type="text"
-          placeholder="지원서 템플릿의 제목을 입력하세요..."
-          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+            v-model="templateTitle"
+            type="text"
+            placeholder="지원서 템플릿의 제목을 입력하세요..."
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
         />
       </div>
 
       <!-- 질문 필드 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
-          <label class="text-sm font-semibold text-gray-700">질문 추가</label>
+          <label class="text-sm font-bold text-gray-900">질문 추가</label>
         </div>
 
         <!-- 기본 필드 (삭제 불가) -->
@@ -178,12 +163,12 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
               <span v-if="field.placeholder" class="text-gray-400 ml-2">{{ field.placeholder }}</span>
             </div>
             <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-gray-600">
+              <label class="flex items-center gap-2 text-sm text-gray-600" @click.prevent>
                 <input
-                  type="checkbox"
-                  :checked="field.required"
-                  disabled
-                  class="w-4 h-4 text-brand-600 rounded border-gray-300"
+                    type="checkbox"
+                    :checked="field.required"
+                    readonly
+                    class="w-4 h-4 text-brand-600 rounded border-gray-300 pointer-events-none"
                 />
                 필수
               </label>
@@ -241,11 +226,11 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
         <div class="flex items-center gap-3">
           <div class="flex-1 relative">
             <input
-              v-model="newFieldLabel"
-              type="text"
-              placeholder="+ 질문 항목을 추가하세요..."
-              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-              @focus="showFieldTypeDropdown = false"
+                v-model="newFieldLabel"
+                type="text"
+                placeholder="+ 질문 항목을 추가하세요..."
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
+                @focus="showFieldTypeDropdown = false"
             />
           </div>
           <div class="relative">

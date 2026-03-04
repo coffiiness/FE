@@ -2,8 +2,10 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { useRecruitmentStore } from '@/stores/recruitment'
 
 const router = useRouter()
+const recruitmentStore = useRecruitmentStore()
 
 // 검색
 const searchQuery = ref('')
@@ -17,13 +19,7 @@ const currentPage = ref(1)
 const itemsPerPage = 5
 
 // 더미 데이터
-const templates = ref([
-  { id: 1, name: '백엔드 개발자 지원서', createdAt: '2024.01.15', updatedAt: '2024.01.20', status: '사용중' },
-  { id: 2, name: '프론트엔드 개발자 지원서', createdAt: '2024.01.18', updatedAt: '2024.01.25', status: '사용중' },
-  { id: 3, name: 'DevOps 엔지니어 지원서', createdAt: '2024.01.22', updatedAt: '2024.02.01', status: '미사용' },
-  { id: 4, name: '인턴 개발자 지원서', createdAt: '2024.02.01', updatedAt: '2024.02.01', status: '사용중' },
-  { id: 5, name: '시니어 개발자 지원서', createdAt: '2024.02.03', updatedAt: '2024.02.05', status: '미사용' },
-])
+const templates = computed(() => recruitmentStore.templates)
 
 // 필터링
 const filteredTemplates = computed(() => {
@@ -102,9 +98,7 @@ const openDeleteModal = (template) => {
 // 삭제 확인
 const handleDeleteConfirm = () => {
   if (deleteTarget.value) {
-    // TODO: API 연동 - DELETE /api/v1/recruitment/templates/{templateId}
-    templates.value = templates.value.filter(t => t.id !== deleteTarget.value.id)
-    console.log('Deleted:', deleteTarget.value.id)
+    recruitmentStore.deleteTemplate(deleteTarget.value.id)
   }
   showDeleteModal.value = false
   deleteTarget.value = null
@@ -181,7 +175,7 @@ const handleDeleteCancel = () => {
             <td class="px-6 py-4 text-gray-700">{{ template.createdAt }}</td>
 
             <!-- 수정일 -->
-            <td class="px-6 py-4 text-gray-700">{{ template.updatedAt }}</td>
+            <td class="px-6 py-4 text-gray-700">{{ template.updatedAt || '-' }}</td>
 
             <!-- 상태 -->
             <td class="px-6 py-4">

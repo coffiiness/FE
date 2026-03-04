@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
 const router = useRouter()
-const { signup } = useAuth()
+const { signup, login } = useAuth()
 
 // 폼 입력 데이터 반응형 변수
 const nickname = ref('')
@@ -26,15 +26,15 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    // await signup(email.value, password.value, nickname.value)
+    await signup(email.value, password.value, nickname.value)
+    await login(email.value, password.value)
 
-    // 3.  가입 성공 시 축하 화면으로 이동
     router.push({
       name: 'SignupSuccess',
       query: { name: nickname.value }
     })
   } catch (e) {
-    error.value = e.response?.data?.message || '회원가입에 실패했습니다. 다시 시도해주세요.'
+    error.value = e.response?.data?.error?.message || '회원가입에 실패했습니다. 다시 시도해주세요.'
   } finally {
     loading.value = false
   }

@@ -1,50 +1,58 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { adminApi } from '@/api/admin'
 
 const periodTab = ref('monthly')
 
-// Mock data — 추후 adminApi.getDashboardSummary() 로 교체
+const STATUS_LABEL = {
+  ACTIVE: '활성',
+  TRIAL: '체험 중',
+  CANCELLED: '해지'
+}
+const STATUS_COLOR = {
+  ACTIVE: 'bg-brand-400',
+  TRIAL: 'bg-amber-400',
+  CANCELLED: 'bg-slate-300'
+}
+
 const summary = ref({
-  mrr: 12430000,
-  mrrGrowth: 12.3,
-  subscribers: 47,
-  newThisMonth: 5,
-  churnRate: 2.1,
-  churnImprove: -0.5,
-  totalCost: 8250000,
-  costGrowth: 3.1
+  mrr: 0, mrrGrowth: 0, subscribers: 0, newThisMonth: 0,
+  churnRate: 0, churnImprove: 0, totalCost: 0, costGrowth: 0
 })
-
-const trendData = ref([
-  { month: '7월', revenue: 8200000, cost: 6800000 },
-  { month: '8월', revenue: 8600000, cost: 7000000 },
-  { month: '9월', revenue: 9000000, cost: 7200000 },
-  { month: '10월', revenue: 9200000, cost: 7550000 },
-  { month: '11월', revenue: 10100000, cost: 7800000 },
-  { month: '12월', revenue: 10500000, cost: 8000000 },
-  { month: '1월', revenue: 11070000, cost: 8100000 },
-  { month: '2월', revenue: 12430000, cost: 8250000 }
-])
-
-const planDistribution = ref([
-  { name: '비즈니스 (무료)', count: 26, color: 'bg-brand-400' },
-  { name: '엔터프라이즈', count: 12, color: 'bg-amber-400' },
-  { name: '해지 / 만료', count: 9, color: 'bg-slate-300' }
-])
+const trendData = ref([])
+const planDistribution = ref([])
 
 const totalCustomers = computed(() =>
   planDistribution.value.reduce((sum, p) => sum + p.count, 0)
 )
 
-const recentChanges = ref([
-  { company: '스타트업허브', plan: '엔터프라이즈', type: '신규 구독', typeColor: 'text-brand-500', date: '2025.02.08', amount: 890000, status: '활성', statusColor: 'bg-brand-100 text-brand-700' },
-  { company: '넥스트코드', plan: '비즈니스 → 엔터프라이즈', type: '업그레이드', typeColor: 'text-blue-500', date: '2025.02.05', amount: 445000, status: '활성', statusColor: 'bg-brand-100 text-brand-700' },
-  { company: '디지털웍스', plan: '비즈니스', type: '신규 가입', typeColor: 'text-brand-500', date: '2025.02.03', amount: 0, status: '활성', statusColor: 'bg-brand-100 text-brand-700' },
-  { company: '클라우드나인', plan: '엔터프라이즈', type: '해지 요청', typeColor: 'text-rose-500', date: '2025.02.01', amount: 1335000, status: '해지 예정', statusColor: 'bg-rose-100 text-rose-700' }
-])
+const fetchAll = async () => {
+  try {
+    const [summaryRes, trendRes, planRes] = await Promise.all([
+      adminApi.getDashboardSummary(),
+      adminApi.getRevenueCostTrend(),
+      adminApi.getPlanDistribution()
+    ])
+    summary.value = summaryRes.data.data
+    trendData.value = (trendRes.data.data.trend || []).map(d => ({
+      month: `${d.month}월`,
+      revenue: d.revenue,
+      cost: d.cost
+    }))
+    planDistribution.value = (planRes.data.data.distribution || []).map(p => ({
+      name: STATUS_LABEL[p.status] || p.status,
+      count: p.count,
+      color: STATUS_COLOR[p.status] || 'bg-gray-300'
+    }))
+  } catch (e) {
+    console.error('대시보드 데이터 로드 실패', e)
+  }
+}
+
+onMounted(fetchAll)
 
 const maxRevenue = computed(() =>
-  Math.max(...trendData.value.map(d => d.revenue))
+  Math.max(1, ...trendData.value.map(d => d.revenue))
 )
 
 const formatWon = (v) => {
@@ -217,43 +225,9 @@ const formatWon = (v) => {
       </div>
     </div>
 
-    <!-- Recent Changes -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100">
-      <div class="p-6 border-b border-gray-100">
-        <h3 class="text-lg font-bold text-gray-800">최근 구독 변동</h3>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-left text-gray-500 border-b border-gray-100">
-              <th class="px-6 py-3 font-medium">회사명</th>
-              <th class="px-6 py-3 font-medium">요금제</th>
-              <th class="px-6 py-3 font-medium">변동 유형</th>
-              <th class="px-6 py-3 font-medium">변동일</th>
-              <th class="px-6 py-3 font-medium">월 청구액</th>
-              <th class="px-6 py-3 font-medium">상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="row in recentChanges"
-              :key="row.company + row.date"
-              class="border-b border-gray-50 hover:bg-slate-50 transition-colors"
-            >
-              <td class="px-6 py-4 font-semibold text-gray-900">{{ row.company }}</td>
-              <td class="px-6 py-4 text-gray-600">{{ row.plan }}</td>
-              <td class="px-6 py-4 font-medium" :class="row.typeColor">{{ row.type }}</td>
-              <td class="px-6 py-4 text-gray-500">{{ row.date }}</td>
-              <td class="px-6 py-4 text-gray-700">{{ formatWon(row.amount) }}</td>
-              <td class="px-6 py-4">
-                <span class="px-2.5 py-1 rounded-full text-xs font-semibold" :class="row.statusColor">
-                  {{ row.status }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- Recent Changes — 구독 목록에서 최근 변동 확인 가능 -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center text-sm text-gray-400">
+      최근 구독 변동 내역은 <strong class="text-gray-600">구독 관리</strong> 메뉴에서 확인하세요.
     </div>
   </div>
 </template>

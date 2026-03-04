@@ -25,7 +25,10 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}
 const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
+const isSuccessModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
+const isDisconnectConfirmModalOpen = ref(false)
+const isDisconnectSuccessModalOpen = ref(false)
 
 // Store
 const scheduleStore = useScheduleStore()
@@ -47,7 +50,7 @@ const { acceptedSchedules } = storeToRefs(notificationStore)
 const upcomingEvents = computed(() => {
   const today = getToday()
   return allSchedules.value
-      .filter(e => e.date >= today) // 오늘 포함 미래 일정
+      .filter(e => e.date >= today && e.type === 'INTERVIEW') // 오늘 포함 미래의 면접 일정만 필터링
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
       .slice(0, 3) // 최대 3개
 })
@@ -203,6 +206,37 @@ const getEventStyle = (event) => {
   }
 }
 
+const getEventClass = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
+    case 'MEETING': return 'bg-amber-50 text-amber-700 border-amber-100'
+    case 'BUSINESS_TRIP': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    case 'VACATION': return 'bg-rose-50 text-rose-700 border-rose-100'
+    default: return 'bg-slate-50 text-slate-700 border-slate-200'
+  }
+}
+
+const getEventClassWeek = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-600 text-white border-indigo-800'
+    case 'MEETING': return 'bg-amber-100 text-amber-800 border-amber-400'
+    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
+    case 'VACATION': return 'bg-rose-100 text-rose-800 border-rose-400'
+    default: return 'bg-slate-100 text-slate-800 border-slate-400'
+  }
+}
+
+const getEventClassList = (type) => {
+  switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-100 text-indigo-600'
+    case 'MEETING': return 'bg-amber-100 text-amber-600'
+    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-600'
+    case 'VACATION': return 'bg-rose-100 text-rose-600'
+    default: return 'bg-slate-100 text-slate-600'
+  }
+}
+
+
 // --- [Events] ---
 
 const handleDateClick = (date) => {
@@ -259,6 +293,9 @@ const handleSave = (formData) => {
     scheduleStore.addSchedule(formData)
   }
   isFormModalOpen.value = false
+  setTimeout(() => {
+    isSuccessModalOpen.value = true
+  }, 300)
 }
 
 const openDeleteConfirm = (id) => {
@@ -293,6 +330,36 @@ const getRoomInfo = (schedule) => {
   }
   return null
 }
+
+// Google Calendar 연동
+const isGoogleConnected = ref(localStorage.getItem('isGoogleCalendarConnected') === 'true')
+const googleConnectedEmail = ref(localStorage.getItem('googleCalendarEmail') || '')
+
+const connectGoogleCalendar = () => {
+  const clientId = '553048700196-ojj8o5cgbq8d76q18khbkfh4t191mvoc.apps.googleusercontent.com'
+  const redirectUri = window.location.origin + '/auth/callback'
+  const scope = 'https://www.googleapis.com/auth/calendar openid email profile'
+  
+  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`
+  
+  window.location.href = googleAuthUrl
+}
+
+const disconnectGoogleCalendar = () => {
+  isDisconnectConfirmModalOpen.value = true
+}
+
+const confirmDisconnectGoogleCalendar = () => {
+  localStorage.removeItem('isGoogleCalendarConnected')
+  localStorage.removeItem('googleCalendarEmail')
+  isGoogleConnected.value = false
+  googleConnectedEmail.value = ''
+  isDisconnectConfirmModalOpen.value = false
+  setTimeout(() => {
+    isDisconnectSuccessModalOpen.value = true
+  }, 300)
+}
+
 </script>
 
 <template>
@@ -365,7 +432,7 @@ const getRoomInfo = (schedule) => {
                  </span>
               </div>
               <div v-if="cell.events.length" class="mt-2 space-y-1.5">
-                <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="evt.type === 'INTERVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-amber-50 text-amber-700 border-amber-100'">
+                <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="getEventClass(evt.type)">
                   {{ evt.startTime }} {{ evt.title }}
                 </div>
                 <div v-if="cell.events.length > 2" class="text-[10px] font-bold text-slate-400 pl-1">+ {{ cell.events.length - 2 }}개</div>
@@ -423,7 +490,7 @@ const getRoomInfo = (schedule) => {
                   <div v-for="evt in getEventsForDate(day.fullDate)" :key="evt.id"
                        @click.stop="openDetailModal(evt)"
                        class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
-                       :class="evt.type === 'INTERVIEW' ? 'bg-indigo-600 text-white border-indigo-800' : 'bg-amber-100 text-amber-800 border-amber-400'"
+                       :class="getEventClassWeek(evt.type)"
                        :style="getEventStyle(evt)">
                     <p class="text-[10px] font-bold opacity-90">{{ evt.startTime }}</p>
                     <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
@@ -486,7 +553,7 @@ const getRoomInfo = (schedule) => {
 
               <div class="flex-1 min-w-0">
                 <span class="inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-3"
-                      :class="evt.type === 'INTERVIEW' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'">
+                      :class="getEventClassList(evt.type)">
                   {{ evt.type }}
                 </span>
                 <h4 class="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">{{ evt.title }}</h4>
@@ -542,25 +609,36 @@ const getRoomInfo = (schedule) => {
                 <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" class="w-5 h-5">
                 Google Calendar
               </p>
+              <p v-if="isGoogleConnected && googleConnectedEmail" class="text-[11px] text-slate-500 font-medium mt-1 truncate max-w-[160px]">
+                {{ googleConnectedEmail }}
+              </p>
             </div>
-            <span class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          연동됨
-        </span>
+            <span v-if="isGoogleConnected" class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              연동됨
+            </span>
+            <span v-else class="px-2 py-1 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200 flex items-center gap-1">
+              미연동
+            </span>
           </div>
 
           <div class="relative z-10">
-            <p class="text-xs text-slate-500 mb-4 font-medium">
-              마지막 동기화: <span class="text-slate-700 font-bold">방금 전</span><br>
-              계정: <span class="text-slate-700">recruiter@company.com</span>
-            </p>
-
-            <button class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2 group/btn">
-              <svg class="w-4 h-4 text-slate-400 group-hover/btn:text-brand-500 group-hover/btn:rotate-180 transition-all duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              지금 동기화하기
-            </button>
+            <template v-if="isGoogleConnected">
+              <p class="text-xs text-slate-500 mb-4 font-medium">
+                일정이 구글 캘린더와<br>자동으로 동기화됩니다.
+              </p>
+              <button @click="disconnectGoogleCalendar" class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
+                연동 해제
+              </button>
+            </template>
+            <template v-else>
+              <p class="text-xs text-slate-500 mb-4 font-medium">
+                구글 캘린더와 연동하여<br>일정을 간편하게 관리하세요.
+              </p>
+              <button @click="connectGoogleCalendar" class="w-full py-3 rounded-lg bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
+                구글 캘린더 연동하기
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -577,6 +655,28 @@ const getRoomInfo = (schedule) => {
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
+    <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
+    
+    <!-- 구글 캘린더 연동 해제 모달 -->
+    <ConfirmModal 
+      :show="isDisconnectConfirmModalOpen" 
+      title="연동 해제" 
+      message="정말로 구글 캘린더 연동을 해제하시겠습니까?" 
+      confirmText="해제하기" 
+      type="danger" 
+      @confirm="confirmDisconnectGoogleCalendar" 
+      @cancel="isDisconnectConfirmModalOpen = false" 
+    />
+    <ConfirmModal 
+      :show="isDisconnectSuccessModalOpen" 
+      title="해제 완료" 
+      message="구글 캘린더 연동이 성공적으로 해제되었습니다." 
+      confirmText="확인" 
+      type="success" 
+      :showCancel="false" 
+      @confirm="isDisconnectSuccessModalOpen = false" 
+      @cancel="isDisconnectSuccessModalOpen = false" 
+    />
   </div>
 </template>
 <style scoped>

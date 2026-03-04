@@ -64,8 +64,8 @@ export const adminApi = {
   getPnlSummary(month) {
     return api.get('/admin/pnl/summary', { params: { month } })
   },
-  getPnlReport(month) {
-    return api.get('/admin/pnl/report', { params: { month } })
+  getPnlReport(months = 3) {
+    return api.get('/admin/pnl/report', { params: { months } })
   },
   exportPnlExcel(month) {
     return api.get('/admin/pnl/export', {

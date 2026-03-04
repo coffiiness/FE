@@ -1,6 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
-import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   show: {
@@ -13,15 +12,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'delete', 'edit'])
-
-const isDeleteConfirmOpen = ref(false)
-
-const handleDelete = () => {
-  isDeleteConfirmOpen.value = false
-  emit('delete', props.event.id)
-}
-
+const emit = defineEmits(['close', 'edit'])
 
 const closeOnBackdrop = (e) => {
   if (e.target === e.currentTarget) emit('close')
@@ -105,12 +96,12 @@ const attendees = computed(() => props.event.attendees || [])
             <div>
               <p class="text-sm font-bold text-slate-800 mb-1.5">참석자</p>
               <div class="flex flex-wrap gap-2">
-                 <div class="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                 <div class="px-2 py-1 rounded-md bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
                    나
                  </div>
                 <div v-for="att in attendees" :key="att" 
-                     class="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600">
-                  {{ att[0] }}
+                     class="px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-xs font-medium text-indigo-700">
+                  {{ att }}
                 </div>
               </div>
             </div>
@@ -118,28 +109,12 @@ const attendees = computed(() => props.event.attendees || [])
 
         </div>
 
-        <!-- Footer -->
-        <div class="px-6 py-5 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-4">
-          <button @click="isDeleteConfirmOpen = true" class="text-sm font-bold text-rose-500 hover:text-rose-700 transition-colors">
-            삭제
-          </button>
-        </div>
+        <!-- Footer removed as per user request -->
 
       </div>
     </div>
 
   </Transition>
-
-  <ConfirmModal
-    :show="isDeleteConfirmOpen"
-    title="면접 일정 삭제"
-    message="정말로 이 면접 일정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
-    confirm-text="삭제"
-    cancel-text="취소"
-    type="danger"
-    @confirm="handleDelete"
-    @cancel="isDeleteConfirmOpen = false"
-  />
 </template>
 
 <style scoped>

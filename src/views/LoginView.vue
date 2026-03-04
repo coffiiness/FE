@@ -19,7 +19,7 @@ const handleLogin = async () => {
     await login(email.value, password.value)
     router.push('/dashboard')
   } catch (e) {
-    error.value = e.response?.data?.message || '로그인에 실패했습니다.'
+    error.value = e.response?.data?.error?.message || '로그인에 실패했습니다.'
   } finally {
     loading.value = false
   }

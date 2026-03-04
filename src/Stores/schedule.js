@@ -2,8 +2,10 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import scheduleData from '@/data/schedule.json'
+import roomsData from '@/data/rooms.json'
+import organizationData from '@/data/organization.json'
 
-export const useScheduleStore = defineStore('schedule', () => {
+export const useScheduleStore = defineStore('schedule_v2', () => {
   // [유틸] 오늘 날짜 구하기 (YYYY-MM-DD)
   const getToday = () => {
     const d = new Date()
@@ -32,11 +34,43 @@ export const useScheduleStore = defineStore('schedule', () => {
     return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
   }
 
+  // Helper: Find Room Name by ID
+  const getRoomName = (roomId) => {
+    const room = roomsData.find(r => r.id === roomId)
+    return room ? room.name : '지정된 장소 없음'
+  }
+
+  // Helper: Find Member Details by IDs
+  const getAllMembers = () => {
+    const members = []
+    organizationData.forEach(dept => {
+      dept.teams.forEach(team => {
+        members.push(...team.members)
+      })
+    })
+    return members
+  }
+
+  const allMembers = getAllMembers()
+
+  const getAttendeeDetails = (attendeeIds) => {
+    if (!attendeeIds || attendeeIds.length === 0) return []
+    return attendeeIds.map(id => {
+      const member = allMembers.find(m => m.id === id)
+      if (member) {
+        return `${member.name} (${member.position})`
+      }
+      return `Unknown (${id})`
+    })
+  }
+
   // JSON 데이터의 dayOffset을 실제 날짜로 변환하여 초기화
   const initialSchedules = scheduleData.map(item => ({
     ...item,
     date: getRelativeDate(item.dayOffset),
-    time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
+    time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`,
+    location: item.roomId ? getRoomName(item.roomId) : (item.location || '지정된 장소 없음'),
+    attendees: item.attendeeIds ? getAttendeeDetails(item.attendeeIds) : (item.attendees || [])
   }))
 
   const schedules = ref(initialSchedules)

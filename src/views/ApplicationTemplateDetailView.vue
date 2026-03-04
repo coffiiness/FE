@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useRecruitmentStore } from '@/stores/recruitment'
 
 const router = useRouter()
 const route = useRoute()
+const recruitmentStore = useRecruitmentStore()
 
 const templateId = computed(() => route.params.id)
 const loading = ref(true)
@@ -38,48 +40,10 @@ onMounted(async () => {
 const loadTemplate = async () => {
   loading.value = true
   try {
-    // TODO: API 연동 - GET /api/v1/recruitment/templates/{templateId}
-    // 더미 데이터로 시뮬레이션
-    const dummyData = {
-      1: {
-        id: 1,
-        title: '백엔드 개발자 지원서',
-        status: '사용중',
-        createdAt: '2024.01.15',
-        updatedAt: '2024.01.20',
-        customFields: [
-          { id: 'intro', label: '자기소개', type: 'long_text', required: true },
-          { id: 'portfolio', label: '포트폴리오 URL', type: 'short_text', required: false },
-        ]
-      },
-      2: {
-        id: 2,
-        title: '프론트엔드 개발자 지원서',
-        status: '사용중',
-        createdAt: '2024.01.18',
-        updatedAt: '2024.01.25',
-        customFields: [
-          { id: 'intro', label: '자기소개', type: 'long_text', required: true },
-          { id: 'github', label: 'GitHub', type: 'short_text', required: false },
-          { id: 'blog', label: '기술 블로그', type: 'short_text', required: false },
-        ]
-      },
-      3: {
-        id: 3,
-        title: 'DevOps 엔지니어 지원서',
-        status: '미사용',
-        createdAt: '2024.01.22',
-        updatedAt: '2024.02.01',
-        customFields: [
-          { id: 'experience', label: 'DevOps 경력 기술', type: 'long_text', required: true },
-          { id: 'certifications', label: '보유 자격증', type: 'short_text', required: false },
-        ]
-      },
-    }
-
-    template.value = dummyData[templateId.value] || null
+    const foundData = recruitmentStore.templates.find(t => t.id === Number(templateId.value))
+    template.value = foundData || null
   } catch (error) {
-    console.error('Failed to load template:', error)
+    console.error('템플릿을 불러올 수 없습니다:', error)
   } finally {
     loading.value = false
   }
