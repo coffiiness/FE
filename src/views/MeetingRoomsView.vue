@@ -7,8 +7,6 @@ import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
 
-const BOOKINGS_KEY = 'meeting_bookings'
-
 const handleRoomConfirm = (roomData) => {
   if (editingRoom.value) {
     handleUpdateRoom(roomData)
@@ -73,42 +71,6 @@ const defaultRooms = [
     color: '#ec4899'
   }
 ]
-const defaultBookings = [
-  {
-    id: 'b1',
-    roomId: 'r1',
-    title: '면접 1차 · FE',
-    description: '프론트엔드 직무 1차 면접',
-    organizer: '채용팀',
-    attendees: ['김하린', '박선우'],
-    status: 'confirmed',
-    startTime: new Date('2026-02-10T10:30:00'),
-    endTime: new Date('2026-02-10T12:00:00')
-  },
-  {
-    id: 'b2',
-    roomId: 'r2',
-    title: '디자인 리뷰',
-    description: '홈 화면 UI 리뷰',
-    organizer: '브랜드팀',
-    attendees: ['정지윤', '김태형'],
-    status: 'confirmed',
-    startTime: new Date('2026-02-10T09:00:00'),
-    endTime: new Date('2026-02-10T10:30:00')
-  },
-  {
-    id: 'b3',
-    roomId: 'r3',
-    title: '면접 2차 · BE',
-    description: '백엔드 직무 최종 면접',
-    organizer: '개발팀',
-    attendees: ['윤태호'],
-    status: 'pending',
-    startTime: new Date('2026-02-10T14:00:00'),
-    endTime: new Date('2026-02-10T15:00:00')
-  }
-]
-
 const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
 const toViewRoom = (room, index = 0) => ({
   id: `r-${room.id}`,
@@ -122,9 +84,12 @@ const toViewRoom = (room, index = 0) => ({
 })
 
 const rooms = ref([...defaultRooms])
-const bookings = ref([...defaultBookings])
+const bookings = ref([])
 
-const dateValue = ref('2026-02-10')
+const today = new Date()
+const dateValue = ref(
+  `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`
+)
 const hours = Array.from({ length: 13 }, (_, i) => i + 8)
 
 const bookingModalOpen = ref(false)
@@ -139,37 +104,49 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 
-const safeJsonParse = (raw, fallback) => {
+const pad2 = (n) => `${n}`.padStart(2, '0')
+const toLocalDateTime = (date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+
+const toErrorText = (error) => {
+  const payload = error?.response?.data
+  if (!payload) return error?.message || '알 수 없는 오류'
+  if (typeof payload === 'string') return payload
+  if (typeof payload?.message === 'string') return payload.message
+  if (typeof payload?.error === 'string') return payload.error
+  if (typeof payload?.data === 'string') return payload.data
+  if (Array.isArray(payload?.errors)) {
+    const first = payload.errors[0]
+    if (typeof first === 'string') return first
+    if (typeof first?.message === 'string') return first.message
+  }
   try {
-    const v = JSON.parse(raw)
-    return v ?? fallback
+    return JSON.stringify(payload)
   } catch (e) {
-    return fallback
+    return '알 수 없는 오류'
   }
 }
 
-const reviveBookingDates = (list) => {
-  if (!Array.isArray(list)) return []
-  return list.map((b) => ({
-    ...b,
-    startTime: b?.startTime ? new Date(b.startTime) : null,
-    endTime: b?.endTime ? new Date(b.endTime) : null
-  }))
+const getMonthRange = (dateString) => {
+  const [y, m] = dateString.split('-').map(Number)
+  const from = new Date(y, m - 1, 1, 0, 0, 0)
+  const to = new Date(y, m, 1, 0, 0, 0)
+  return { from, to }
 }
 
-const loadState = () => {
-  const savedBookingsRaw = localStorage.getItem(BOOKINGS_KEY)
-  if (savedBookingsRaw) {
-    const parsed = safeJsonParse(savedBookingsRaw, null)
-    if (Array.isArray(parsed)) {
-      bookings.value = reviveBookingDates(parsed)
-    }
-  }
-}
-
-const saveBookings = () => {
-  localStorage.setItem(BOOKINGS_KEY, JSON.stringify(bookings.value))
-}
+const toViewBookingFromApi = (reservation) => ({
+  id: `b-${reservation.id}`,
+  serverId: reservation.id,
+  roomId: `r-${reservation.meetingRoomId}`,
+  roomServerId: reservation.meetingRoomId,
+  title: '회의실 예약',
+  description: '',
+  organizer: `user-${reservation.userId}`,
+  attendees: [],
+  status: reservation.status === 'RESERVED' ? 'confirmed' : 'pending',
+  startTime: new Date(reservation.startDatetime),
+  endTime: new Date(reservation.endDatetime)
+})
 
 const loadRoomsFromApi = async () => {
   try {
@@ -183,17 +160,33 @@ const loadRoomsFromApi = async () => {
   }
 }
 
+const loadBookingsFromApi = async (dateString = dateValue.value) => {
+  try {
+    const { from, to } = getMonthRange(dateString)
+    const response = await meetingRoomApi.listReservations({
+      fromDatetime: toLocalDateTime(from),
+      toDatetime: toLocalDateTime(to)
+    })
+    const data = response?.data?.data
+    if (Array.isArray(data)) {
+      bookings.value = data.map(toViewBookingFromApi)
+    }
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 예약 목록 조회 실패:', detail, error)
+  }
+}
+
 onMounted(async () => {
-  loadState()
   await loadRoomsFromApi()
+  await loadBookingsFromApi()
 })
 
 watch(
-    bookings,
-    () => {
-      saveBookings()
-    },
-    { deep: true }
+  dateValue,
+  async () => {
+    await loadBookingsFromApi()
+  }
 )
 
 const handleTimeSlotClick = (roomId, hour) => {
@@ -226,13 +219,36 @@ const handleBookRoomClick = (room) => {
   }, 0)
 }
 
-const handleBookingConfirm = (booking) => {
-  bookings.value.push({
-    id: `b-${Date.now()}`,
-    ...booking
-  })
-  bookingModalOpen.value = false
-  successModalOpen.value = true
+const handleBookingConfirm = async (booking) => {
+  if (!selectedRoom.value?.serverId) return
+  try {
+    const response = await meetingRoomApi.reserve(selectedRoom.value.serverId, {
+      startDatetime: toLocalDateTime(booking.startTime),
+      endDatetime: toLocalDateTime(booking.endTime)
+    })
+    const saved = response?.data?.data
+    if (!saved?.id) return
+
+    bookings.value.push({
+      id: `b-${saved.id}`,
+      serverId: saved.id,
+      roomId: selectedRoom.value.id,
+      roomServerId: selectedRoom.value.serverId,
+      title: booking.title || '회의실 예약',
+      description: booking.description || '',
+      organizer: booking.organizer || '',
+      attendees: booking.attendees || [],
+      status: 'confirmed',
+      startTime: new Date(saved.startDatetime),
+      endTime: new Date(saved.endDatetime)
+    })
+    bookingModalOpen.value = false
+    successModalOpen.value = true
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 예약 실패:', detail, error)
+    window.alert(`회의실 예약에 실패했습니다.\n${detail || '시간 중복이나 인증 정보를 확인해 주세요.'}`)
+  }
 }
 
 const deleteBookingModalOpen = ref(false)
@@ -243,13 +259,22 @@ const handleBookingDelete = (bookingId) => {
   deleteBookingModalOpen.value = true
 }
 
-const confirmDeleteBooking = () => {
+const confirmDeleteBooking = async () => {
   const id = deleteTargetBookingId.value
-  const idx = bookings.value.findIndex((b) => b.id === id)
-  if (idx >= 0) bookings.value.splice(idx, 1)
-  deleteBookingModalOpen.value = false
-  deleteTargetBookingId.value = null
-  detailModalOpen.value = false
+  const target = bookings.value.find((b) => b.id === id)
+  if (!target?.serverId || !target?.roomServerId) return
+  try {
+    await meetingRoomApi.cancelReservation(target.roomServerId, target.serverId)
+    const idx = bookings.value.findIndex((b) => b.id === id)
+    if (idx >= 0) bookings.value.splice(idx, 1)
+    deleteBookingModalOpen.value = false
+    deleteTargetBookingId.value = null
+    detailModalOpen.value = false
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 예약 삭제 실패:', detail, error)
+    window.alert(`회의실 예약 삭제에 실패했습니다.\n${detail || ''}`)
+  }
 }
 
 const roomCreatedModalOpen = ref(false)

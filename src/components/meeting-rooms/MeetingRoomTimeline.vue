@@ -4,14 +4,27 @@ import { computed, ref } from 'vue'
 const props = defineProps({
   rooms: { type: Array, required: true },
   bookings: { type: Array, required: true },
-  hours: { type: Array, required: true }
+  hours: { type: Array, required: true },
+  selectedDate: { type: String, default: '' }
 })
 
 const emit = defineEmits(['timeSlotClick', 'bookingClick'])
 
+const isSameDate = (a, b) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate()
+
+const selectedDateObject = computed(() =>
+  props.selectedDate ? new Date(`${props.selectedDate}T00:00:00`) : null
+)
+
 const getBookingsForRoomAndHour = (roomId, hour) => {
   return props.bookings.filter((booking) => {
     if (booking.roomId !== roomId) return false
+    if (selectedDateObject.value && !isSameDate(booking.startTime, selectedDateObject.value)) {
+      return false
+    }
     const startHour = booking.startTime.getHours()
     const endHour = booking.endTime.getHours()
     const endMinute = booking.endTime.getMinutes()
