@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, computed, defineProps, defineEmits, onMounted, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
