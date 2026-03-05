@@ -183,11 +183,15 @@ const goNext = () => {
   if (currentStep.value < 3) {
     currentStep.value++
   } else {
+    const stageText = selectedStep.value?.step || ''
+    const round = stageText.includes('2차') ? 'SECOND' : 'FIRST'
     // 최종 완료 -> 일정 생성 페이지로 이동
     router.push({
       path: '/recruitment/interview/schedule',
       query: {
         recruitmentId: jobId,
+        recruitmentStageId: selectedStep.value?.id ?? '',
+        round,
         stage: selectedStep.value.step,
         interviewers: JSON.stringify(selectedInterviewers.value),
         applicants: JSON.stringify(selectedApplicants.value)
@@ -218,7 +222,7 @@ onMounted(() => {
   <div class="page">
     <div class="header">
       <div class="flex flex-col gap-1">
-        <span class="text-xs font-bold text-slate-500">면접 일정 생성</span>
+        <span class="text-xs font-bold text-slate-500">일정 생성</span>
         <h1 class="title">{{ recruitment.title }}</h1>
       </div>
       

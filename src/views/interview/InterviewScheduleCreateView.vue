@@ -67,7 +67,7 @@ const applicants = ref(
 
 const showModal = ref(false)
 
-import { useScheduleStore } from '@/Stores/schedule'
+import { useScheduleStore } from '@/stores/schedule'
 
 const scheduleStore = useScheduleStore()
 

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useRecruitmentStore } from '@/Stores/recruitment'
+import { useRecruitmentStore } from '@/stores/recruitment'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { storeToRefs } from 'pinia'
 
