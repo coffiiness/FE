@@ -44,7 +44,7 @@ const handleLogin = async () => {
                 Recruiting <br/> <span class="text-brand-400">Simplified.</span>
             </h1>
             <p class="text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
-                면접관의 시간과 회의실 예약까지 알아서 조율하는,<br>가장 똑똑한 자동화 채용 파트너V
+                면접관의 시간과 회의실 예약까지 알아서 조율하는,<br>가장 똑똑한 자동화 채용 파트너
             </p>
             
             <!-- Illustration Placeholder (CSS-only minimal graphic) -->
