@@ -142,50 +142,46 @@ const onDragEnd = () => {
 }
 
 const handleSubmit = async () => {
+  // 필수 필드 검증
   if (!form.value.title || !form.value.startDate || !form.value.endDate || !form.value.leadTeamId) {
     alert('필수 정보를 모두 입력해주세요.')
+    return
+  }
+
+  if (!form.value.applicationTemplateId) {
+    alert('지원서 템플릿을 선택해주세요.')
+    return
+  }
+
+  if (!form.value.contents) {
+    alert('공고 내용을 입력해주세요.')
+    return
+  }
+
+  // 면접관 최소 1명 검증 (BE @Size(min=1) 규칙)
+  if (!form.value.interviewerIds || form.value.interviewerIds.length === 0) {
+    alert('면접관은 최소 1명 이상 선택해야 합니다.')
     return
   }
 
   loading.value = true
 
   try {
-    // Lead Team Name
-    const leadTeam = teams.value.find(t => t.id === form.value.leadTeamId)
-    const leadTeamName = leadTeam ? leadTeam.name : 'Unknown'
-    
-    // Reference Team Names
-    const referenceTeamNames = teams.value
-        .filter(t => form.value.referenceTeamIds.includes(t.id))
-        .map(t => t.name)
-
-    // Position String Construction
-    let positionStr = ''
-    if (form.value.careerType === 'NEW') {
-      positionStr = '신입'
-    } else if (form.value.careerType === 'EXPERIENCED') {
-        const min = form.value.experienceYears.min
-        const max = form.value.experienceYears.max
-        if (min > 0 && max > 0) positionStr = `경력 (${min}~${max}년)`
-        else if (min > 0) positionStr = `경력 (${min}년 이상)`
-        else positionStr = '경력'
-    } else {
-      positionStr = '경력 무관'
-    }
-
-    // Selected Interviewer Names
-    const selectedInterviewerNames = interviewers.value
-        .filter(i => form.value.interviewerIds.includes(i.id))
-        .map(i => i.name)
-
+    // RecruitmentCreateRequest 형식에 맞는 payload 구성
     const payload = {
-      ...form.value,
-      team: leadTeamName, // Backward compatibility for list view
-      leadTeamId: form.value.leadTeamId,
-      referenceTeamIds: form.value.referenceTeamIds, 
-      position: positionStr, 
-      interviewers: selectedInterviewerNames,
-      processes: processes.value.map((p, index) => ({
+      title: form.value.title,
+      targetCount: form.value.targetCount || 1,
+      applicationTemplateId: Number(form.value.applicationTemplateId),
+      contents: form.value.contents,
+      startDate: form.value.startDate,
+      endDate: form.value.endDate,
+      careerType: form.value.careerType,
+      minExperienceYears: form.value.careerType === 'EXPERIENCED' ? (form.value.experienceYears.min || 0) : null,
+      maxExperienceYears: form.value.careerType === 'EXPERIENCED' ? (form.value.experienceYears.max || 0) : null,
+      leadGroupId: Number(form.value.leadTeamId),
+      referenceGroupIds: form.value.referenceTeamIds.map(Number),
+      interviewerIds: form.value.interviewerIds.map(Number),
+      stages: processes.value.map((p, index) => ({
         stageName: p.stageName,
         stageType: p.stageType,
         stageStep: index + 1
@@ -193,19 +189,23 @@ const handleSubmit = async () => {
     }
 
     console.log('생성 요청 데이터:', payload)
-    
-    // Store에 추가
-    store.addJob(payload)
 
-    setTimeout(() => {
-      // alert('공고가 성공적으로 등록되었습니다.')
-      // router.push('/recruitment')
-      showSuccessModal.value = true
-    }, 500)
+    await store.createRecruitment(payload)
+    showSuccessModal.value = true
 
-  } catch (e) {
-    console.error(e)
-    alert('오류가 발생했습니다.')
+  } catch (err) {
+    const status = err.response?.status
+    const msg = err.response?.data?.message
+
+    if (status === 400) {
+      alert(msg || '입력값을 확인해주세요.')
+    } else if (status === 403) {
+      alert('채용 공고를 생성할 권한이 없습니다.')
+      router.push('/recruitment/home')
+    } else {
+      alert('일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+    }
+    console.error('채용 공고 생성 실패:', err)
   } finally {
     loading.value = false
   }

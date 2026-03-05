@@ -68,21 +68,51 @@ const labels = {
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 
-// --- Mock Data (Stores) ---
+// --- Recruitment Data from API ---
 const recruitment = computed(() => {
   const job = jobs.value.find(j => j.id === jobId)
   if (!job) return {}
+
+  // D-Day 계산
+  let ddayText = '-'
+  let statusText = job.status || 'DRAFT'
+  if (job.endDate) {
+    const end = new Date(job.endDate)
+    const now = new Date()
+    const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) { ddayText = '마감'; statusText = 'CLOSED' }
+    else if (diffDays <= 3) { ddayText = `D-${diffDays}`; statusText = 'URGENT' }
+    else { ddayText = `D-${diffDays}` }
+  }
+
+  // 경력 텍스트
+  let positionText = '경력 무관'
+  if (job.careerType === 'NEW') positionText = '신입'
+  else if (job.careerType === 'EXPERIENCED') {
+    const min = job.minExperienceYears
+    const max = job.maxExperienceYears
+    if (min && max) positionText = `경력 ${min}~${max}년`
+    else if (min) positionText = `경력 ${min}년 이상`
+    else positionText = '경력'
+  }
+
+  // 기간 텍스트
+  const startStr = job.startDate ? new Date(job.startDate).toLocaleDateString('ko-KR') : '미정'
+  const endStr = job.endDate ? new Date(job.endDate).toLocaleDateString('ko-KR') : '미정'
+
   return {
     id: job.id,
     title: job.title,
-    period: `${job.createdAt.split('T')[0]} ~ ${job.endDate ? job.endDate.split('T')[0] : '미정'}`,
-    status: job.status.toUpperCase(),
-    dday: job.dday,
-    totalApplicants: job.totalApplicants,
-    ongoingInterviews: job.ongoingInterviews, 
-    completionRate: job.completionRate,
-    interviewers: job.interviewers || [],
-    position: job.position || '직군 미정' // Added position field
+    period: `${startStr} ~ ${endStr}`,
+    status: statusText,
+    dday: ddayText,
+    totalApplicants: (job.stages || []).reduce((sum, s) => sum + (s.applicantCount || 0), 0),
+    ongoingInterviews: 0,
+    completionRate: 0,
+    interviewers: (job.assignees || []).map(a => a.name || '?'),
+    position: positionText,
+    leadGroupName: job.leadGroupName || '-',
+    stages: job.stages || []
   }
 })
 

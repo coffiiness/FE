@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useRecruitmentStore } from '@/Stores/recruitment'
+import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useScheduleStore } from '@/stores/schedule'
 
@@ -11,8 +11,40 @@ import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewLi
 const router = useRouter()
 const store = useRecruitmentStore()
 const scheduleStore = useScheduleStore()
-const { jobs } = storeToRefs(store)
+const { jobs, loading } = storeToRefs(store)
 const { schedules } = storeToRefs(scheduleStore)
+
+// --- 페이지 진입 시 API 호출 ---
+onMounted(async () => {
+  try {
+    await store.fetchRecruitments()
+  } catch (err) {
+    console.error('채용 공고 목록 조회 실패:', err)
+  }
+})
+
+// --- BE 응답 → UI 필드 변환 헬퍼 ---
+const getDday = (endDate) => {
+  if (!endDate) return { text: '-', value: 99, status: 'active' }
+  const end = new Date(endDate)
+  const now = new Date()
+  const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+  if (diffDays <= 0) return { text: '마감', value: diffDays, status: 'closed' }
+  if (diffDays <= 3) return { text: `D-${diffDays}`, value: diffDays, status: 'urgent' }
+  return { text: `D-${diffDays}`, value: diffDays, status: 'active' }
+}
+
+const getCareerText = (job) => {
+  if (job.careerType === 'NEW') return '신입'
+  if (job.careerType === 'EXPERIENCED') {
+    const min = job.minExperienceYears
+    const max = job.maxExperienceYears
+    if (min && max) return `경력 ${min}~${max}년`
+    if (min) return `경력 ${min}년 이상`
+    return '경력'
+  }
+  return '경력 무관'
+}
 
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
@@ -131,7 +163,23 @@ const statusFilter = ref('전체 상태')
 const sortBy = ref('최신순')
 
 const filteredJobs = computed(() => {
-  let result = [...jobs.value]
+  let result = jobs.value.map(job => {
+    const dday = getDday(job.endDate)
+    return {
+      ...job,
+      dday: dday.text,
+      ddayValue: dday.value,
+      displayStatus: job.status === 'CLOSED' ? 'closed' : dday.status,
+      team: job.leadGroupName || '-',
+      position: getCareerText(job),
+      funnel: (job.stages || []).map(s => ({
+        step: s.stageName,
+        count: s.applicantCount || 0,
+        active: (s.applicantCount || 0) > 0
+      })),
+      interviewers: (job.assignees || []).map(a => a.name || '?')
+    }
+  })
 
   // 1. 검색어 필터링
   const query = searchQuery.value.trim().toLowerCase()
@@ -152,14 +200,12 @@ const filteredJobs = computed(() => {
       '종료됨': 'closed'
     }
     const targetStatus = statusMap[statusFilter.value]
-    result = result.filter(job => job.status === targetStatus)
+    result = result.filter(job => job.displayStatus === targetStatus)
   }
 
   // 3. 정렬
   if (sortBy.value === '최신순') {
-    result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-  } else if (sortBy.value === '지원자순') {
-    result.sort((a, b) => b.totalApplicants - a.totalApplicants)
+    result.sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0))
   } else if (sortBy.value === '마감일순') {
     result.sort((a, b) => a.ddayValue - b.ddayValue)
   }
@@ -310,7 +356,7 @@ const saveInterviewers = () => {
 
         <div class="flex justify-between items-start mb-4 relative">
           <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
-            <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.status)]">
+            <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.displayStatus)]">
               {{ job.dday }}
             </span>
             <h3 class="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{{ job.title }}</h3>
