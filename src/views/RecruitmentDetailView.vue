@@ -394,7 +394,7 @@ const getDayColor = (index) => {
         </div>
 
         <button @click="goInterview" class="w-full mt-4 bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition">
-          + 면접 생성하기
+          + 일정 생성하기
         </button>
 
         <div>
