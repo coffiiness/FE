@@ -1,5 +1,5 @@
 <script setup>
-import { defineProps, defineEmits, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: Boolean,

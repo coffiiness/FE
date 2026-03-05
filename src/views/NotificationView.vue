@@ -1,7 +1,7 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNotificationStore } from '@/Stores/notification'
+import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()

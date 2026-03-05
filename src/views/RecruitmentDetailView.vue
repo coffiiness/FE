@@ -68,21 +68,51 @@ const labels = {
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 
-// --- Mock Data (Stores) ---
+// --- Recruitment Data from API ---
 const recruitment = computed(() => {
   const job = jobs.value.find(j => j.id === jobId)
   if (!job) return {}
+
+  // D-Day 계산
+  let ddayText = '-'
+  let statusText = job.status || 'DRAFT'
+  if (job.endDate) {
+    const end = new Date(job.endDate)
+    const now = new Date()
+    const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) { ddayText = '마감'; statusText = 'CLOSED' }
+    else if (diffDays <= 3) { ddayText = `D-${diffDays}`; statusText = 'URGENT' }
+    else { ddayText = `D-${diffDays}` }
+  }
+
+  // 경력 텍스트
+  let positionText = '경력 무관'
+  if (job.careerType === 'NEW') positionText = '신입'
+  else if (job.careerType === 'EXPERIENCED') {
+    const min = job.minExperienceYears
+    const max = job.maxExperienceYears
+    if (min && max) positionText = `경력 ${min}~${max}년`
+    else if (min) positionText = `경력 ${min}년 이상`
+    else positionText = '경력'
+  }
+
+  // 기간 텍스트
+  const startStr = job.startDate ? new Date(job.startDate).toLocaleDateString('ko-KR') : '미정'
+  const endStr = job.endDate ? new Date(job.endDate).toLocaleDateString('ko-KR') : '미정'
+
   return {
     id: job.id,
     title: job.title,
-    period: `${job.createdAt.split('T')[0]} ~ ${job.endDate ? job.endDate.split('T')[0] : '미정'}`,
-    status: job.status.toUpperCase(),
-    dday: job.dday,
-    totalApplicants: job.totalApplicants,
-    ongoingInterviews: job.ongoingInterviews, 
-    completionRate: job.completionRate,
-    interviewers: job.interviewers || [],
-    position: job.position || '직군 미정' // Added position field
+    period: `${startStr} ~ ${endStr}`,
+    status: statusText,
+    dday: ddayText,
+    totalApplicants: (job.stages || []).reduce((sum, s) => sum + (s.applicantCount || 0), 0),
+    ongoingInterviews: 0,
+    completionRate: 0,
+    interviewers: (job.assignees || []).map(a => a.name || '?'),
+    position: positionText,
+    leadGroupName: job.leadGroupName || '-',
+    stages: job.stages || []
   }
 })
 
@@ -186,19 +216,19 @@ const currentWeekDays = computed(() => {
 
 // --- Helper for Week View Styles ---
 const getEventStyle = (booking) => {
-  if (!booking.time || !booking.endTime) return {}
-  const startHour = parseInt(booking.time.split(':')[0])
-  const startMin = parseInt(booking.time.split(':')[1])
+  if (!booking.startTime || !booking.endTime) return {}
+  const startHour = parseInt(booking.startTime.split(':')[0])
+  const startMin = parseInt(booking.startTime.split(':')[1])
   const endHour = parseInt(booking.endTime.split(':')[0])
   const endMin = parseInt(booking.endTime.split(':')[1])
 
   const baseHour = 9
-  const slotHeight = 60 // Slightly smaller slot height for fit
+  const slotHeight = 60
 
   const top = ((startHour - baseHour) * slotHeight) + ((startMin / 60) * slotHeight)
   const durationHour = endHour - startHour
   const durationMin = endMin - startMin
-  const height = (durationHour * slotHeight) + ((durationMin / 60) * slotHeight)
+  const height = Math.max((durationHour * slotHeight) + ((durationMin / 60) * slotHeight), 30)
 
   return {
     top: `${top}px`,
@@ -465,42 +495,40 @@ const getDayColor = (index) => {
           <div class="bg-white border border-slate-300 rounded-[28px] overflow-hidden shadow-sm flex flex-col h-full">
             <!-- Calendar Header -->
             <div class="p-6 border-b border-slate-300 flex items-center justify-between bg-white">
-              <div class="flex items-center gap-4">
-                 <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <div class="flex items-center gap-2">
+                 <div class="flex bg-slate-100 p-0.5 rounded-md border border-slate-200">
                   <button
                       v-for="opt in viewOptions"
                       :key="opt.value"
                       @click="currentView = opt.value"
-                      class="px-3 py-1 text-xs font-bold rounded-md transition-all"
+                      class="px-2.5 py-1 text-[11px] font-bold rounded transition-all"
                       :class="currentView === opt.value ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
                   >
                     {{ opt.label }}
                   </button>
                 </div>
-              </div>
-              <div class="flex items-center gap-4">
-                <button @click="goToday" class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold">
+                <button @click="goToday" class="px-3 py-1 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-md transition-all text-[11px] font-bold">
                   {{ labels.todayMove }}
                 </button>
-                  <div class="flex items-center gap-6">
-                  <button @click="goPrev" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <div class="text-center min-w-[240px]">
-                    <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight">
-                      {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
-                    </h2>
-                    <p v-if="currentView === 'WEEK'" class="text-sm font-bold text-brand-600 mt-1">{{ currentWeekTitle }}</p>
-                    <p v-if="currentView === 'DAY'" class="text-sm font-bold text-brand-600 mt-1">{{ currentDayTitle }}</p>
-                  </div>
-                  <button @click="goNext" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+              </div>
+              <div class="flex items-center gap-3">
+                <button @click="goPrev" class="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div class="text-center min-w-[180px]">
+                  <h2 class="text-lg font-display font-bold text-slate-800 tracking-tight">
+                    {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
+                  </h2>
+                  <p v-if="currentView === 'WEEK'" class="text-[11px] font-bold text-brand-600">{{ currentWeekTitle }}</p>
+                  <p v-if="currentView === 'DAY'" class="text-[11px] font-bold text-brand-600">{{ currentDayTitle }}</p>
                 </div>
+                <button @click="goNext" class="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
               </div>
             </div>
 
@@ -552,7 +580,7 @@ const getDayColor = (index) => {
                       @click.stop="openInterviewDetail(booking)"
                     >
                       <span>{{ getInterviewerName(booking.interviewerId) }}</span>
-                      <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.time) }}</span>
+                      <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ booking.startTime }}</span>
                     </div>
                     <button
                       v-if="getBookingsForDay(day).length > 2"

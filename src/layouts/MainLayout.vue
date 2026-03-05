@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
-import { useNotificationStore } from '@/Stores/notification'
+import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()
