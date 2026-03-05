@@ -24,10 +24,24 @@ onMounted(async () => {
 })
 
 // --- BE 응답 → UI 필드 변환 헬퍼 ---
-const getDday = (endDate) => {
+const getDday = (startDate, endDate) => {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+
+  // startDate가 미래면 → '게시 전'
+  if (startDate) {
+    const start = new Date(startDate)
+    start.setHours(0, 0, 0, 0)
+    if (start > now) {
+      const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
+      return { text: '게시 전', value: 999, status: 'pending', detail: `${diffToStart}일 후 시작` }
+    }
+  }
+
+  // endDate 기반 D-Day 계산
   if (!endDate) return { text: '-', value: 99, status: 'active' }
   const end = new Date(endDate)
-  const now = new Date()
+  end.setHours(0, 0, 0, 0)
   const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
   if (diffDays <= 0) return { text: '마감', value: diffDays, status: 'closed' }
   if (diffDays <= 3) return { text: `D-${diffDays}`, value: diffDays, status: 'urgent' }
@@ -120,6 +134,7 @@ const getStatusColor = (status) => {
     case 'active': return 'text-brand-700 bg-brand-50 border-brand-200'
     case 'urgent': return 'text-rose-700 bg-rose-50 border-rose-200 animate-pulse'
     case 'closed': return 'text-slate-600 bg-slate-100 border-slate-200'
+    case 'pending': return 'text-amber-700 bg-amber-50 border-amber-200'
     default: return 'text-slate-600'
   }
 }
@@ -164,13 +179,14 @@ const sortBy = ref('최신순')
 
 const filteredJobs = computed(() => {
   let result = jobs.value.map(job => {
-    const dday = getDday(job.endDate)
+    const dday = getDday(job.startDate, job.endDate)
     return {
       ...job,
       dday: dday.text,
       ddayValue: dday.value,
+      ddayDetail: dday.detail || null,
       displayStatus: job.status === 'CLOSED' ? 'closed' : dday.status,
-      team: job.leadGroupName || '-',
+      team: job.leadGroupName || '부서 미지정',
       position: getCareerText(job),
       funnel: (job.stages || []).map(s => ({
         step: s.stageName,
@@ -197,7 +213,8 @@ const filteredJobs = computed(() => {
     const statusMap = {
       '진행 중': 'active',
       '마감 임박': 'urgent',
-      '종료됨': 'closed'
+      '종료됨': 'closed',
+      '게시 전': 'pending'
     }
     const targetStatus = statusMap[statusFilter.value]
     result = result.filter(job => job.displayStatus === targetStatus)
@@ -339,6 +356,7 @@ const saveInterviewers = () => {
           <option>전체 상태</option>
           <option>진행 중</option>
           <option>마감 임박</option>
+          <option>게시 전</option>
           <option>종료됨</option>
         </select>
         <select v-model="sortBy" class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
@@ -356,8 +374,10 @@ const saveInterviewers = () => {
 
         <div class="flex justify-between items-start mb-4 relative">
           <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
-            <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.displayStatus)]">
+            <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.displayStatus)]"
+                  :title="job.ddayDetail || ''">
               {{ job.dday }}
+              <span v-if="job.ddayDetail" class="ml-1 text-[10px] font-normal opacity-75">{{ job.ddayDetail }}</span>
             </span>
             <h3 class="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{{ job.title }}</h3>
             <p class="text-sm text-slate-500 mt-1 flex items-center">
