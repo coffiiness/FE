@@ -143,7 +143,7 @@ const toViewBookingFromApi = (reservation) => ({
   description: '',
   organizer: `user-${reservation.userId}`,
   attendees: [],
-  status: reservation.status === 'RESERVED' ? 'confirmed' : 'pending',
+  status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
   startTime: new Date(reservation.startDatetime),
   endTime: new Date(reservation.endDatetime)
 })
