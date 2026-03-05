@@ -5,8 +5,8 @@ import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vu
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { meetingRoomApi } from '@/api/meetingRoom'
 
-const ROOMS_KEY = 'meeting_rooms'
 const BOOKINGS_KEY = 'meeting_bookings'
 
 const handleRoomConfirm = (roomData) => {
@@ -109,6 +109,18 @@ const defaultBookings = [
   }
 ]
 
+const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
+const toViewRoom = (room, index = 0) => ({
+  id: `r-${room.id}`,
+  serverId: room.id,
+  name: room.name,
+  capacity: room.capacity,
+  floor: room.location ?? 1,
+  facilities: ['WiFi'],
+  description: '',
+  color: roomColors[index % roomColors.length]
+})
+
 const rooms = ref([...defaultRooms])
 const bookings = ref([...defaultBookings])
 
@@ -146,16 +158,6 @@ const reviveBookingDates = (list) => {
 }
 
 const loadState = () => {
-  const savedRoomsRaw = localStorage.getItem(ROOMS_KEY)
-  if (savedRoomsRaw) {
-    const parsed = safeJsonParse(savedRoomsRaw, null)
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      rooms.value = parsed
-    } else {
-      rooms.value = [...defaultRooms] 
-    }
-  }
-
   const savedBookingsRaw = localStorage.getItem(BOOKINGS_KEY)
   if (savedBookingsRaw) {
     const parsed = safeJsonParse(savedBookingsRaw, null)
@@ -165,24 +167,26 @@ const loadState = () => {
   }
 }
 
-const saveRooms = () => {
-  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms.value))
-}
 const saveBookings = () => {
   localStorage.setItem(BOOKINGS_KEY, JSON.stringify(bookings.value))
 }
 
-onMounted(() => {
-  loadState()
-})
+const loadRoomsFromApi = async () => {
+  try {
+    const response = await meetingRoomApi.list()
+    const data = response?.data?.data
+    if (Array.isArray(data)) {
+      rooms.value = data.map((room, index) => toViewRoom(room, index))
+    }
+  } catch (error) {
+    console.error('회의실 목록 조회 실패:', error)
+  }
+}
 
-watch(
-    rooms,
-    () => {
-      saveRooms()
-    },
-    { deep: true }
-)
+onMounted(async () => {
+  loadState()
+  await loadRoomsFromApi()
+})
 
 watch(
     bookings,
@@ -251,14 +255,27 @@ const confirmDeleteBooking = () => {
 const roomCreatedModalOpen = ref(false)
 const createdRoomName = ref('')
 
-const handleCreateRoom = (roomData) => {
-  rooms.value.push({
-    id: `r-${Date.now()}`,
-    ...roomData
-  })
-  createRoomOpen.value = false
-  createdRoomName.value = roomData.name
-  roomCreatedModalOpen.value = true
+const handleCreateRoom = async (roomData) => {
+  try {
+    const response = await meetingRoomApi.create({
+      name: roomData.name,
+      location: roomData.floor,
+      capacity: roomData.capacity
+    })
+    const created = response?.data?.data
+    if (!created?.id) return
+    rooms.value.push({
+      ...roomData,
+      id: `r-${created.id}`,
+      serverId: created.id
+    })
+    createRoomOpen.value = false
+    createdRoomName.value = roomData.name
+    roomCreatedModalOpen.value = true
+  } catch (error) {
+    console.error('회의실 생성 실패:', error)
+    window.alert('회의실 생성에 실패했습니다.')
+  }
 }
 
 const handleEditRoom = (room) => {
@@ -269,14 +286,27 @@ const handleEditRoom = (room) => {
 const roomUpdatedModalOpen = ref(false)
 const updatedRoomName = ref('')
 
-const handleUpdateRoom = (roomData) => {
+const handleUpdateRoom = async (roomData) => {
   if (!editingRoom.value) return
   const idx = rooms.value.findIndex((r) => r.id === editingRoom.value.id)
-  if (idx >= 0) rooms.value[idx] = { ...rooms.value[idx], ...roomData }
-  editingRoom.value = null
-  createRoomOpen.value = false
-  updatedRoomName.value = roomData.name
-  roomUpdatedModalOpen.value = true
+  if (idx < 0) return
+  try {
+    const target = rooms.value[idx]
+    if (target.serverId) {
+      await meetingRoomApi.update(target.serverId, {
+        name: roomData.name,
+        capacity: roomData.capacity
+      })
+    }
+    rooms.value[idx] = { ...rooms.value[idx], ...roomData }
+    editingRoom.value = null
+    createRoomOpen.value = false
+    updatedRoomName.value = roomData.name
+    roomUpdatedModalOpen.value = true
+  } catch (error) {
+    console.error('회의실 수정 실패:', error)
+    window.alert('회의실 수정에 실패했습니다.')
+  }
 }
 
 const deleteRoomModalOpen = ref(false)
@@ -287,13 +317,23 @@ const handleDeleteRoom = (roomId) => {
   deleteRoomModalOpen.value = true
 }
 
-const confirmDeleteRoom = () => {
+const confirmDeleteRoom = async () => {
   const id = deleteTargetRoomId.value
   const idx = rooms.value.findIndex((r) => r.id === id)
-  if (idx >= 0) rooms.value.splice(idx, 1)
-  bookings.value = bookings.value.filter((b) => b.roomId !== id)
-  deleteRoomModalOpen.value = false
-  deleteTargetRoomId.value = null
+  if (idx < 0) return
+  try {
+    const target = rooms.value[idx]
+    if (target.serverId) {
+      await meetingRoomApi.remove(target.serverId)
+    }
+    rooms.value.splice(idx, 1)
+    bookings.value = bookings.value.filter((b) => b.roomId !== id)
+    deleteRoomModalOpen.value = false
+    deleteTargetRoomId.value = null
+  } catch (error) {
+    console.error('회의실 삭제 실패:', error)
+    window.alert('회의실 삭제에 실패했습니다.')
+  }
 }
 
 const handleDateClick = (date) => {
