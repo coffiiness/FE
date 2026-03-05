@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 // Stores
 import { useRecruitmentStore } from '@/stores/recruitment'
-import { useScheduleStore } from '@/stores/schedule'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 import applicantData from '@/data/applicant.json' // Import dummy data
@@ -14,11 +13,9 @@ const router = useRouter()
 const jobId = Number(route.params.id)
 
 const recruitmentStore = useRecruitmentStore()
-const scheduleStore = useScheduleStore()
 const organizationStore = useOrganizationStore()
 
 const { jobs } = storeToRefs(recruitmentStore)
-const { schedules: allSchedules } = storeToRefs(scheduleStore)
 const { organizations } = storeToRefs(organizationStore)
 
 // --- 상태 관리 ---
@@ -33,6 +30,7 @@ const draggingOverColumnId = ref(null)
 const isInterviewDetailModalOpen = ref(false)
 const selectedInterview = ref(null)
 const showCopyModal = ref(false) // 링크 복사 모달
+const apiSchedules = ref([])
 
 // --- Calendar State (New) ---
 const calendarState = reactive({
@@ -144,14 +142,11 @@ watch([recruitment, allEmployees], ([newVal, employees]) => {
   }
 }, { immediate: true })
 
-const schedules = computed(() => {
-  if (!allSchedules.value) return []
-  return allSchedules.value
-    .filter(s => s.recruitmentId === jobId)
-    .map(s => ({
-      ...s
-    }))
-})
+const toYearMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+const toYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const toHm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+
+const schedules = computed(() => apiSchedules.value)
 
 // ...
 
@@ -385,6 +380,80 @@ const formatTime = (timeStr) => {
   const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
   return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
 }
+
+const normalizeSchedule = (item) => {
+  const startRaw =
+    item?.scheduledAt ||
+    item?.startDateTime ||
+    item?.startDatetime ||
+    item?.startAt ||
+    item?.occurredAt
+
+  if (!startRaw) return null
+
+  const start = new Date(startRaw)
+  if (Number.isNaN(start.getTime())) return null
+
+  const duration = Number(item?.durationMinutes || 60)
+  const endRaw = item?.endDateTime || item?.endDatetime || item?.endAt
+  const end = endRaw ? new Date(endRaw) : new Date(start.getTime() + duration * 60000)
+
+  const interviewerIds = Array.isArray(item?.interviewerIds) ? item.interviewerIds : []
+  const interviewerId =
+    Number(item?.interviewerId) ||
+    Number(item?.interviewer?.id) ||
+    Number(interviewerIds[0]) ||
+    null
+
+  const applicantName =
+    item?.applicantName ||
+    item?.applicant?.name ||
+    (Array.isArray(item?.applicants) && item.applicants[0]?.name) ||
+    '-'
+
+  return {
+    id: item.id,
+    recruitmentId: Number(item.recruitmentId || jobId),
+    date: toYmd(start),
+    startTime: toHm(start),
+    endTime: toHm(end),
+    time: `${formatTime(toHm(start))} - ${formatTime(toHm(end))}`,
+    interviewerId,
+    applicantName,
+    title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
+    description: item?.memo || item?.note || '',
+    attendees: Array.isArray(item?.applicants) ? item.applicants.map((a) => a?.name).filter(Boolean) : []
+  }
+}
+
+const loadInterviewSchedules = async () => {
+  try {
+    const yearMonth = toYearMonth(calendarState.currentMonth)
+    const raw = await recruitmentStore.fetchInterviewSchedules(jobId, yearMonth)
+    apiSchedules.value = Array.isArray(raw)
+      ? raw.map(normalizeSchedule).filter(Boolean)
+      : []
+  } catch (error) {
+    console.error('면접 일정 조회 실패:', error)
+    apiSchedules.value = []
+  }
+}
+
+watch(
+  () => toYearMonth(calendarState.currentMonth),
+  async () => {
+    await loadInterviewSchedules()
+  }
+)
+
+onMounted(async () => {
+  if (!jobs.value.length) {
+    await recruitmentStore.fetchRecruitments().catch((error) => {
+      console.error('채용 공고 목록 조회 실패:', error)
+    })
+  }
+  await loadInterviewSchedules()
+})
 
 const getDayColor = (index) => {
   if (index === 0) return 'text-rose-500' // Sunday

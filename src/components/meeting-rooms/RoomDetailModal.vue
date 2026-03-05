@@ -15,8 +15,15 @@ const formatTime = (date) => {
 
 const todayBookings = () => {
   if (!props.room) return []
+  const today = new Date()
   return props.bookings
-    .filter((b) => b.roomId === props.room.id)
+    .filter(
+      (b) =>
+        b.roomId === props.room.id &&
+        b.startTime.getFullYear() === today.getFullYear() &&
+        b.startTime.getMonth() === today.getMonth() &&
+        b.startTime.getDate() === today.getDate()
+    )
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 </script>

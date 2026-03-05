@@ -108,6 +108,33 @@ const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
 
+const getCurrentUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null')
+  } catch {
+    return null
+  }
+}
+
+const resolveOrganizerName = (reservation) => {
+  const fromPayload =
+    reservation?.organizerName ||
+    reservation?.creatorName ||
+    reservation?.hostName ||
+    reservation?.userName ||
+    reservation?.memberName
+
+  if (fromPayload) return fromPayload
+
+  const currentUser = getCurrentUser()
+  const reservationUserId = Number(reservation?.userId)
+  const currentUserId = Number(currentUser?.id)
+  if (Number.isFinite(reservationUserId) && Number.isFinite(currentUserId) && reservationUserId === currentUserId) {
+    return currentUser?.name || currentUser?.nickname || `user-${reservation.userId}`
+  }
+  return `user-${reservation.userId}`
+}
+
 const toErrorText = (error) => {
   const payload = error?.response?.data
   if (!payload) return error?.message || '알 수 없는 오류'
@@ -127,6 +154,21 @@ const toErrorText = (error) => {
   }
 }
 
+const toReservationErrorMessage = (error) => {
+  const status = error?.response?.status
+  const code = error?.response?.data?.error?.code
+  if (status === 400 || code === 'E400') {
+    return '이미 해당 시간에 예약이 있습니다. 다른 시간대로 다시 시도해 주세요.'
+  }
+  if (status === 401 || code === 'E401') {
+    return '로그인 정보가 만료되었거나 권한이 없습니다. 다시 로그인 후 시도해 주세요.'
+  }
+  if (status === 409 || code === 'E409') {
+    return '예약 충돌이 발생했습니다. 다른 시간대로 다시 시도해 주세요.'
+  }
+  return toErrorText(error) || '시간 중복이나 인증 정보를 확인해 주세요.'
+}
+
 const getMonthRange = (dateString) => {
   const [y, m] = dateString.split('-').map(Number)
   const from = new Date(y, m - 1, 1, 0, 0, 0)
@@ -141,7 +183,7 @@ const toViewBookingFromApi = (reservation) => ({
   roomServerId: reservation.meetingRoomId,
   title: '회의실 예약',
   description: '',
-  organizer: `user-${reservation.userId}`,
+  organizer: resolveOrganizerName(reservation),
   attendees: [],
   status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
   startTime: new Date(reservation.startDatetime),
@@ -236,7 +278,7 @@ const handleBookingConfirm = async (booking) => {
       roomServerId: selectedRoom.value.serverId,
       title: booking.title || '회의실 예약',
       description: booking.description || '',
-      organizer: booking.organizer || '',
+      organizer: booking.organizer || getCurrentUser()?.name || '',
       attendees: booking.attendees || [],
       status: 'confirmed',
       startTime: new Date(saved.startDatetime),
@@ -245,9 +287,9 @@ const handleBookingConfirm = async (booking) => {
     bookingModalOpen.value = false
     successModalOpen.value = true
   } catch (error) {
-    const detail = toErrorText(error)
+    const detail = toReservationErrorMessage(error)
     console.error('회의실 예약 실패:', detail, error)
-    window.alert(`회의실 예약에 실패했습니다.\n${detail || '시간 중복이나 인증 정보를 확인해 주세요.'}`)
+    window.alert(`회의실 예약에 실패했습니다.\n${detail}`)
   }
 }
 
