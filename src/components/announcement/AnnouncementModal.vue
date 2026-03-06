@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 /* Props */
 const props = defineProps({
@@ -81,7 +82,7 @@ const remove = () => {
 <template>
   <div
       v-if="show"
-      class="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center"
+      class="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center"
   >
     <div
         class="bg-white w-[720px] max-h-[90vh] rounded-2xl p-8 relative shadow-xl text-slate-900"
@@ -214,38 +215,17 @@ const remove = () => {
       </div>
     </div>
 
-    <div
-        v-if="showDeleteConfirm"
-        class="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center"
-    >
-      <div
-          class="bg-white w-[360px] rounded-xl p-6 text-center space-y-4 text-slate-900"
-      >
-        <h3 class="text-lg font-bold">삭제 확인</h3>
-
-        <p class="text-sm text-slate-600">
-          정말 삭제하시겠습니까?
-        </p>
-
-        <div class="flex justify-center gap-3 pt-3">
-
-          <button
-              @click="showDeleteConfirm = false"
-              class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold"
-          >
-            취소
-          </button>
-
-          <button
-              @click="remove"
-              class="px-4 py-2 rounded-lg bg-red-500 text-white"
-          >
-            삭제
-          </button>
-
-        </div>
-      </div>
-    </div>
+    <ConfirmModal
+        :show="showDeleteConfirm"
+        type="danger"
+        title="공지사항 삭제"
+        message="정말 삭제하시겠습니까? 삭제된 공지사항은 복구할 수 없습니다."
+        confirmText="삭제하기"
+        cancelText="취소"
+        :showCancel="true"
+        @confirm="remove"
+        @cancel="showDeleteConfirm = false"
+    />
 
   </div>
 </template>

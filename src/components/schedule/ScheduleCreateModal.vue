@@ -1,5 +1,6 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
@@ -49,6 +50,7 @@ const form = ref({
 })
 
 const attendeeInput = ref('')
+const validationModalOpen = ref(false)
 
 const scheduleTypes = [
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
@@ -86,7 +88,10 @@ const addAttendee = () => {
 const removeAttendee = (index) => { form.value.attendees.splice(index, 1) }
 
 const save = () => {
-  if (!form.value.title) return alert('일정 제목을 입력해주세요.')
+  if (!form.value.title) {
+    validationModalOpen.value = true
+    return
+  }
   // 타입 보정을 위해 복사본 생성
   const payload = { ...form.value }
   emit('save', payload)
@@ -244,6 +249,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
       </div>
     </div>
   </Transition>
+
+  <ConfirmModal
+      :show="validationModalOpen"
+      type="warning"
+      title="입력 확인"
+      message="일정 제목을 입력해주세요."
+      confirmText="확인"
+      :showCancel="false"
+      @confirm="validationModalOpen = false"
+      @cancel="validationModalOpen = false"
+  />
 </template>
 
 <style scoped>
