@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { announcementBoardApi } from '@/api/announcementBoard'
 
 const router = useRouter()
@@ -10,6 +11,21 @@ const router = useRouter()
 const showAnnouncementModal = ref(false)
 const announcementMode = ref('list') // list | create | detail
 const selectedAnnouncementId = ref(null)
+const feedbackModal = ref({
+  show: false,
+  type: 'info',
+  title: '',
+  message: ''
+})
+
+const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) => {
+  feedbackModal.value = {
+    show: true,
+    type,
+    title,
+    message
+  }
+}
 
 // 만들기
 const openCreateAnnouncement = () => {
@@ -158,9 +174,18 @@ const handleSaveAnnouncement = async (data) => {
     announcements.value.unshift(toViewAnnouncement(created))
     currentPage.value = 1
     closeAnnouncement()
+    openFeedbackModal({
+      type: 'success',
+      title: '공지사항 등록 완료',
+      message: '공지사항이 성공적으로 등록되었습니다.'
+    })
   } catch (error) {
     console.error('공지사항 생성 실패:', error)
-    window.alert('공지사항 생성에 실패했습니다.')
+    openFeedbackModal({
+      type: 'warning',
+      title: '공지사항 등록 실패',
+      message: '공지사항 생성 중 문제가 발생했습니다.'
+    })
   }
 }
 
@@ -182,9 +207,18 @@ const handleUpdateAnnouncement = async (data) => {
       }
     }
     closeAnnouncement()
+    openFeedbackModal({
+      type: 'success',
+      title: '공지사항 수정 완료',
+      message: '공지사항이 성공적으로 수정되었습니다.'
+    })
   } catch (error) {
     console.error('공지사항 수정 실패:', error)
-    window.alert('공지사항 수정에 실패했습니다.')
+    openFeedbackModal({
+      type: 'warning',
+      title: '공지사항 수정 실패',
+      message: '공지사항 수정 중 문제가 발생했습니다.'
+    })
   }
 }
 
@@ -196,9 +230,18 @@ const handleRemoveAnnouncement = async (id) => {
       currentPage.value = Math.max(totalPages.value, 1)
     }
     closeAnnouncement()
+    openFeedbackModal({
+      type: 'success',
+      title: '공지사항 삭제 완료',
+      message: '공지사항이 성공적으로 삭제되었습니다.'
+    })
   } catch (error) {
     console.error('공지사항 삭제 실패:', error)
-    window.alert('공지사항 삭제에 실패했습니다.')
+    openFeedbackModal({
+      type: 'warning',
+      title: '공지사항 삭제 실패',
+      message: '공지사항 삭제 중 문제가 발생했습니다.'
+    })
   }
 }
 
@@ -497,6 +540,17 @@ onMounted(() => {
       @create="handleSaveAnnouncement"
       @update="handleUpdateAnnouncement"
       @remove="handleRemoveAnnouncement"
+  />
+
+  <ConfirmModal
+      :show="feedbackModal.show"
+      :type="feedbackModal.type"
+      :title="feedbackModal.title"
+      :message="feedbackModal.message"
+      confirmText="확인"
+      :showCancel="false"
+      @confirm="feedbackModal.show = false"
+      @cancel="feedbackModal.show = false"
   />
 
 </template>

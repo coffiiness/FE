@@ -98,11 +98,20 @@ const roomDetailOpen = ref(false)
 const createRoomOpen = ref(false)
 const editingRoom = ref(null)
 const successModalOpen = ref(false)
+const errorModalOpen = ref(false)
+const errorModalTitle = ref('')
+const errorModalMessage = ref('')
 
 const selectedRoom = ref(null)
 const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
+
+const openErrorModal = (title, message) => {
+  errorModalTitle.value = title
+  errorModalMessage.value = message
+  errorModalOpen.value = true
+}
 
 const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
@@ -289,7 +298,7 @@ const handleBookingConfirm = async (booking) => {
   } catch (error) {
     const detail = toReservationErrorMessage(error)
     console.error('회의실 예약 실패:', detail, error)
-    window.alert(`회의실 예약에 실패했습니다.\n${detail}`)
+    openErrorModal('회의실 예약 실패', detail || '회의실 예약에 실패했습니다.')
   }
 }
 
@@ -315,7 +324,7 @@ const confirmDeleteBooking = async () => {
   } catch (error) {
     const detail = toErrorText(error)
     console.error('회의실 예약 삭제 실패:', detail, error)
-    window.alert(`회의실 예약 삭제에 실패했습니다.\n${detail || ''}`)
+    openErrorModal('회의실 예약 삭제 실패', detail || '회의실 예약 삭제에 실패했습니다.')
   }
 }
 
@@ -341,7 +350,7 @@ const handleCreateRoom = async (roomData) => {
     roomCreatedModalOpen.value = true
   } catch (error) {
     console.error('회의실 생성 실패:', error)
-    window.alert('회의실 생성에 실패했습니다.')
+    openErrorModal('회의실 생성 실패', '회의실 생성에 실패했습니다.')
   }
 }
 
@@ -372,7 +381,7 @@ const handleUpdateRoom = async (roomData) => {
     roomUpdatedModalOpen.value = true
   } catch (error) {
     console.error('회의실 수정 실패:', error)
-    window.alert('회의실 수정에 실패했습니다.')
+    openErrorModal('회의실 수정 실패', '회의실 수정에 실패했습니다.')
   }
 }
 
@@ -399,7 +408,7 @@ const confirmDeleteRoom = async () => {
     deleteTargetRoomId.value = null
   } catch (error) {
     console.error('회의실 삭제 실패:', error)
-    window.alert('회의실 삭제에 실패했습니다.')
+    openErrorModal('회의실 삭제 실패', '회의실 삭제에 실패했습니다.')
   }
 }
 
@@ -529,6 +538,17 @@ const openCreateRoom = () => {
       :showCancel="true"
       @confirm="confirmDeleteBooking"
       @cancel="deleteBookingModalOpen = false"
+    />
+
+    <ConfirmModal
+      :show="errorModalOpen"
+      type="warning"
+      :title="errorModalTitle"
+      :message="errorModalMessage"
+      confirmText="확인"
+      :showCancel="false"
+      @confirm="errorModalOpen = false"
+      @cancel="errorModalOpen = false"
     />
   </div>
 </template>
