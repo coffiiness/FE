@@ -7,6 +7,11 @@ const routes = [
   },
 
   {
+    path: '/careers',
+    name: 'CareersHome',
+    component: () => import('@/views/CareersHomeView.vue')
+  },
+  {
     path: '/careers/:companySlug',
     name: 'CompanyCareers',
     component: () => import('@/views/CareersListView.vue')
