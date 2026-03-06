@@ -1,9 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const sidebarOpen = ref(true)
+
+const { user } = useAuth()
+const userName = computed(() => user.value?.name || '관리자')
+const userInitial = computed(() => userName.value.charAt(0))
 
 const navigation = [
   { section: 'OVERVIEW' },
@@ -139,10 +144,10 @@ const currentMonth = computed(() => {
       <div class="border-t border-slate-700/50 p-4 bg-slate-900/50">
         <div class="flex items-center">
           <div class="h-9 w-9 bg-brand-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0">
-            김
+            {{ userInitial }}
           </div>
           <div v-if="sidebarOpen" class="ml-3">
-            <p class="text-sm font-medium text-white">김철수</p>
+            <p class="text-sm font-medium text-white">{{ userName }}</p>
             <p class="text-xs text-slate-400">시스템 관리자</p>
           </div>
         </div>

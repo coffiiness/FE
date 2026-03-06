@@ -271,7 +271,8 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !token) {
     next('/login')
   } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-    next('/dashboard')
+    const user = JSON.parse(localStorage.getItem('user') || '{}')
+    next(user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard')
   } else {
     next()
   }
