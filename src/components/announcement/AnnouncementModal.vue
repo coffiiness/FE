@@ -9,7 +9,7 @@ const props = defineProps({
   announcements: Array
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'create', 'update', 'remove'])
 
 const isEditMode = ref(false)
 const showDeleteConfirm = ref(false)
@@ -52,43 +52,29 @@ const save = () => {
   if (!form.value.title || !form.value.content) return
 
   if (props.mode === 'create') {
-    props.announcements.unshift({
-      id: Date.now(),
-      ...form.value,
-      author: '김인사',
-      date: new Date().toISOString().slice(0, 10)
+    emit('create', {
+      title: form.value.title,
+      content: form.value.content,
+      pinned: form.value.pinned
     })
+    return
   }
 
   if (props.mode === 'detail') {
-    const idx = props.announcements.findIndex(
-        a => a.id === props.selectedId
-    )
-
-    if (idx !== -1) {
-      props.announcements[idx] = {
-        ...props.announcements[idx],
-        ...form.value
-      }
-    }
-
+    emit('update', {
+      id: props.selectedId,
+      title: form.value.title,
+      content: form.value.content,
+      pinned: form.value.pinned
+    })
     isEditMode.value = false
   }
 
-  emit('close')
 }
 
 const remove = () => {
-  const idx = props.announcements.findIndex(
-      a => a.id === props.selectedId
-  )
-
-  if (idx !== -1) {
-    props.announcements.splice(idx, 1)
-  }
-
+  emit('remove', props.selectedId)
   showDeleteConfirm.value = false
-  emit('close')
 }
 </script>
 

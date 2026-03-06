@@ -139,8 +139,7 @@ const handleSubmit = () => {
         </div>
       </div>
       <div class="p-6 border-t flex justify-end gap-2 flex-shrink-0 bg-white">
-        <button type="button" class="px-4 py-2 border rounded-lg" @click="emit('close')">취소</button>
-        <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
+        <button type="button" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200" @click="emit('close')" > 취소 </button>        <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
           {{ mode === 'edit' ? '수정 저장' : '회의실 등록' }}
         </button>
       </div>

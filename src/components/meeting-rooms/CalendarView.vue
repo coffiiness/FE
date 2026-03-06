@@ -205,7 +205,7 @@ const toggleBooking = (bookingId) => {
               @click.stop="emit('bookingClick', booking)"
             >
               <span>{{ getRoomName(booking.roomId) }}</span>
-              <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.startTime) }}</span>
+              <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
             </div>
             <button
               v-if="getBookingsForDay(day).length > 2"

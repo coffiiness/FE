@@ -58,6 +58,15 @@ const state = reactive({
   attendees: []
 })
 
+const getCurrentUserName = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null')
+    return user?.name || user?.nickname || ''
+  } catch {
+    return ''
+  }
+}
+
 watch(
   () => props.open,
   (open) => {
@@ -67,6 +76,7 @@ watch(
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
     state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
+    state.organizer = getCurrentUserName()
     state.attendees = [] // 초기화
     selectedDeptId.value = null
     attendeeInput.value = ''

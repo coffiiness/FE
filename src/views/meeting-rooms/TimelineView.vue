@@ -8,6 +8,12 @@ const props = defineProps({
   dateValue: { type: String, required: true },
   handlers: { type: Object, required: true }
 })
+
+const moveToToday = () => {
+  const today = new Date()
+  const dateString = `${today.getFullYear()}-${`${today.getMonth() + 1}`.padStart(2, '0')}-${`${today.getDate()}`.padStart(2, '0')}`
+  props.handlers.setDateValue(dateString)
+}
 </script>
 
 <template>
@@ -21,7 +27,12 @@ const props = defineProps({
             :value="dateValue"
             @change="handlers.setDateValue($event.target.value)"
           />
-          <button class="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200">오늘</button>
+          <button
+            class="text-xs font-semibold text-teal-700 bg-teal-50 px-2 py-1 rounded-md border border-teal-200"
+            @click="moveToToday"
+          >
+            오늘
+          </button>
         </div>
         <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2">
           <span class="text-xs text-slate-500">시간 범위</span>
@@ -45,6 +56,7 @@ const props = defineProps({
       :rooms="rooms"
       :bookings="bookings"
       :hours="hours"
+      :selectedDate="dateValue"
       @timeSlotClick="handlers.handleTimeSlotClick"
       @bookingClick="handlers.handleBookingClick"
     />

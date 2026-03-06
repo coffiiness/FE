@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
+import { announcementBoardApi } from '@/api/announcementBoard'
 
 const router = useRouter()
 
@@ -83,13 +84,20 @@ const currentPage = ref(1)
 const pageSize = 3 // 한 페이지에 3개씩
 
 const totalPages = computed(() => {
-  return Math.ceil(announcements.value.length / pageSize)
+  return Math.ceil(sortedAnnouncements.value.length / pageSize)
+})
+
+const sortedAnnouncements = computed(() => {
+  return [...announcements.value].sort((a, b) => {
+    if (a.pinned === b.pinned) return b.id - a.id
+    return a.pinned ? -1 : 1
+  })
 })
 
 const pagedAnnouncements = computed(() => {
   const start = (currentPage.value - 1) * pageSize
   const end = start + pageSize
-  return announcements.value.slice(start, end)
+  return sortedAnnouncements.value.slice(start, end)
 })
 
 const prevPage = () => {
@@ -106,53 +114,92 @@ const nextPage = () => {
 
 
 // --- Data: Announcements ---
-const announcements = ref([
-  {
-    id: 1,
-    title: '탕비실 비품 도난 사건',
-    content: '최근 탕비실 비품 분실 사례가 발생했습니다.',
-    pinned: true,
-    author: '김인사',
-    tag: '새 공지',
-    date: '2026.01.26'
-  },
-  {
-    id: 2,
-    title: '설 연휴 대체 휴무 안내',
-    content: '2/10~2/12 대체 휴무입니다.',
-    pinned: false,
-    author: '김인사',
-    tag: '필독',
-    date: '2026.01.20'
-  },
-  {
-    id: 3,
-    title: '2026년 상반기 채용 계획 취합',
-    content: '상반기 채용 계획을 취합합니다.',
-    pinned: false,
-    author: '김인사',
-    tag: '',
-    date: '2026.01.15'
-  }
-])
+const announcements = ref([])
 
-const handleSaveAnnouncement = (data) => {
-  announcements.value.unshift({
-    id: Date.now(),
-    title: data.title,
-    content: data.content,
-    pinned: data.pinned,
-    author: '김인사',
-    tag: data.pinned ? '고정' : '',
-    date: new Date().toISOString().slice(0,10)
-  })
-
-  currentPage.value = 1
+const formatDateLabel = (date = new Date()) => {
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}.${mm}.${dd}`
 }
 
-const handleRemoveAnnouncement = (id) => {
-  announcements.value =
-      announcements.value.filter(a => a.id !== id)
+const toViewAnnouncement = (item) => ({
+  id: item.id,
+  title: item.title,
+  content: item.content,
+  pinned: item.pinned,
+  author: '관리자',
+  tag: item.pinned ? '고정' : '',
+  date: formatDateLabel()
+})
+
+const loadAnnouncements = async () => {
+  try {
+    const response = await announcementBoardApi.list()
+    const data = response?.data?.data
+    if (Array.isArray(data)) {
+      announcements.value = data.map((item) => toViewAnnouncement(item))
+      currentPage.value = 1
+    }
+  } catch (error) {
+    console.error('공지사항 조회 실패:', error)
+  }
+}
+
+const handleSaveAnnouncement = async (data) => {
+  try {
+    const response = await announcementBoardApi.create({
+      title: data.title,
+      content: data.content,
+      pinned: data.pinned
+    })
+    const created = response?.data?.data
+    if (!created?.id) return
+    announcements.value.unshift(toViewAnnouncement(created))
+    currentPage.value = 1
+    closeAnnouncement()
+  } catch (error) {
+    console.error('공지사항 생성 실패:', error)
+    window.alert('공지사항 생성에 실패했습니다.')
+  }
+}
+
+const handleUpdateAnnouncement = async (data) => {
+  try {
+    await announcementBoardApi.update(data.id, {
+      title: data.title,
+      content: data.content,
+      pinned: data.pinned
+    })
+    const idx = announcements.value.findIndex((a) => a.id === data.id)
+    if (idx !== -1) {
+      announcements.value[idx] = {
+        ...announcements.value[idx],
+        title: data.title,
+        content: data.content,
+        pinned: data.pinned,
+        tag: data.pinned ? '고정' : ''
+      }
+    }
+    closeAnnouncement()
+  } catch (error) {
+    console.error('공지사항 수정 실패:', error)
+    window.alert('공지사항 수정에 실패했습니다.')
+  }
+}
+
+const handleRemoveAnnouncement = async (id) => {
+  try {
+    await announcementBoardApi.remove(id)
+    announcements.value = announcements.value.filter((a) => a.id !== id)
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = Math.max(totalPages.value, 1)
+    }
+    closeAnnouncement()
+  } catch (error) {
+    console.error('공지사항 삭제 실패:', error)
+    window.alert('공지사항 삭제에 실패했습니다.')
+  }
 }
 
 
@@ -228,6 +275,10 @@ const openScheduleDetail = (schedule) => {
 
 
 }
+
+onMounted(() => {
+  loadAnnouncements()
+})
 </script>
 
 <template>
@@ -443,7 +494,8 @@ const openScheduleDetail = (schedule) => {
       :selected-id="selectedAnnouncementId"
       :announcements="announcements"
       @close="closeAnnouncement"
-      @save="handleSaveAnnouncement"
+      @create="handleSaveAnnouncement"
+      @update="handleUpdateAnnouncement"
       @remove="handleRemoveAnnouncement"
   />
 
