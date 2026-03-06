@@ -72,12 +72,23 @@ const defaultRooms = [
   }
 ]
 const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
+const parseFloor = (value) => {
+  if (value === null || value === undefined) return 1
+  const parsed = Number(String(value).replace(/[^0-9-]/g, ''))
+  return Number.isFinite(parsed) ? parsed : 1
+}
+
+const parseCapacity = (value) => {
+  const parsed = Number(String(value).replace(/[^0-9]/g, ''))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+}
+
 const toViewRoom = (room, index = 0) => ({
   id: `r-${room.id}`,
   serverId: room.id,
   name: room.name,
-  capacity: room.capacity,
-  floor: room.location ?? 1,
+  capacity: parseCapacity(room.capacity),
+  floor: parseFloor(room.location),
   facilities: ['WiFi'],
   description: '',
   color: roomColors[index % roomColors.length]
@@ -106,6 +117,33 @@ const selectedRoom = ref(null)
 const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
+const reservationTitleMap = ref({})
+
+const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
+
+const loadReservationTitleMap = () => {
+  try {
+    const raw = localStorage.getItem(RESERVATION_TITLE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    reservationTitleMap.value = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    reservationTitleMap.value = {}
+  }
+}
+
+const saveReservationTitleMap = () => {
+  try {
+    localStorage.setItem(RESERVATION_TITLE_MAP_KEY, JSON.stringify(reservationTitleMap.value))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const setReservationTitle = (reservationId, title) => {
+  if (!reservationId || !title) return
+  reservationTitleMap.value[String(reservationId)] = title
+  saveReservationTitleMap()
+}
 
 const openErrorModal = (title, message) => {
   errorModalTitle.value = title
@@ -185,19 +223,26 @@ const getMonthRange = (dateString) => {
   return { from, to }
 }
 
-const toViewBookingFromApi = (reservation) => ({
-  id: `b-${reservation.id}`,
-  serverId: reservation.id,
-  roomId: `r-${reservation.meetingRoomId}`,
-  roomServerId: reservation.meetingRoomId,
-  title: '회의실 예약',
-  description: '',
-  organizer: resolveOrganizerName(reservation),
-  attendees: [],
-  status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
-  startTime: new Date(reservation.startDatetime),
-  endTime: new Date(reservation.endDatetime)
-})
+const toViewBookingFromApi = (reservation) => {
+  const reservationId = reservation?.id
+  const titleFromApi =
+    reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
+  const titleFromLocal = reservationTitleMap.value[String(reservationId)]
+
+  return {
+    id: `b-${reservationId}`,
+    serverId: reservationId,
+    roomId: `r-${reservation.meetingRoomId}`,
+    roomServerId: reservation.meetingRoomId,
+    title: titleFromApi || titleFromLocal || '회의실 예약',
+    description: reservation?.description || reservation?.memo || '',
+    organizer: resolveOrganizerName(reservation),
+    attendees: [],
+    status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
+    startTime: new Date(reservation.startDatetime),
+    endTime: new Date(reservation.endDatetime)
+  }
+}
 
 const loadRoomsFromApi = async () => {
   try {
@@ -229,6 +274,7 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
 }
 
 onMounted(async () => {
+  loadReservationTitleMap()
   await loadRoomsFromApi()
   await loadBookingsFromApi()
 })
@@ -279,6 +325,7 @@ const handleBookingConfirm = async (booking) => {
     })
     const saved = response?.data?.data
     if (!saved?.id) return
+    setReservationTitle(saved.id, booking.title)
 
     bookings.value.push({
       id: `b-${saved.id}`,
@@ -318,6 +365,8 @@ const confirmDeleteBooking = async () => {
     await meetingRoomApi.cancelReservation(target.roomServerId, target.serverId)
     const idx = bookings.value.findIndex((b) => b.id === id)
     if (idx >= 0) bookings.value.splice(idx, 1)
+    delete reservationTitleMap.value[String(target.serverId)]
+    saveReservationTitleMap()
     deleteBookingModalOpen.value = false
     deleteTargetBookingId.value = null
     detailModalOpen.value = false
