@@ -17,18 +17,18 @@ export const formatDate = (isoString) => {
 }
 
 /**
- * 이름에서 아바타용 이니셜 추출 (앞 2글자).
+ * 이름에서 아바타용 이니셜 추출 (첫 1글자).
  * @param {string|null|undefined} name
  * @returns {string}
  *
  * @example
- * getInitials('홍길동')  // '홍길'
- * getInitials('Kim')    // 'Ki'
+ * getInitials('진희헌')  // '진'
+ * getInitials('gwano')  // 'G'
  * getInitials(null)     // '?'
  */
 export const getInitials = (name) => {
   if (!name) return '?'
-  return name.length >= 2 ? name.substring(0, 2) : name
+  return name.charAt(0).toUpperCase()
 }
 
 /**
