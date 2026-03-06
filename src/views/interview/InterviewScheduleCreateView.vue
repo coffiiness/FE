@@ -21,6 +21,7 @@ const onModalCancel  = () => { modal.value.show = false }
 
 const route = useRoute()
 const router = useRouter()
+const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
 
 const recruitmentId = Number(route.query.recruitmentId || 0)
 const recruitmentStageId = Number(route.query.recruitmentStageId || 0) || null
@@ -134,6 +135,32 @@ const toErrorText = (error) => {
 
 const toApiDateTime = (date, time = '00:00') => `${date}T${time}:00`
 const rangesOverlap = (targetStart, targetEnd, slotStart, slotEnd) => targetStart < slotEnd && slotStart < targetEnd
+const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
+  const roomId = Number(meetingRoomId)
+  const start = new Date(startDatetime).getTime()
+  const end = new Date(endDatetime).getTime()
+  if (!Number.isFinite(roomId) || Number.isNaN(start) || Number.isNaN(end)) return null
+  return `${roomId}|${start}|${end}`
+}
+const getInterviewSlotTitle = () => {
+  const recruitmentTitle = String(route.query.recruitmentTitle || '').trim()
+  const stageTitle = String(route.query.stage || '').trim()
+  return [recruitmentTitle, stageTitle].filter(Boolean).join(' - ') || '면접 일정'
+}
+const saveInterviewSlotTitle = (meetingRoomId, startDatetime, endDatetime) => {
+  const key = toDateTimeKey(meetingRoomId, startDatetime, endDatetime)
+  if (!key) return
+  const title = getInterviewSlotTitle()
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_TITLE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    const next = parsed && typeof parsed === 'object' ? parsed : {}
+    next[key] = title
+    localStorage.setItem(INTERVIEW_SLOT_TITLE_MAP_KEY, JSON.stringify(next))
+  } catch {
+    // ignore storage errors
+  }
+}
 
 const hasBusyOverlap = (date, time, slots, keyName, targetId = null) => {
   const cellStart = new Date(toApiDateTime(date, time))
@@ -372,6 +399,11 @@ const confirmSchedule = async (memo) => {
       durationMinutes: selectedRange.durationMinutes,
       memo: memo || ''
     })
+    saveInterviewSlotTitle(
+      Number(selectedRoom.value.id),
+      `${selectedRange.date}T${selectedRange.start}:00`,
+      `${selectedRange.date}T${selectedRange.end}:00`
+    )
     showModal.value = false
     openModal({
       title: '일정 확정 완료',

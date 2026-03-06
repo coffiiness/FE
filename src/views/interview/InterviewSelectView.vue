@@ -291,6 +291,7 @@ const goNext = () => {
       path: '/recruitment/interview/schedule',
       query: {
         recruitmentId: jobId,
+        recruitmentTitle: recruitment.value?.title || '',
         recruitmentStageId: selectedStep.value?.id ?? '',
         round,
         stage: selectedStep.value.step,

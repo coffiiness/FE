@@ -6,6 +6,7 @@ import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
+import { recruitmentApi } from '@/api/recruitment'
 
 const handleRoomConfirm = (roomData) => {
   if (editingRoom.value) {
@@ -118,8 +119,11 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 const reservationTitleMap = ref({})
+const interviewReservationTitleMap = ref({})
+const interviewSlotTitleMap = ref({})
 
 const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
+const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
 
 const loadReservationTitleMap = () => {
   try {
@@ -139,6 +143,16 @@ const saveReservationTitleMap = () => {
   }
 }
 
+const loadInterviewSlotTitleMap = () => {
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_TITLE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewSlotTitleMap.value = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewSlotTitleMap.value = {}
+  }
+}
+
 const setReservationTitle = (reservationId, title) => {
   if (!reservationId || !title) return
   reservationTitleMap.value[String(reservationId)] = title
@@ -154,6 +168,21 @@ const openErrorModal = (title, message) => {
 const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+
+const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
+  const roomId = Number(meetingRoomId)
+  const start = new Date(startDatetime).getTime()
+  const end = new Date(endDatetime).getTime()
+  if (!Number.isFinite(roomId) || Number.isNaN(start) || Number.isNaN(end)) return null
+  return `${roomId}|${start}|${end}`
+}
+
+const toTimeOnlyKey = (startDatetime, endDatetime) => {
+  const start = new Date(startDatetime).getTime()
+  const end = new Date(endDatetime).getTime()
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  return `${start}|${end}`
+}
 
 const getCurrentUser = () => {
   try {
@@ -223,18 +252,96 @@ const getMonthRange = (dateString) => {
   return { from, to }
 }
 
+const toYearMonth = (dateString) => {
+  const [y, m] = dateString.split('-').map(Number)
+  return `${y}-${String(m).padStart(2, '0')}`
+}
+
+const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
+  try {
+    const yearMonth = toYearMonth(dateString)
+    const recruitmentsRes = await recruitmentApi.getRecruitments({ page: 0, size: 200 })
+    const recruitments = Array.isArray(recruitmentsRes?.data?.data) ? recruitmentsRes.data.data : []
+
+    const scheduleResults = await Promise.allSettled(
+      recruitments.map((r) => recruitmentApi.getInterviewSchedules(r.id, yearMonth))
+    )
+
+    const nextMap = {}
+    const timeOnlyBucket = {}
+    scheduleResults.forEach((result, idx) => {
+      if (result.status !== 'fulfilled') return
+      const recruitment = recruitments[idx]
+      const schedules = Array.isArray(result.value?.data?.data) ? result.value.data.data : []
+      schedules.forEach((item) => {
+        const scheduleId = Number(item?.id)
+        const startRaw = item?.scheduledAt || item?.startDateTime || item?.startDatetime || item?.startAt
+        if (!startRaw) return
+        const startDate = new Date(startRaw)
+        if (Number.isNaN(startDate.getTime())) return
+        const duration = Number(item?.durationMinutes || 60)
+        const endRaw = item?.endDateTime || item?.endDatetime || item?.endAt
+        const endDate = endRaw ? new Date(endRaw) : new Date(startDate.getTime() + duration * 60000)
+        const stageTitle = String(item?.title || '').trim()
+        const recruitmentTitle = String(recruitment?.title || '').trim()
+        const mergedTitle = [recruitmentTitle, stageTitle].filter(Boolean).join(' - ') || '면접 일정'
+        if (Number.isFinite(scheduleId)) {
+          nextMap[`schedule:${scheduleId}`] = mergedTitle
+        }
+
+        const roomAndTimeKey = toDateTimeKey(
+          item?.meetingRoomId || item?.roomId || item?.meeting_room_id,
+          startDate,
+          endDate
+        )
+        if (roomAndTimeKey) {
+          nextMap[roomAndTimeKey] = mergedTitle
+          return
+        }
+
+        const timeOnlyKey = toTimeOnlyKey(startDate, endDate)
+        if (!timeOnlyKey) return
+        if (!timeOnlyBucket[timeOnlyKey]) timeOnlyBucket[timeOnlyKey] = new Set()
+        timeOnlyBucket[timeOnlyKey].add(mergedTitle)
+      })
+    })
+
+    Object.entries(timeOnlyBucket).forEach(([key, titles]) => {
+      if (titles.size === 1) {
+        nextMap[key] = [...titles][0]
+      }
+    })
+
+    interviewReservationTitleMap.value = nextMap
+  } catch (error) {
+    interviewReservationTitleMap.value = {}
+    console.error('면접 예약 제목 매핑 조회 실패:', error)
+  }
+}
+
 const toViewBookingFromApi = (reservation) => {
   const reservationId = reservation?.id
+  const scheduleId = Number(reservation?.interviewScheduleId)
   const titleFromApi =
     reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
   const titleFromLocal = reservationTitleMap.value[String(reservationId)]
+  const roomAndTimeKey = toDateTimeKey(reservation?.meetingRoomId, reservation?.startDatetime, reservation?.endDatetime)
+  const timeOnlyKey = toTimeOnlyKey(reservation?.startDatetime, reservation?.endDatetime)
+  const titleFromScheduleId = Number.isFinite(scheduleId)
+    ? interviewReservationTitleMap.value[`schedule:${scheduleId}`]
+    : null
+  const titleFromLocalInterview = roomAndTimeKey ? interviewSlotTitleMap.value[roomAndTimeKey] : null
+  const titleFromInterview =
+    titleFromScheduleId ||
+    (roomAndTimeKey ? interviewReservationTitleMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationTitleMap.value[timeOnlyKey] : null)
 
   return {
     id: `b-${reservationId}`,
     serverId: reservationId,
     roomId: `r-${reservation.meetingRoomId}`,
     roomServerId: reservation.meetingRoomId,
-    title: titleFromApi || titleFromLocal || '회의실 예약',
+    title: titleFromLocalInterview || titleFromInterview || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
     organizer: resolveOrganizerName(reservation),
     attendees: [],
@@ -258,6 +365,7 @@ const loadRoomsFromApi = async () => {
 
 const loadBookingsFromApi = async (dateString = dateValue.value) => {
   try {
+    loadInterviewSlotTitleMap()
     const { from, to } = getMonthRange(dateString)
     const response = await meetingRoomApi.listReservations({
       fromDatetime: toLocalDateTime(from),
@@ -275,6 +383,8 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
 
 onMounted(async () => {
   loadReservationTitleMap()
+  loadInterviewSlotTitleMap()
+  await loadInterviewReservationTitles()
   await loadRoomsFromApi()
   await loadBookingsFromApi()
 })
@@ -282,6 +392,7 @@ onMounted(async () => {
 watch(
   dateValue,
   async () => {
+    await loadInterviewReservationTitles()
     await loadBookingsFromApi()
   }
 )
