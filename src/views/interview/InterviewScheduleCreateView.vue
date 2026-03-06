@@ -109,6 +109,11 @@ const parseCapacityRange = (capacityText) => {
   return Number.isFinite(one) && one > 0 ? [1, one] : [1, Number.MAX_SAFE_INTEGER]
 }
 
+const canUseRoomByHeadcount = (capacityText, totalPeople) => {
+  const [, maxCapacity] = parseCapacityRange(capacityText)
+  return totalPeople <= maxCapacity
+}
+
 const meetingRoomBusySlots = ref([])
 const interviewerBusySlots = ref([])
 
@@ -344,8 +349,7 @@ const confirmSchedule = async (memo) => {
     return
   }
   const totalParticipants = interviewerIds.length + applicantIds.length
-  const [minCapacity, maxCapacity] = parseCapacityRange(selectedRoom.value.capacity)
-  if (totalParticipants < minCapacity || totalParticipants > maxCapacity) {
+  if (!canUseRoomByHeadcount(selectedRoom.value.capacity, totalParticipants)) {
     openModal({
       title: '일정 확정 실패',
       message: `선택한 회의실 정원(${selectedRoom.value.capacity})과 면접 인원(${totalParticipants}명)이 맞지 않습니다.`,
@@ -413,8 +417,7 @@ const handleAutoAssign = ({ useTimeRange, start }) => {
   const currentMin = now.getHours() * 60 + now.getMinutes()
 
   const candidateRooms = rooms.value.filter((room) => {
-    const [min, max] = parseCapacityRange(room.capacity)
-    return totalPeople >= min && totalPeople <= max
+    return canUseRoomByHeadcount(room.capacity, totalPeople)
   })
 
   for (const day of weekDays.value) {
@@ -453,12 +456,10 @@ watch([selectedRoomId, interviewers, applicants], async () => {
   const total = interviewers.value.length + applicants.value.length
   const room = rooms.value.find((r) => Number(r.id) === Number(selectedRoomId.value))
   if (!room) return
-  const [min, max] = parseCapacityRange(room.capacity)
-  if (total < min || total > max) {
+  if (!canUseRoomByHeadcount(room.capacity, total)) {
     openModal({ title: '회의실 변경', message: '인원 수에 맞는 회의실로 자동 변경합니다.', type: 'warning' })
     const available = rooms.value.find((r) => {
-      const [a, b] = parseCapacityRange(r.capacity)
-      return total >= a && total <= b
+      return canUseRoomByHeadcount(r.capacity, total)
     })
     if (available) selectedRoomId.value = available.id
   }
