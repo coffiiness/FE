@@ -26,13 +26,15 @@ const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const isSuccessModalOpen = ref(false)
+const isErrorModalOpen = ref(false)
+const errorMessage = ref('')
 const isDetailModalOpen = ref(false)
 const isDisconnectConfirmModalOpen = ref(false)
 const isDisconnectSuccessModalOpen = ref(false)
 
 // Store
 const scheduleStore = useScheduleStore()
-const { schedules: allSchedules } = storeToRefs(scheduleStore)
+const { schedules: allSchedules, loading } = storeToRefs(scheduleStore)
 const { getToday } = scheduleStore
 
 // 초기값: 진짜 오늘 날짜로 설정
@@ -44,15 +46,38 @@ const route = useRoute()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 
-// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임) - Store로 이동됨
+// [유틸] 현재 뷰 기준으로 API 조회 범위 계산
+const getVisibleRange = () => {
+  const curr = new Date(selectedDate.value)
+  const year = curr.getFullYear()
+  const month = curr.getMonth()
+  // 월 뷰: 이전달 마지막주 ~ 다음달 첫주까지 포함
+  const firstDay = new Date(year, month, 1)
+  const startOffset = firstDay.getDay()
+  const start = new Date(firstDay)
+  start.setDate(start.getDate() - startOffset)
+
+  const lastDay = new Date(year, month + 1, 0)
+  const endOffset = 6 - lastDay.getDay()
+  const end = new Date(lastDay)
+  end.setDate(end.getDate() + endOffset)
+
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { startDate: fmt(start), endDate: fmt(end) }
+}
+
+const loadSchedules = async () => {
+  const { startDate, endDate } = getVisibleRange()
+  await scheduleStore.fetchSchedules(startDate, endDate)
+}
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
 const upcomingEvents = computed(() => {
   const today = getToday()
   return allSchedules.value
-      .filter(e => e.date >= today && e.type === 'INTERVIEW') // 오늘 포함 미래의 면접 일정만 필터링
+      .filter(e => e.date >= today)
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
-      .slice(0, 3) // 최대 3개
+      .slice(0, 3)
 })
 
 // [월간 뷰용] 동적 캘린더 데이터 생성
@@ -208,31 +233,31 @@ const getEventStyle = (event) => {
 
 const getEventClass = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
     case 'MEETING': return 'bg-amber-50 text-amber-700 border-amber-100'
-    case 'BUSINESS_TRIP': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    case 'BUSINESS': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
     case 'VACATION': return 'bg-rose-50 text-rose-700 border-rose-100'
-    default: return 'bg-slate-50 text-slate-700 border-slate-200'
+    case 'OTHERS': return 'bg-slate-50 text-slate-700 border-slate-200'
+    default: return 'bg-indigo-50 text-indigo-700 border-indigo-100'
   }
 }
 
 const getEventClassWeek = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-600 text-white border-indigo-800'
     case 'MEETING': return 'bg-amber-100 text-amber-800 border-amber-400'
-    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
+    case 'BUSINESS': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
     case 'VACATION': return 'bg-rose-100 text-rose-800 border-rose-400'
-    default: return 'bg-slate-100 text-slate-800 border-slate-400'
+    case 'OTHERS': return 'bg-slate-100 text-slate-800 border-slate-400'
+    default: return 'bg-indigo-600 text-white border-indigo-800'
   }
 }
 
 const getEventClassList = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-100 text-indigo-600'
     case 'MEETING': return 'bg-amber-100 text-amber-600'
-    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-600'
+    case 'BUSINESS': return 'bg-emerald-100 text-emerald-600'
     case 'VACATION': return 'bg-rose-100 text-rose-600'
-    default: return 'bg-slate-100 text-slate-600'
+    case 'OTHERS': return 'bg-slate-100 text-slate-600'
+    default: return 'bg-indigo-100 text-indigo-600'
   }
 }
 
@@ -259,11 +284,14 @@ const mergeAcceptedSchedules = (items) => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadSchedules()
+
   const scheduleId = Number(route.query.scheduleId)
-  if (Number.isNaN(scheduleId)) return
-  const target = allSchedules.value.find((e) => e.id === scheduleId)
-  if (target) openDetailModal(target)
+  if (!Number.isNaN(scheduleId)) {
+    const target = allSchedules.value.find((e) => e.id === scheduleId)
+    if (target) openDetailModal(target)
+  }
 })
 
 watch(
@@ -272,6 +300,14 @@ watch(
     mergeAcceptedSchedules(value)
   },
   { deep: true, immediate: true }
+)
+
+// 날짜/뷰 변경 시 API 재조회
+watch(
+  () => selectedDate.value,
+  async () => {
+    await loadSchedules()
+  }
 )
 
 const openCreateForm = (date = null) => {
@@ -286,16 +322,24 @@ const openEditForm = (event) => {
   isFormModalOpen.value = true
 }
 
-const handleSave = (formData) => {
-  if (formData.id) {
-    scheduleStore.updateSchedule(formData)
-  } else {
-    scheduleStore.addSchedule(formData)
+const handleSave = async (formData) => {
+  try {
+    if (formData.id) {
+      await scheduleStore.updateSchedule(formData.id, formData)
+    } else {
+      await scheduleStore.createSchedule(formData)
+    }
+    isFormModalOpen.value = false
+    await loadSchedules()
+    setTimeout(() => {
+      isSuccessModalOpen.value = true
+    }, 300)
+  } catch (err) {
+    console.error('일정 저장 실패:', err)
+    isFormModalOpen.value = false
+    errorMessage.value = '일정 저장에 실패했습니다. 다시 시도해 주세요.'
+    isErrorModalOpen.value = true
   }
-  isFormModalOpen.value = false
-  setTimeout(() => {
-    isSuccessModalOpen.value = true
-  }, 300)
 }
 
 const openDeleteConfirm = (id) => {
@@ -304,13 +348,22 @@ const openDeleteConfirm = (id) => {
   isDeleteModalOpen.value = true
 }
 
-const confirmDelete = () => {
-  if (targetDeleteId.value) {
-    scheduleStore.deleteSchedule(targetDeleteId.value)
+const confirmDelete = async () => {
+  try {
+    if (targetDeleteId.value) {
+      await scheduleStore.deleteSchedule(targetDeleteId.value)
+    }
+    isDeleteModalOpen.value = false
+    isFormModalOpen.value = false
+    targetDeleteId.value = null
+    await loadSchedules()
+  } catch (err) {
+    console.error('일정 삭제 실패:', err)
+    isDeleteModalOpen.value = false
+    targetDeleteId.value = null
+    errorMessage.value = '일정 삭제에 실패했습니다. 다시 시도해 주세요.'
+    isErrorModalOpen.value = true
   }
-  isDeleteModalOpen.value = false
-  isFormModalOpen.value = false
-  targetDeleteId.value = null
 }
 
 // 면접관 응답 확인 연결
@@ -655,7 +708,8 @@ const confirmDisconnectGoogleCalendar = () => {
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
     <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
-    <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
+    <ConfirmModal :show="isSuccessModalOpen" title="일정 저장 완료" message="일정이 성공적으로 저장되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
+    <ConfirmModal :show="isErrorModalOpen" :title="'오류'" :message="errorMessage" confirmText="확인" type="danger" :showCancel="false" @confirm="isErrorModalOpen = false" @cancel="isErrorModalOpen = false" />
     
     <!-- 구글 캘린더 연동 해제 모달 -->
     <ConfirmModal 
