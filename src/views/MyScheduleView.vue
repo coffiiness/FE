@@ -9,7 +9,7 @@ import { useNotificationStore } from '@/stores/notification'
 import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { useRoomStore } from '@/stores/room'
+import { meetingRoomApi } from '@/api/meetingRoom'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -45,6 +45,7 @@ const targetDeleteId = ref(null)
 const route = useRoute()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
+const meetingRooms = ref([])
 
 // [유틸] 현재 뷰 기준으로 API 조회 범위 계산
 const getVisibleRange = () => {
@@ -285,7 +286,7 @@ const mergeAcceptedSchedules = (items) => {
 }
 
 onMounted(async () => {
-  await loadSchedules()
+  await Promise.all([loadSchedules(), loadMeetingRooms()])
 
   const scheduleId = Number(route.query.scheduleId)
   if (!Number.isNaN(scheduleId)) {
@@ -310,13 +311,15 @@ watch(
   }
 )
 
-const openCreateForm = (date = null) => {
+const openCreateForm = async (date = null) => {
+  await ensureMeetingRoomsLoaded()
   selectedDate.value = date || selectedDate.value
   selectedEventToEdit.value = null
   isFormModalOpen.value = true
 }
 
-const openEditForm = (event) => {
+const openEditForm = async (event) => {
+  await ensureMeetingRoomsLoaded()
   isDetailModalOpen.value = false
   selectedEventToEdit.value = event
   isFormModalOpen.value = true
@@ -374,15 +377,35 @@ const goToInterviewResponse = () => {
   router.push('/recruitment/interview/response')
 }
 
-// Room Store
-const roomStore = useRoomStore()
+const loadMeetingRooms = async () => {
+  try {
+    const response = await meetingRoomApi.list()
+    const data = response?.data?.data
+    meetingRooms.value = Array.isArray(data) ? data : []
+  } catch (error) {
+    console.error('회의실 목록 조회 실패:', error)
+    meetingRooms.value = []
+  }
+}
+
+const ensureMeetingRoomsLoaded = async () => {
+  if (meetingRooms.value.length > 0) return
+  await loadMeetingRooms()
+}
 
 const getRoomInfo = (schedule) => {
-  if (schedule.roomId) {
-    const r = roomStore.getRoomById(schedule.roomId)
-    if (r) return r
+  const roomId = Number(schedule?.roomId)
+  if (!Number.isFinite(roomId)) return null
+
+  const room = meetingRooms.value.find((item) => Number(item.id) === roomId)
+  if (!room) return null
+
+  return {
+    id: room.id,
+    name: room.name,
+    floor: room.location ?? room.floor ?? '-',
+    capacity: room.capacity
   }
-  return null
 }
 
 // Google Calendar 연동
@@ -707,7 +730,7 @@ const confirmDisconnectGoogleCalendar = () => {
     />
 
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
-    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" />
+    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" :roomOptions="meetingRooms" @close="isFormModalOpen = false" @save="handleSave" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
     <ConfirmModal :show="isSuccessModalOpen" title="일정 저장 완료" message="일정이 성공적으로 저장되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
     <ConfirmModal :show="isErrorModalOpen" :title="'오류'" :message="errorMessage" confirmText="확인" type="danger" :showCancel="false" @confirm="isErrorModalOpen = false" @cancel="isErrorModalOpen = false" />

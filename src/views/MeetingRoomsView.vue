@@ -6,6 +6,7 @@ import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
+import { scheduleApi } from '@/api/schedule'
 
 const handleRoomConfirm = (roomData) => {
   if (editingRoom.value) {
@@ -15,62 +16,7 @@ const handleRoomConfirm = (roomData) => {
   }
 }
 
-const defaultRooms = [
-  {
-    id: 'r1',
-    name: 'Orion-1',
-    capacity: 8,
-    floor: 7,
-    facilities: ['프로젝터', '화이트보드', 'WiFi'],
-    description: '채용 면접 전용 회의실',
-    color: '#14b8a6'
-  },
-  {
-    id: 'r2',
-    name: 'Nebula-3',
-    capacity: 6,
-    floor: 7,
-    facilities: ['모니터', '화상회의', '스피커'],
-    description: '디자인/기획 협업 공간',
-    color: '#10b981'
-  },
-  {
-    id: 'r3',
-    name: 'Astra-2',
-    capacity: 10,
-    floor: 3,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#6366f1'
-  },
-  {
-    id: 'r4',
-    name: 'Nova-5',
-    capacity: 12,
-    floor: 5,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#f59e0b'
-  },
-  {
-    id: 'r5',
-    name: 'Cosmo-1',
-    capacity: 4,
-    floor: 2,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#06b6d4'
-  },
-  {
-    id: 'r6',
-    name: 'Pulse-7',
-    capacity: 16,
-    floor: 9,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#ec4899'
-  }
-]
+const defaultRooms = []
 const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
 const toViewRoom = (room, index = 0) => ({
   id: `r-${room.id}`,
@@ -150,6 +96,8 @@ const toErrorText = (error) => {
   if (typeof payload === 'string') return payload
   if (typeof payload?.message === 'string') return payload.message
   if (typeof payload?.error === 'string') return payload.error
+  if (typeof payload?.error?.message === 'string') return payload.error.message
+  if (typeof payload?.error?.detail === 'string') return payload.error.detail
   if (typeof payload?.data === 'string') return payload.data
   if (Array.isArray(payload?.errors)) {
     const first = payload.errors[0]
@@ -185,12 +133,62 @@ const getMonthRange = (dateString) => {
   return { from, to }
 }
 
-const toViewBookingFromApi = (reservation) => ({
+const toDateKey = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+const toTimeKey = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+const toTimeSlotKey = (value) => {
+  const [hours = '00', minutes = '00'] = String(value).split(':')
+  return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`
+}
+const toScheduleKey = ({ roomId, date, startTime, endTime }) => `${Number(roomId)}|${date}|${toTimeSlotKey(startTime)}|${toTimeSlotKey(endTime)}`
+const toReservationKey = (reservation) => {
+  const start = new Date(reservation.startDatetime)
+  const end = new Date(reservation.endDatetime)
+
+  return toScheduleKey({
+    roomId: reservation.meetingRoomId,
+    date: toDateKey(start),
+    startTime: toTimeKey(start),
+    endTime: toTimeKey(end)
+  })
+}
+
+const loadScheduleTitlesByReservationKey = async ({ from, to }) => {
+  try {
+    const end = new Date(to)
+    end.setDate(end.getDate() - 1)
+
+    const response = await scheduleApi.getSchedules(toDateKey(from), toDateKey(end))
+    const data = response?.data?.data
+    const titleMap = new Map()
+
+    if (Array.isArray(data)) {
+      data.forEach((schedule) => {
+        const roomId = Number(schedule?.roomId)
+        if (!Number.isFinite(roomId)) return
+
+        const key = toScheduleKey({
+          roomId,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime
+        })
+        titleMap.set(key, schedule.title || '회의실 예약')
+      })
+    }
+
+    return titleMap
+  } catch (error) {
+    console.error('회의실 예약 일정 제목 조회 실패:', error)
+    return new Map()
+  }
+}
+
+const toViewBookingFromApi = (reservation, titleByReservationKey = new Map()) => ({
   id: `b-${reservation.id}`,
   serverId: reservation.id,
   roomId: `r-${reservation.meetingRoomId}`,
   roomServerId: reservation.meetingRoomId,
-  title: '회의실 예약',
+  title: titleByReservationKey.get(toReservationKey(reservation)) || '회의실 예약',
   description: '',
   organizer: resolveOrganizerName(reservation),
   attendees: [],
@@ -219,8 +217,9 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
       toDatetime: toLocalDateTime(to)
     })
     const data = response?.data?.data
+    const titleByReservationKey = await loadScheduleTitlesByReservationKey({ from, to })
     if (Array.isArray(data)) {
-      bookings.value = data.map(toViewBookingFromApi)
+      bookings.value = data.map((reservation) => toViewBookingFromApi(reservation, titleByReservationKey))
     }
   } catch (error) {
     const detail = toErrorText(error)
@@ -349,8 +348,9 @@ const handleCreateRoom = async (roomData) => {
     createdRoomName.value = roomData.name
     roomCreatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 생성 실패:', error)
-    openErrorModal('회의실 생성 실패', '회의실 생성에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 생성 실패:', detail, error)
+    openErrorModal('회의실 생성 실패', detail || '회의실 생성에 실패했습니다.')
   }
 }
 
@@ -380,8 +380,9 @@ const handleUpdateRoom = async (roomData) => {
     updatedRoomName.value = roomData.name
     roomUpdatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 수정 실패:', error)
-    openErrorModal('회의실 수정 실패', '회의실 수정에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 수정 실패:', detail, error)
+    openErrorModal('회의실 수정 실패', detail || '회의실 수정에 실패했습니다.')
   }
 }
 

@@ -8,7 +8,8 @@ import { storeToRefs } from 'pinia'
 const props = defineProps({
   isOpen: Boolean,
   initialDate: String,
-  initialData: { type: Object, default: null }
+  initialData: { type: Object, default: null },
+  roomOptions: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -46,6 +47,7 @@ const form = ref({
   endTime: '14:00',
   type: 'INTERVIEW',
   description: '',
+  roomId: null,
   attendees: []
 })
 
@@ -62,7 +64,7 @@ const scheduleTypes = [
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     if (props.initialData) {
-      form.value = { ...props.initialData, attendees: props.initialData.attendees || [] }
+      form.value = { ...props.initialData, roomId: props.initialData.roomId ?? null, attendees: props.initialData.attendees || [] }
     } else {
       form.value = {
         title: '',
@@ -71,6 +73,7 @@ watch(() => props.isOpen, (newVal) => {
         endTime: '14:00',
         type: 'MEETING',
         description: '',
+        roomId: null,
         attendees: []
       }
     }
@@ -92,8 +95,9 @@ const save = () => {
     validationModalOpen.value = true
     return
   }
-  // 타입 보정을 위해 복사본 생성
   const payload = { ...form.value }
+  const parsedRoomId = Number(payload.roomId)
+  payload.roomId = Number.isFinite(parsedRoomId) ? parsedRoomId : null
   emit('save', payload)
 }
 
@@ -157,6 +161,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                 <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">종료 시간</label>
                 <input v-model="form.endTime" type="time" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium text-center shadow-sm"> </div>
             </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">회의실 선택</label>
+            <select v-model="form.roomId" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium shadow-sm">
+              <option :value="null">선택 안 함</option>
+              <option v-for="room in roomOptions" :key="room.id" :value="room.id">
+                {{ room.name }} ({{ room.location ?? room.floor ?? '-' }}층 / {{ room.capacity }}명)
+              </option>
+            </select>
+            <p class="mt-1.5 text-[11px] text-slate-500">회의실을 선택해 일정을 생성하면 회의실 예약 캘린더에도 반영됩니다.</p>
           </div>
 
           <!-- 참석자 선택 -->
