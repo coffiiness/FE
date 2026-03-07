@@ -62,6 +62,32 @@ const openErrorModal = (title, message) => {
 const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(value)
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+const parseLocalDateTime = (value) => {
+  if (value instanceof Date) return new Date(value.getTime())
+  if (typeof value !== 'string') return new Date(value)
+
+  const matched = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (matched) {
+    const [, year, month, day, hour, minute, second = '00'] = matched
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      0
+    )
+  }
+  return new Date(value)
+}
 
 const getCurrentUser = () => {
   try {
@@ -141,8 +167,8 @@ const toTimeSlotKey = (value) => {
 }
 const toScheduleKey = ({ roomId, date, startTime, endTime }) => `${Number(roomId)}|${date}|${toTimeSlotKey(startTime)}|${toTimeSlotKey(endTime)}`
 const toReservationKey = (reservation) => {
-  const start = new Date(reservation.startDatetime)
-  const end = new Date(reservation.endDatetime)
+  const start = parseLocalDateTime(reservation.startDatetime)
+  const end = parseLocalDateTime(reservation.endDatetime)
 
   return toScheduleKey({
     roomId: reservation.meetingRoomId,
@@ -193,8 +219,8 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = new Map()) =>
   organizer: resolveOrganizerName(reservation),
   attendees: [],
   status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
-  startTime: new Date(reservation.startDatetime),
-  endTime: new Date(reservation.endDatetime)
+  startTime: parseLocalDateTime(reservation.startDatetime),
+  endTime: parseLocalDateTime(reservation.endDatetime)
 })
 
 const loadRoomsFromApi = async () => {
@@ -241,7 +267,7 @@ watch(
 
 const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
-  selectedDate.value = new Date(dateValue.value)
+  selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour
   bookingModalOpen.value = true
 }
@@ -260,8 +286,8 @@ const handleRoomClick = (room) => {
 
 const handleBookRoomClick = (room) => {
   selectedRoom.value = room
-  selectedDate.value = new Date(dateValue.value)
-  selectedHour.value = 9
+  selectedDate.value = parseDateOnly(dateValue.value)
+  selectedHour.value = null
   roomDetailOpen.value = false
 
   setTimeout(() => {
@@ -277,21 +303,11 @@ const handleBookingConfirm = async (booking) => {
       endDatetime: toLocalDateTime(booking.endTime)
     })
     const saved = response?.data?.data
-    if (!saved?.id) return
+    if (!saved?.id) {
+      throw new Error('예약 응답에 id가 없습니다.')
+    }
 
-    bookings.value.push({
-      id: `b-${saved.id}`,
-      serverId: saved.id,
-      roomId: selectedRoom.value.id,
-      roomServerId: selectedRoom.value.serverId,
-      title: booking.title || '회의실 예약',
-      description: booking.description || '',
-      organizer: booking.organizer || getCurrentUser()?.name || '',
-      attendees: booking.attendees || [],
-      status: 'confirmed',
-      startTime: new Date(saved.startDatetime),
-      endTime: new Date(saved.endDatetime)
-    })
+    await loadBookingsFromApi(dateValue.value)
     bookingModalOpen.value = false
     successModalOpen.value = true
   } catch (error) {
@@ -434,6 +450,7 @@ const openCreateRoom = () => {
           :is="Component"
           :rooms="rooms"
           :bookings="bookings"
+        :selectedDate="dateValue"
           :hours="hours"
           :dateValue="dateValue"
           :handlers="{
@@ -471,6 +488,7 @@ const openCreateRoom = () => {
         :open="roomDetailOpen"
         :room="selectedRoom"
         :bookings="bookings"
+        :selectedDate="dateValue"
         @close="roomDetailOpen = false"
         @bookRoom="handleBookRoomClick"
         @bookingClick="handleBookingClick"
@@ -553,3 +571,7 @@ const openCreateRoom = () => {
     />
   </div>
 </template>
+
+
+
+

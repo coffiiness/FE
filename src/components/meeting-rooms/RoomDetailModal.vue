@@ -2,7 +2,8 @@
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
-  bookings: { type: Array, required: true }
+  bookings: { type: Array, required: true },
+  selectedDate: { type: String, default: '' }
 })
 
 const emit = defineEmits(['close', 'bookRoom', 'bookingClick'])
@@ -13,16 +14,24 @@ const formatTime = (date) => {
   return `${h}:${m}`
 }
 
-const todayBookings = () => {
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date()
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+
+const visibleBookings = () => {
   if (!props.room) return []
-  const today = new Date()
+  const targetDate = props.selectedDate ? parseDateOnly(props.selectedDate) : new Date()
   return props.bookings
     .filter(
       (b) =>
         b.roomId === props.room.id &&
-        b.startTime.getFullYear() === today.getFullYear() &&
-        b.startTime.getMonth() === today.getMonth() &&
-        b.startTime.getDate() === today.getDate()
+        b.startTime.getFullYear() === targetDate.getFullYear() &&
+        b.startTime.getMonth() === targetDate.getMonth() &&
+        b.startTime.getDate() === targetDate.getDate()
     )
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
@@ -60,14 +69,14 @@ const todayBookings = () => {
 
           <div>
             <div class="flex items-center justify-between mb-3">
-              <h4 class="font-semibold text-slate-900">오늘의 일정</h4>
+              <h4 class="font-semibold text-slate-900">선택 날짜 일정</h4>
               <button class="px-3 py-1 bg-emerald-600 text-white rounded text-sm" @click="emit('bookRoom', room)">
                 예약하기
               </button>
             </div>
-            <div v-if="todayBookings().length" class="space-y-2">
+            <div v-if="visibleBookings().length" class="space-y-2">
               <div
-                v-for="booking in todayBookings()"
+                v-for="booking in visibleBookings()"
                 :key="booking.id"
                 class="p-4 bg-gray-50 rounded-lg border hover:border-emerald-500 transition-colors cursor-pointer"
                 @click="emit('bookingClick', booking)"
@@ -80,7 +89,7 @@ const todayBookings = () => {
               </div>
             </div>
             <div v-else class="text-center py-6 text-slate-800 bg-gray-50 rounded-lg">
-              오늘 예약된 일정이 없습니다
+              선택한 날짜에 예약된 일정이 없습니다
             </div>
           </div>
       </div>
@@ -90,3 +99,5 @@ const todayBookings = () => {
     </div>
   </div>
 </template>
+
+
