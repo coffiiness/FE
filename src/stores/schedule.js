@@ -1,8 +1,33 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { scheduleApi } from '@/api/schedule'
+import { workspaceApi } from '@/api/workspace'
 
 export const useScheduleStore = defineStore('schedule_v2', () => {
+  const ensureWorkspaceId = async ({ forceRefresh = false } = {}) => {
+    const currentWorkspaceId = localStorage.getItem('workspaceId')
+    if (!forceRefresh && currentWorkspaceId) {
+      return currentWorkspaceId
+    }
+
+    try {
+      const workspaceResponse = await workspaceApi.getMyWorkspace()
+      const resolvedWorkspaceId = workspaceResponse?.data?.data?.workspaceId || null
+      if (resolvedWorkspaceId) {
+        localStorage.setItem('workspaceId', resolvedWorkspaceId)
+        return resolvedWorkspaceId
+      }
+    } catch (_) {
+      // fall through to workspace check below
+    }
+
+    if (!forceRefresh && currentWorkspaceId) {
+      return currentWorkspaceId
+    }
+
+    localStorage.removeItem('workspaceId')
+    throw new Error('Workspace is missing. Create or join a workspace first.')
+  }
 
   const getToday = () => {
     const d = new Date()
@@ -15,7 +40,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   const formatTime = (timeStr) => {
     if (!timeStr) return ''
     const [hour, min] = timeStr.split(':').map(Number)
-    const ampm = hour >= 12 ? '오후' : '오전'
+    const ampm = hour >= 12 ? 'PM' : 'AM'
     const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
     return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
   }
@@ -24,10 +49,6 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   const loading = ref(false)
   const error = ref(null)
 
-  /**
-   * BE 응답 → FE 내부 형식 변환
-   * BE: { id, title, date("yyyy-MM-dd"), startTime("HH:mm"), endTime("HH:mm"), type, description, roomId, isBusy }
-   */
   const normalizeSchedule = (item) => {
     return {
       id: item.id,
@@ -43,14 +64,18 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     }
   }
 
-  /**
-   * FE form → BE request 변환
-   * FE: { title, date("yyyy-MM-dd"), startTime("HH:mm"), endTime("HH:mm"), type, description, attendeeIds }
-   * BE: { title, description, type, startTime(LocalDateTime), endTime(LocalDateTime), isAllDay, roomId, isBusy, attendeeIds }
-   */
   const buildRequest = (formData) => {
-    const startDateTime = `${formData.date}T${formData.startTime}:00`
-    const endDateTime = `${formData.date}T${formData.endTime}:00`
+    const toDateTime = (date, timeValue) => {
+      if (!timeValue) return null
+      const parts = String(timeValue).split(':')
+      if (parts.length >= 3) {
+        return `${date}T${parts[0]}:${parts[1]}:${parts[2]}`
+      }
+      return `${date}T${parts[0]}:${parts[1]}:00`
+    }
+
+    const startDateTime = toDateTime(formData.date, formData.startTime)
+    const endDateTime = toDateTime(formData.date, formData.endTime)
 
     return {
       title: formData.title,
@@ -69,13 +94,14 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     loading.value = true
     error.value = null
     try {
+      await ensureWorkspaceId()
       const res = await scheduleApi.getSchedules(startDate, endDate)
       const data = res.data?.data || res.data || []
       schedules.value = Array.isArray(data)
         ? data.map(normalizeSchedule)
         : []
     } catch (err) {
-      console.error('일정 조회 실패:', err)
+      console.error('Failed to fetch schedules:', err)
       error.value = err
       schedules.value = []
     } finally {
@@ -84,20 +110,23 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   }
 
   const createSchedule = async (formData) => {
+    await ensureWorkspaceId({ forceRefresh: true })
     const request = buildRequest(formData)
     await scheduleApi.createSchedule(request)
   }
 
   const updateSchedule = async (scheduleId, formData) => {
+    await ensureWorkspaceId({ forceRefresh: true })
     const request = buildRequest(formData)
     await scheduleApi.updateSchedule(scheduleId, request)
   }
 
   const deleteSchedule = async (scheduleId) => {
+    await ensureWorkspaceId({ forceRefresh: true })
     await scheduleApi.deleteSchedule(scheduleId)
   }
 
-  const addScheduleLocal = (schedule) => {
+  const addSchedule = (schedule) => {
     schedules.value.push(normalizeSchedule(schedule))
   }
 
@@ -111,6 +140,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     createSchedule,
     updateSchedule,
     deleteSchedule,
-    addScheduleLocal
+    addSchedule,
+    addScheduleLocal: addSchedule
   }
 })

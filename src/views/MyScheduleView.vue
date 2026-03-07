@@ -337,7 +337,8 @@ const handleSave = async (formData) => {
   } catch (err) {
     console.error('일정 저장 실패:', err)
     isFormModalOpen.value = false
-    errorMessage.value = '일정 저장에 실패했습니다. 다시 시도해 주세요.'
+    const apiMessage = err?.response?.data?.error?.message || err?.message
+    errorMessage.value = apiMessage || '일정 저장에 실패했습니다. 다시 시도해 주세요.'
     isErrorModalOpen.value = true
   }
 }
@@ -706,7 +707,7 @@ const confirmDisconnectGoogleCalendar = () => {
     />
 
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
-    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
+    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" />
     <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
     <ConfirmModal :show="isSuccessModalOpen" title="일정 저장 완료" message="일정이 성공적으로 저장되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
     <ConfirmModal :show="isErrorModalOpen" :title="'오류'" :message="errorMessage" confirmText="확인" type="danger" :showCancel="false" @confirm="isErrorModalOpen = false" @cancel="isErrorModalOpen = false" />

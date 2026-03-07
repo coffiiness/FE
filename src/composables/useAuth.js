@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
+import { workspaceApi } from '@/api/workspace'
 import router from '@/router'
 
 const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
@@ -15,11 +16,23 @@ export function useAuth() {
     localStorage.setItem('user', JSON.stringify(userData))
     user.value = userData
 
-    if (workspaceId) {
-      localStorage.setItem('workspaceId', workspaceId)
+    let resolvedWorkspaceId = workspaceId
+    if (!resolvedWorkspaceId) {
+      try {
+        const workspaceResponse = await workspaceApi.getMyWorkspace()
+        resolvedWorkspaceId = workspaceResponse?.data?.data?.workspaceId || null
+      } catch {
+        resolvedWorkspaceId = null
+      }
     }
 
-    return response.data.data
+    if (resolvedWorkspaceId) {
+      localStorage.setItem('workspaceId', resolvedWorkspaceId)
+    } else {
+      localStorage.removeItem('workspaceId')
+    }
+
+    return { ...response.data.data, workspaceId: resolvedWorkspaceId }
   }
 
   const signup = async (email, password, name) => {
