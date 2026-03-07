@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
@@ -53,6 +53,7 @@ const form = ref({
 
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
+const validationMessage = ref('')
 
 const scheduleTypes = [
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
@@ -90,14 +91,41 @@ const addAttendee = () => {
 
 const removeAttendee = (index) => { form.value.attendees.splice(index, 1) }
 
+const openValidationModal = (message) => {
+  validationMessage.value = message
+  validationModalOpen.value = true
+}
+
 const save = () => {
-  if (!form.value.title) {
-    validationModalOpen.value = true
+  if (!form.value.title?.trim()) {
+    openValidationModal('일정 제목을 입력해주세요.')
     return
   }
+
+  if (!form.value.date) {
+    openValidationModal('일정 날짜를 입력해주세요.')
+    return
+  }
+
+  if (!form.value.startTime || !form.value.endTime) {
+    openValidationModal('시작 시간과 종료 시간을 모두 입력해주세요.')
+    return
+  }
+
+  if (form.value.startTime >= form.value.endTime) {
+    openValidationModal('종료 시간은 시작 시간보다 늦어야 합니다.')
+    return
+  }
+
   const payload = { ...form.value }
-  const parsedRoomId = Number(payload.roomId)
-  payload.roomId = Number.isFinite(parsedRoomId) ? parsedRoomId : null
+  const rawRoomId = payload.roomId
+  if (rawRoomId === null || rawRoomId === '' || rawRoomId === undefined) {
+    payload.roomId = null
+  } else {
+    const parsedRoomId = Number(rawRoomId)
+    payload.roomId = Number.isFinite(parsedRoomId) && parsedRoomId > 0 ? parsedRoomId : null
+  }
+
   emit('save', payload)
 }
 
@@ -269,7 +297,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
       :show="validationModalOpen"
       type="warning"
       title="입력 확인"
-      message="일정 제목을 입력해주세요."
+      :message="validationMessage"
       confirmText="확인"
       :showCancel="false"
       @confirm="validationModalOpen = false"
@@ -283,3 +311,4 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
 </style>
+

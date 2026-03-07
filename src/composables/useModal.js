@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+﻿import { ref } from 'vue'
 
 /**
  * ConfirmModal과 연동되는 알림/확인 모달 상태 관리 composable.
@@ -42,12 +42,14 @@ export function useModal() {
     confirmText: '확인',
     cancelText: '취소',
     onConfirm: () => {},
+    onCancel: () => {},
   })
 
   /**
    * 모달 열기
    * @param {{ title: string, message: string, type?: string, showCancel?: boolean,
-   *           confirmText?: string, cancelText?: string, onConfirm?: Function }} opts
+   *           confirmText?: string, cancelText?: string,
+   *           onConfirm?: Function, onCancel?: Function }} opts
    */
   const openModal = (opts) => {
     modal.value = {
@@ -56,17 +58,29 @@ export function useModal() {
       confirmText: '확인',
       cancelText: '취소',
       onConfirm: () => {},
+      onCancel: () => {},
       ...opts,
     }
   }
 
-  const onModalConfirm = () => {
-    modal.value.onConfirm()
+  const onModalConfirm = async () => {
+    const handler = modal.value.onConfirm
     modal.value.show = false
+    try {
+      await Promise.resolve(handler?.())
+    } catch (error) {
+      console.error('모달 확인 처리 중 오류가 발생했습니다:', error)
+    }
   }
 
-  const onModalCancel = () => {
+  const onModalCancel = async () => {
+    const handler = modal.value.onCancel
     modal.value.show = false
+    try {
+      await Promise.resolve(handler?.())
+    } catch (error) {
+      console.error('모달 취소 처리 중 오류가 발생했습니다:', error)
+    }
   }
 
   return { modal, openModal, onModalConfirm, onModalCancel }
