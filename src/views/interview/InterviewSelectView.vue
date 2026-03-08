@@ -81,7 +81,6 @@ const selectStep = (step) => {
 */
 const searchInterviewer = ref('')
 const selectedInterviewers = ref([])
-const selectedInterviewerCount = ref(1)
 
 const selectedFilterTeams = ref([])
 
@@ -147,14 +146,6 @@ const allTeams = computed(() => {
     )
 })
 
-const interviewerCountOptions = computed(() => {
-  return Array.from({ length: allowedInterviewers.value.length }, (_, i) => i + 1)
-})
-
-const canSelectMoreInterviewers = computed(() => {
-  return selectedInterviewers.value.length < selectedInterviewerCount.value
-})
-
 const filteredInterviewers = computed(() => {
   // 1. 팀 필터 적용
   let filtered = allowedInterviewers.value
@@ -179,7 +170,6 @@ const toggleInterviewer = (member) => {
   if (idx > -1) {
     selectedInterviewers.value.splice(idx, 1)
   } else {
-    if (!canSelectMoreInterviewers.value) return
     selectedInterviewers.value.push(member)
   }
 }
@@ -209,27 +199,6 @@ watch(
   },
   { immediate: true }
 )
-
-watch(
-  interviewerCountOptions,
-  (options) => {
-    if (!options.length) {
-      selectedInterviewerCount.value = 0
-      selectedInterviewers.value = []
-      return
-    }
-    if (!options.includes(selectedInterviewerCount.value)) {
-      selectedInterviewerCount.value = options.length
-    }
-  },
-  { immediate: true }
-)
-
-watch(selectedInterviewerCount, (count) => {
-  if (selectedInterviewers.value.length > count) {
-    selectedInterviewers.value = selectedInterviewers.value.slice(0, count)
-  }
-})
 
 /* 
   3. 지원자 데이터 (Mock + Store 연동 예시)
@@ -270,10 +239,7 @@ const removeApplicant = (id) => {
 /* 네비게이션 */
 const canProceed = computed(() => {
   if (currentStep.value === 1) return !!selectedStep.value
-  if (currentStep.value === 2) {
-    return selectedInterviewers.value.length > 0 &&
-      selectedInterviewers.value.length <= selectedInterviewerCount.value
-  }
+  if (currentStep.value === 2) return selectedInterviewers.value.length > 0
   if (currentStep.value === 3) return selectedApplicants.value.length > 0
   return false
 })
@@ -396,20 +362,11 @@ onMounted(() => {
       <!-- Step 2: 면접관 선택 -->
       <div v-else-if="currentStep === 2" class="step-container animate-fade-in">
         <h2 class="step-title">면접관을 선택해주세요</h2>
-        <p class="step-desc">공고 생성 시 지정한 면접관만 표시됩니다. 선택 인원을 먼저 정해주세요.</p>
+        <p class="step-desc">공고 생성 시 지정한 면접관만 표시됩니다.</p>
 
         <div class="mt-4 mb-2 flex items-center gap-3">
-          <span class="text-xs font-bold text-slate-700">선택 인원</span>
-          <select
-            v-model.number="selectedInterviewerCount"
-            class="px-3 py-1.5 rounded-lg text-sm font-bold border border-slate-300 bg-white focus:outline-none focus:border-brand-500"
-          >
-            <option v-for="count in interviewerCountOptions" :key="count" :value="count">
-              {{ count }}명
-            </option>
-          </select>
           <span class="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded-md px-2 py-1">
-            {{ selectedInterviewers.length }} / {{ selectedInterviewerCount }}명 선택 (최대)
+            선택된 인원 {{ selectedInterviewers.length }}명
           </span>
         </div>
 
@@ -449,7 +406,7 @@ onMounted(() => {
                 class="flex items-center p-3 rounded-lg cursor-pointer transition-colors"
                 :class="selectedInterviewers.find(i => i.id === member.id)
                   ? 'bg-brand-50 border border-brand-200'
-                  : (!canSelectMoreInterviewers ? 'opacity-50 border border-transparent' : 'hover:bg-slate-50 border border-transparent')"
+                  : 'hover:bg-slate-50 border border-transparent'"
               >
                 <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 mr-3">
                   {{ member.name[0] }}
