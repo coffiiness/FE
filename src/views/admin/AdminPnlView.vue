@@ -1,32 +1,52 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
+import { adminApi } from '@/api/admin'
 
-// Mock data — 추후 adminApi.getPnlSummary() 로 교체
 const summary = ref({
-  totalRevenue: 12430000,
-  revenueGrowth: 12.3,
-  totalCost: 8250000,
-  costGrowth: 3.1,
-  operatingProfit: 4180000,
-  operatingMargin: 33.6
+  totalRevenue: 0, revenueGrowth: 0, totalCost: 0,
+  costGrowth: 0, operatingProfit: 0, operatingMargin: 0
 })
 
 const pnlData = ref({
-  columns: ['2024.12', '2025.01', '2025.02'],
-  revenue: {
-    enterprise: [9200000, 10500000, 12430000],
-    business: [0, 0, 0],
-    total: [9200000, 10500000, 12430000]
-  },
-  cost: {
-    labor: [4500000, 4500000, 4500000],
-    infra: [1800000, 1950000, 2100000],
-    marketing: [900000, 1100000, 1200000],
-    etc: [350000, 450000, 450000],
-    total: [7550000, 8000000, 8250000]
-  },
-  operatingProfit: [1650000, 2500000, 4180000]
+  columns: [],
+  revenue: { total: [] },
+  cost: { labor: [], infra: [], marketing: [], etc: [], total: [] },
+  operatingProfit: []
 })
+
+const loading = ref(false)
+
+const fetchAll = async () => {
+  loading.value = true
+  try {
+    const now = new Date()
+    const monthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const [summaryRes, reportRes] = await Promise.all([
+      adminApi.getPnlSummary(monthParam),
+      adminApi.getPnlReport()
+    ])
+    summary.value = summaryRes.data.data
+    const r = reportRes.data.data
+    pnlData.value = {
+      columns: r.columns || [],
+      revenue: { total: r.revenueTotal || [] },
+      cost: {
+        labor: r.laborCost || [],
+        infra: r.infraCost || [],
+        marketing: r.marketingCost || [],
+        etc: r.otherCost || [],
+        total: r.costTotal || []
+      },
+      operatingProfit: r.operatingProfit || []
+    }
+  } catch (e) {
+    console.error('P&L 데이터 로드 실패', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchAll)
 
 const getGrowth = (arr) => {
   if (!arr || arr.length < 2) return null
@@ -95,7 +115,7 @@ const formatGrowth = (growth) => {
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
       <div class="p-6 border-b border-gray-100 flex items-center justify-between">
         <h3 class="text-lg font-bold text-gray-800">월별 손익계산서</h3>
-        <span class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">비용 항목은 MOCK DATA</span>
+        <span v-if="loading" class="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">로딩 중...</span>
       </div>
 
       <div class="overflow-x-auto">
@@ -112,20 +132,8 @@ const formatGrowth = (growth) => {
             <tr class="border-b border-gray-100 bg-slate-50/30">
               <td class="px-6 py-3 font-bold text-gray-800" colspan="5">매출</td>
             </tr>
-            <tr class="border-b border-gray-50">
-              <td class="px-6 py-3 pl-10 text-gray-600">구독 매출 (엔터프라이즈)</td>
-              <td v-for="(val, i) in pnlData.revenue.enterprise" :key="'re'+i" class="px-6 py-3 text-right text-gray-700">{{ formatWon(val) }}</td>
-              <td class="px-6 py-3 text-right font-medium" :class="growthClass(getGrowth(pnlData.revenue.enterprise))">
-                {{ formatGrowth(getGrowth(pnlData.revenue.enterprise)) }}
-              </td>
-            </tr>
-            <tr class="border-b border-gray-50">
-              <td class="px-6 py-3 pl-10 text-gray-600">구독 매출 (비즈니스)</td>
-              <td v-for="(val, i) in pnlData.revenue.business" :key="'rb'+i" class="px-6 py-3 text-right text-gray-700">{{ formatWon(val) }}</td>
-              <td class="px-6 py-3 text-right text-gray-400">—</td>
-            </tr>
             <tr class="border-b border-gray-200">
-              <td class="px-6 py-3 pl-10 font-semibold text-gray-800">매출 합계</td>
+              <td class="px-6 py-3 pl-10 font-semibold text-gray-800">구독 매출 합계</td>
               <td v-for="(val, i) in pnlData.revenue.total" :key="'rt'+i" class="px-6 py-3 text-right font-semibold text-gray-800">{{ formatWon(val) }}</td>
               <td class="px-6 py-3 text-right font-semibold" :class="growthClass(getGrowth(pnlData.revenue.total))">
                 {{ formatGrowth(getGrowth(pnlData.revenue.total)) }}

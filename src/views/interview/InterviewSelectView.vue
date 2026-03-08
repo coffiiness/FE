@@ -22,13 +22,34 @@ const jobId = Number(route.query.jobId)
   1. 채용 공고 & 전형 단계 데이터
 */
 const recruitment = computed(() => {
-  return jobs.value.find(j => j.id === jobId) || { title: '공고 정보를 불러올 수 없습니다.', funnel: [] }
+  const job = jobs.value.find(j => Number(j.id) === Number(jobId))
+  if (!job) {
+    return { title: '공고 정보를 불러올 수 없습니다.', stages: [], team: '' }
+  }
+  return {
+    ...job,
+    title: job.title || '공고 정보를 불러올 수 없습니다.',
+    stages: Array.isArray(job.stages) ? job.stages : [],
+    team: job.leadGroupName || job.team || ''
+  }
 })
 
-// "면접" 키워드가 포함된 단계만 필터링
+// API stages 기준으로 면접 단계만 필터링 (기존 funnel 형식도 호환)
 const interviewSteps = computed(() => {
-  if (!recruitment.value.funnel) return []
-  return recruitment.value.funnel.filter(s => s.step && s.step.includes('면접'))
+  if (Array.isArray(recruitment.value.stages) && recruitment.value.stages.length > 0) {
+    return recruitment.value.stages
+      .filter((s) => s?.stageType === 'INTERVIEW' || String(s?.stageName || '').includes('면접'))
+      .map((s) => ({
+        id: s.id,
+        step: s.stageName,
+        count: s.applicantCount || 0,
+        stageStep: s.stageStep
+      }))
+  }
+  if (Array.isArray(recruitment.value.funnel)) {
+    return recruitment.value.funnel.filter((s) => s.step && s.step.includes('면접'))
+  }
+  return []
 })
 
 const selectedStep = ref(null)
@@ -56,6 +77,26 @@ const allTeams = computed(() => {
 })
 
 const selectedFilterTeams = ref([])
+
+const recommendedInterviewerIds = computed(() => {
+  const explicitIds = Array.isArray(recruitment.value?.interviewerIds) ? recruitment.value.interviewerIds : []
+  const assignees = Array.isArray(recruitment.value?.assignees) ? recruitment.value.assignees : []
+  return new Set(
+    [...explicitIds, ...assignees.map((a) => a?.id)]
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id))
+  )
+})
+
+const recommendedInterviewerNames = computed(() => {
+  const explicitNames = Array.isArray(recruitment.value?.interviewers) ? recruitment.value.interviewers : []
+  const assignees = Array.isArray(recruitment.value?.assignees) ? recruitment.value.assignees : []
+  return new Set(
+    [...explicitNames, ...assignees.map((a) => a?.name)]
+      .map((name) => String(name || '').trim())
+      .filter(Boolean)
+  )
+})
 
 // 2-2. 팀 필터 토글
 const toggleTeamFilter = (teamId) => {
@@ -85,8 +126,12 @@ const allEmployees = computed(() => {
   organization.value.forEach(dept => {
     dept.teams.forEach(team => {
       team.members.forEach(member => {
-        // 공고의 팀과 일치하는지 확인 (추천용)
-        const isRecomm = recruitment.value.team && recruitment.value.team === team.name
+        const memberId = Number(member.id)
+        const memberName = String(member.name || '').trim()
+        const byAssignee = recommendedInterviewerIds.value.has(memberId) || recommendedInterviewerNames.value.has(memberName)
+        // 하위 호환: 기존 팀 기반 추천
+        const byTeam = recruitment.value.team && recruitment.value.team === team.name
+        const isRecomm = byAssignee || byTeam
         employees.push({
           ...member,
           deptName: dept.name,
@@ -106,7 +151,8 @@ const filteredInterviewers = computed(() => {
   let filtered = allEmployees.value
   
   if (selectedFilterTeams.value.length > 0) {
-      filtered = filtered.filter(e => selectedFilterTeams.value.includes(e.teamId))
+      // 추천 면접관은 팀 필터와 관계없이 항상 노출
+      filtered = filtered.filter(e => selectedFilterTeams.value.includes(e.teamId) || e.isRecommended)
   }
 
   // 2. 검색어 필터 적용
@@ -183,11 +229,16 @@ const goNext = () => {
   if (currentStep.value < 3) {
     currentStep.value++
   } else {
+    const stageText = selectedStep.value?.step || ''
+    const stepNo = Number(selectedStep.value?.stageStep || 1)
+    const round = stepNo >= 2 || stageText.includes('2차') ? 'SECOND' : 'FIRST'
     // 최종 완료 -> 일정 생성 페이지로 이동
     router.push({
       path: '/recruitment/interview/schedule',
       query: {
         recruitmentId: jobId,
+        recruitmentStageId: selectedStep.value?.id ?? '',
+        round,
         stage: selectedStep.value.step,
         interviewers: JSON.stringify(selectedInterviewers.value),
         applicants: JSON.stringify(selectedApplicants.value)
@@ -211,6 +262,11 @@ onMounted(() => {
     // alert('잘못된 접근입니다.')
     // router.back()
   }
+  if (!jobs.value.length) {
+    recruitmentStore.fetchRecruitments().catch((error) => {
+      console.error('채용 공고 데이터 조회 실패:', error)
+    })
+  }
 })
 </script>
 
@@ -218,7 +274,7 @@ onMounted(() => {
   <div class="page">
     <div class="header">
       <div class="flex flex-col gap-1">
-        <span class="text-xs font-bold text-slate-500">면접 일정 생성</span>
+        <span class="text-xs font-bold text-slate-500">일정 생성</span>
         <h1 class="title">{{ recruitment.title }}</h1>
       </div>
       

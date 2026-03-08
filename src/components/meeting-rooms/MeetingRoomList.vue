@@ -42,6 +42,13 @@ const formatTime = (date) => {
   const m = `${date.getMinutes()}`.padStart(2, '0')
   return `${h}:${m}`
 }
+
+const formatDate = (date) => {
+  const y = date.getFullYear()
+  const m = `${date.getMonth() + 1}`.padStart(2, '0')
+  const d = `${date.getDate()}`.padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 </script>
 
 <template>
@@ -90,21 +97,21 @@ const formatTime = (date) => {
             <div class="text-xs text-slate-600 mb-1">현재 예약</div>
             <div class="text-sm font-semibold text-slate-900 truncate">{{ getCurrentBooking(room.id).title }}</div>
             <div class="text-xs text-slate-700 mt-1">
-              {{ formatTime(getCurrentBooking(room.id).startTime) }} - {{ formatTime(getCurrentBooking(room.id).endTime) }}
+              {{ formatDate(getCurrentBooking(room.id).startTime) }} {{ formatTime(getCurrentBooking(room.id).startTime) }} - {{ formatTime(getCurrentBooking(room.id).endTime) }}
             </div>
           </template>
           <template v-else-if="getTodayBooking(room.id)">
             <div class="text-xs text-slate-600 mb-1">다음 진행 일정</div>
             <div class="text-sm font-semibold text-slate-900 truncate">{{ getTodayBooking(room.id).title }}</div>
             <div class="text-xs text-slate-700 mt-1">
-              {{ formatTime(getTodayBooking(room.id).startTime) }} - {{ formatTime(getTodayBooking(room.id).endTime) }}
+              {{ formatDate(getTodayBooking(room.id).startTime) }} {{ formatTime(getTodayBooking(room.id).startTime) }} - {{ formatTime(getTodayBooking(room.id).endTime) }}
             </div>
           </template>
           <template v-else-if="getNextBooking(room.id)">
             <div class="text-xs text-slate-600 mb-1">다음 예약</div>
             <div class="text-sm font-semibold text-slate-900 truncate">{{ getNextBooking(room.id).title }}</div>
             <div class="text-xs text-slate-700 mt-1">
-              {{ formatTime(getNextBooking(room.id).startTime) }} - {{ formatTime(getNextBooking(room.id).endTime) }}
+              {{ formatDate(getNextBooking(room.id).startTime) }} {{ formatTime(getNextBooking(room.id).startTime) }} - {{ formatTime(getNextBooking(room.id).endTime) }}
             </div>
           </template>
           <div v-else class="text-sm text-slate-700">오늘 예약 없음</div>

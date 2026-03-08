@@ -6,7 +6,8 @@ import MeetingRoomTimeline from '@/components/meeting-rooms/MeetingRoomTimeline.
 const props = defineProps({
   rooms: { type: Array, required: true },
   bookings: { type: Array, required: true },
-  handlers: { type: Object, required: true }
+  handlers: { type: Object, required: true },
+  dateValue: { type: String, default: '' }
 })
 
 const viewMode = ref('calendar')
@@ -49,6 +50,7 @@ const hours = Array.from({ length: 13 }, (_, i) => i + 8)
       :rooms="rooms"
       :bookings="bookings"
       :hours="hours"
+      :selectedDate="dateValue"
       @timeSlotClick="handlers.handleTimeSlotClick"
       @bookingClick="handlers.handleBookingClick"
     />

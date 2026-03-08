@@ -1,56 +1,74 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { adminApi } from '@/api/admin'
 
 const CATEGORY_CONFIG = [
-  { id: '인건비',    cardName: '인건비',           color: 'bg-blue-500',   barColor: 'bg-blue-500',   tagColor: 'bg-blue-100 text-blue-700' },
-  { id: '서버/인프라', cardName: '서버 / 인프라',   color: 'bg-amber-500',  barColor: 'bg-amber-500',  tagColor: 'bg-amber-100 text-amber-700' },
-  { id: '마케팅',    cardName: '마케팅',           color: 'bg-violet-500', barColor: 'bg-violet-500', tagColor: 'bg-violet-100 text-violet-700' },
-  { id: '기타',      cardName: '기타 (외주, 사무)', color: 'bg-rose-500',   barColor: 'bg-rose-500',   tagColor: 'bg-rose-100 text-rose-700' },
+  { id: 'LABOR',          cardName: '인건비',           color: 'bg-blue-500',   barColor: 'bg-blue-500',   tagColor: 'bg-blue-100 text-blue-700' },
+  { id: 'INFRASTRUCTURE', cardName: '서버 / 인프라',    color: 'bg-amber-500',  barColor: 'bg-amber-500',  tagColor: 'bg-amber-100 text-amber-700' },
+  { id: 'MARKETING',      cardName: '마케팅',            color: 'bg-violet-500', barColor: 'bg-violet-500', tagColor: 'bg-violet-100 text-violet-700' },
+  { id: 'OTHER',          cardName: '기타 (외주, 사무)', color: 'bg-rose-500',   barColor: 'bg-rose-500',   tagColor: 'bg-rose-100 text-rose-700' },
 ]
 
-const costItems = ref([
-  { id: 'CST-001', category: '인건비',    categoryColor: 'bg-blue-100 text-blue-700',   name: '개발자 급여 (본인)',    amount: 4500000, month: '2025.02', note: '월 고정비' },
-  { id: 'CST-002', category: '서버/인프라', categoryColor: 'bg-amber-100 text-amber-700', name: 'AWS EC2 + RDS',       amount: 1200000, month: '2025.02', note: '운영 서버' },
-  { id: 'CST-003', category: '서버/인프라', categoryColor: 'bg-amber-100 text-amber-700', name: 'CloudFront + S3',     amount: 350000,  month: '2025.02', note: 'CDN/스토리지' },
-  { id: 'CST-004', category: '서버/인프라', categoryColor: 'bg-amber-100 text-amber-700', name: '도메인 / SSL',         amount: 50000,   month: '2025.02', note: '연간 비용 월할' },
-  { id: 'CST-005', category: '서버/인프라', categoryColor: 'bg-amber-100 text-amber-700', name: '모니터링 (Datadog)',   amount: 500000,  month: '2025.02', note: 'Pro 플랜' },
-  { id: 'CST-006', category: '마케팅',    categoryColor: 'bg-violet-100 text-violet-700', name: 'Google Ads',          amount: 800000,  month: '2025.02', note: '키워드 광고' },
-  { id: 'CST-007', category: '마케팅',    categoryColor: 'bg-violet-100 text-violet-700', name: '콘텐츠 마케팅',        amount: 400000,  month: '2025.02', note: '블로그/SNS' },
-  { id: 'CST-008', category: '기타',      categoryColor: 'bg-rose-100 text-rose-700',    name: '사무용품 / 비품',      amount: 150000,  month: '2025.02', note: '' },
-  { id: 'CST-009', category: '기타',      categoryColor: 'bg-rose-100 text-rose-700',    name: '외주 디자인',          amount: 300000,  month: '2025.02', note: '랜딩 페이지' },
-])
+const CATEGORY_LABEL = Object.fromEntries(CATEGORY_CONFIG.map(c => [c.id, c.cardName]))
+const CATEGORY_TAG_COLOR = Object.fromEntries(CATEGORY_CONFIG.map(c => [c.id, c.tagColor]))
 
-const monthlyTrend = ref([
-  { month: '9월',  monthKey: '2024.09', amount: 7200000 },
-  { month: '10월', monthKey: '2024.10', amount: 7550000 },
-  { month: '11월', monthKey: '2024.11', amount: 7800000 },
-  { month: '12월', monthKey: '2024.12', amount: 8000000 },
-  { month: '1월',  monthKey: '2025.01', amount: 8100000 },
-  { month: '2월',  monthKey: '2025.02', amount: 8250000, current: true },
-])
+const costItems = ref([])
+const monthlyTrend = ref([])
+const categorySummary = ref({})
+const loading = ref(false)
 
-// costItems 기반으로 카테고리 요약 자동 계산
+const now = new Date()
+const currentYear = now.getFullYear()
+const currentMonth = now.getMonth() + 1
+
+const fetchAll = async () => {
+  loading.value = true
+  try {
+    const [summaryRes, trendRes, costsRes] = await Promise.all([
+      adminApi.getCostSummary(`${currentYear}-${String(currentMonth).padStart(2, '0')}`),
+      adminApi.getCostTrend(),
+      adminApi.getCosts({ year: currentYear, month: currentMonth, size: 100 })
+    ])
+    categorySummary.value = summaryRes.data.data.byCategory || {}
+    monthlyTrend.value = (trendRes.data.data.trend || []).map(d => ({
+      month: `${d.month}월`,
+      monthKey: `${d.year}.${String(d.month).padStart(2, '0')}`,
+      amount: d.amount,
+      current: d.year === currentYear && d.month === currentMonth
+    }))
+    costItems.value = (costsRes.data.data || []).map(item => ({
+      id: item.id,
+      category: item.category,
+      categoryColor: CATEGORY_TAG_COLOR[item.category] || '',
+      name: item.name,
+      amount: item.amount,
+      month: `${item.costYear}.${String(item.costMonth).padStart(2, '0')}`,
+      note: item.memo || ''
+    }))
+  } catch (e) {
+    console.error('비용 데이터 로드 실패', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchAll)
+
+// 카테고리 요약 카드 계산 (API 결과 기반)
 const categories = computed(() => {
-  const totals = Object.fromEntries(CATEGORY_CONFIG.map(c => [c.id, 0]))
-
-  costItems.value.forEach(item => {
-    if (totals[item.category] !== undefined) totals[item.category] += item.amount
-  })
-
-  const total = Object.values(totals).reduce((s, v) => s + v, 0)
-
+  const total = Object.values(categorySummary.value).reduce((s, v) => s + v, 0)
   return CATEGORY_CONFIG.map(c => ({
     name: c.cardName,
-    amount: totals[c.id],
-    percent: total > 0 ? Math.round((totals[c.id] / total) * 1000) / 10 : 0,
+    amount: categorySummary.value[c.id] || 0,
+    percent: total > 0 ? Math.round(((categorySummary.value[c.id] || 0) / total) * 1000) / 10 : 0,
     color: c.color,
     barColor: c.barColor,
   }))
 })
 
-const maxTrend = computed(() => Math.max(...monthlyTrend.value.map(d => d.amount)))
-const maxCategory = computed(() => Math.max(...categories.value.map(c => c.amount)))
+const maxTrend = computed(() => Math.max(1, ...monthlyTrend.value.map(d => d.amount)))
+const maxCategory = computed(() => Math.max(1, ...categories.value.map(c => c.amount)))
 
 const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 const formatShort = (v) => {
@@ -61,7 +79,7 @@ const formatShort = (v) => {
 
 // 비용 등록 모달
 const showAddModal = ref(false)
-const addForm = ref({ category: '인건비', name: '', amount: '', month: '2025.02', note: '' })
+const addForm = ref({ category: 'LABOR', name: '', amount: '', year: currentYear, month: currentMonth, note: '' })
 const amountError = ref('')
 
 const validateAmount = () => {
@@ -69,47 +87,42 @@ const validateAmount = () => {
   amountError.value = (!addForm.value.amount || isNaN(v) || v <= 0) ? '올바른 금액을 입력해 주세요.' : ''
 }
 
-const handleAddCost = () => {
+const handleAddCost = async () => {
   validateAmount()
   if (!addForm.value.name.trim() || amountError.value) return
 
-  const catConfig = CATEGORY_CONFIG.find(c => c.id === addForm.value.category)
-  const newId = `CST-${String(costItems.value.length + 1).padStart(3, '0')}`
+  try {
+    await adminApi.createCost({
+      category: addForm.value.category,
+      name: addForm.value.name.trim(),
+      amount: Number(addForm.value.amount),
+      year: addForm.value.year,
+      month: addForm.value.month,
+      memo: addForm.value.note.trim() || null
+    })
 
-  costItems.value.push({
-    id: newId,
-    category: addForm.value.category,
-    categoryColor: catConfig.tagColor,
-    name: addForm.value.name.trim(),
-    amount: Number(addForm.value.amount),
-    month: addForm.value.month,
-    note: addForm.value.note.trim(),
-  })
+    const registeredName = addForm.value.name.trim()
+    const registeredAmount = Number(addForm.value.amount)
 
-  // 월별 추이 반영
-  const trendEntry = monthlyTrend.value.find(t => t.monthKey === addForm.value.month)
-  if (trendEntry) {
-    trendEntry.amount += Number(addForm.value.amount)
-  }
+    showAddModal.value = false
+    addForm.value = { category: 'LABOR', name: '', amount: '', year: currentYear, month: currentMonth, note: '' }
+    amountError.value = ''
 
-  const registeredName = addForm.value.name.trim()
-  const registeredAmount = Number(addForm.value.amount)
-
-  showAddModal.value = false
-  addForm.value = { category: '인건비', name: '', amount: '', month: '2025.02', note: '' }
-  amountError.value = ''
-
-  modal.value = {
-    show: true,
-    title: '비용 등록 완료',
-    message: `'${registeredName}' 항목 ${formatWon(registeredAmount)}이 등록되었습니다.`,
-    type: 'success',
+    modal.value = {
+      show: true,
+      title: '비용 등록 완료',
+      message: `'${registeredName}' 항목 ${formatWon(registeredAmount)}이 등록되었습니다.`,
+      type: 'success',
+    }
+    await fetchAll()
+  } catch (e) {
+    console.error('비용 등록 실패', e)
   }
 }
 
 const closeAddModal = () => {
   showAddModal.value = false
-  addForm.value = { category: '인건비', name: '', amount: '', month: '2025.02', note: '' }
+  addForm.value = { category: 'LABOR', name: '', amount: '', year: currentYear, month: currentMonth, note: '' }
   amountError.value = ''
 }
 
@@ -212,7 +225,7 @@ const closeModal = () => { modal.value.show = false }
               <td class="px-6 py-4 text-gray-500 font-mono">{{ item.id }}</td>
               <td class="px-6 py-4">
                 <span class="px-2.5 py-1 rounded-full text-xs font-semibold" :class="item.categoryColor">
-                  {{ item.category }}
+                  {{ CATEGORY_LABEL[item.category] || item.category }}
                 </span>
               </td>
               <td class="px-6 py-4 text-gray-900">{{ item.name }}</td>
@@ -247,7 +260,7 @@ const closeModal = () => { modal.value.show = false }
               v-model="addForm.category"
               class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
             >
-              <option v-for="cat in CATEGORY_CONFIG" :key="cat.id" :value="cat.id">{{ cat.id }}</option>
+              <option v-for="cat in CATEGORY_CONFIG" :key="cat.id" :value="cat.id">{{ cat.cardName }}</option>
             </select>
           </div>
 
@@ -281,14 +294,27 @@ const closeModal = () => { modal.value.show = false }
           </div>
 
           <!-- 발생월 -->
-          <div>
-            <label class="block text-sm font-semibold text-gray-900 mb-2">발생월</label>
-            <select
-              v-model="addForm.month"
-              class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors bg-white"
-            >
-              <option v-for="t in monthlyTrend" :key="t.monthKey" :value="t.monthKey">{{ t.monthKey }} ({{ t.month }})</option>
-            </select>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-semibold text-gray-900 mb-2">연도</label>
+              <input
+                v-model.number="addForm.year"
+                type="number"
+                min="2020"
+                max="2099"
+                class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              >
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-900 mb-2">월 (1~12)</label>
+              <input
+                v-model.number="addForm.month"
+                type="number"
+                min="1"
+                max="12"
+                class="w-full px-4 py-3 border text-gray-900 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+              >
+            </div>
           </div>
 
           <!-- 비고 -->

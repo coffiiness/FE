@@ -16,8 +16,12 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    await login(email.value, password.value)
-    router.push('/dashboard')
+    const data = await login(email.value, password.value)
+    if (data.user.role === 'ADMIN') {
+      router.push('/admin/dashboard')
+    } else {
+      router.push('/dashboard')
+    }
   } catch (e) {
     error.value = e.response?.data?.error?.message || '로그인에 실패했습니다.'
   } finally {

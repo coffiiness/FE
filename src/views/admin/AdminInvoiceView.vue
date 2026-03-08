@@ -1,46 +1,57 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { adminApi } from '@/api/admin'
+
+const STATUS_LABEL = { PAID: '결제 완료', UNPAID: '미결제', OVERDUE: '연체' }
+const STATUS_COLOR = { PAID: 'bg-brand-100 text-brand-700', UNPAID: 'bg-amber-100 text-amber-700', OVERDUE: 'bg-rose-100 text-rose-700' }
+const TAB_STATUS = { '전체 인보이스': null, '미결제': 'UNPAID', '연체': 'OVERDUE' }
 
 const activeTab = ref('전체 인보이스')
 const currentPage = ref(1)
 const itemsPerPage = 8
 
-// Mock data — 추후 adminApi.getInvoiceSummary() 로 교체
-const summary = ref({
-  confirmedRevenue: 12430000,
-  confirmedCount: 12,
-  outstanding: 1780000,
-  outstandingOverdue: 2,
-  pendingIssue: 890000,
-  nextDueDate: '2025.03.01'
-})
-
 const tabs = ['전체 인보이스', '미결제', '연체']
 
-const invoices = ref([
-  { id: 'INV-2025-0047', company: '스타트업허브', plan: '엔터프라이즈', period: '2025.02', amount: 890000, issuedDate: '2025.02.01', paidDate: '2025.02.05', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' },
-  { id: 'INV-2025-0046', company: '인피니티소프트', plan: '엔터프라이즈', period: '2025.02', amount: 1958000, issuedDate: '2025.02.01', paidDate: '2025.02.03', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' },
-  { id: 'INV-2025-0045', company: '테크밸리', plan: '엔터프라이즈', period: '2025.02', amount: 1335000, issuedDate: '2025.02.01', paidDate: '2025.02.02', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' },
-  { id: 'INV-2025-0044', company: '넥스트코드', plan: '엔터프라이즈', period: '2025.02', amount: 445000, issuedDate: '2025.02.01', paidDate: '2025.02.04', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' },
-  { id: 'INV-2025-0043', company: '클라우드나인', plan: '엔터프라이즈', period: '2025.02', amount: 1335000, issuedDate: '2025.02.01', paidDate: '—', status: '미결제', statusColor: 'bg-amber-100 text-amber-700' },
-  { id: 'INV-2025-0042', company: '블루웨이브', plan: '엔터프라이즈', period: '2025.01', amount: 445000, issuedDate: '2025.01.01', paidDate: '—', status: '연체', statusColor: 'bg-rose-100 text-rose-700' },
-  { id: 'INV-2025-0041', company: '스타트업허브', plan: '엔터프라이즈', period: '2025.01', amount: 890000, issuedDate: '2025.01.01', paidDate: '2025.01.05', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' },
-  { id: 'INV-2025-0040', company: '인피니티소프트', plan: '엔터프라이즈', period: '2025.01', amount: 1958000, issuedDate: '2025.01.01', paidDate: '2025.01.03', status: '결제 완료', statusColor: 'bg-brand-100 text-brand-700' }
-])
+const now = new Date()
+const currentYear = now.getFullYear()
+const currentMonth = now.getMonth() + 1
 
-const filteredInvoices = computed(() => {
-  if (activeTab.value === '전체 인보이스') return invoices.value
-  return invoices.value.filter(inv => inv.status === activeTab.value.replace('미결제', '미결제').replace('연체', '연체'))
-})
+const summary = ref({ confirmedRevenue: 0, confirmedCount: 0, outstanding: 0, outstandingOverdue: 0 })
+const invoices = ref([])
+const loading = ref(false)
 
-const totalPages = computed(() =>
-  Math.ceil(filteredInvoices.value.length / itemsPerPage) || 1
-)
+const fetchAll = async () => {
+  loading.value = true
+  try {
+    const monthParam = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
+    const [summaryRes, invoicesRes] = await Promise.all([
+      adminApi.getInvoiceSummary(monthParam),
+      adminApi.getInvoices({ status: TAB_STATUS[activeTab.value], page: currentPage.value - 1, size: itemsPerPage })
+    ])
+    summary.value = summaryRes.data.data
+    invoices.value = (invoicesRes.data.data || []).map(inv => ({
+      id: inv.id,
+      workspaceId: inv.workspaceId,
+      plan: inv.planType,
+      period: inv.billingPeriod,
+      amount: inv.amount,
+      issuedDate: inv.issuedAt,
+      paidDate: inv.paidAt || '—',
+      statusKey: inv.invoiceStatus,
+      status: STATUS_LABEL[inv.invoiceStatus] || inv.invoiceStatus,
+      statusColor: STATUS_COLOR[inv.invoiceStatus] || 'bg-gray-100 text-gray-700'
+    }))
+  } catch (e) {
+    console.error('인보이스 데이터 로드 실패', e)
+  } finally {
+    loading.value = false
+  }
+}
 
-const paginatedInvoices = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredInvoices.value.slice(start, start + itemsPerPage)
-})
+onMounted(fetchAll)
+watch([activeTab, currentPage], fetchAll)
+
+const totalPages = computed(() => Math.ceil(invoices.value.length / itemsPerPage) || 1)
 
 const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 </script>
@@ -48,21 +59,16 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 <template>
   <div class="space-y-6">
     <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <p class="text-sm text-gray-500 mb-1">이번 달 매출 (확정)</p>
         <p class="text-3xl font-bold text-gray-900">{{ formatWon(summary.confirmedRevenue) }}</p>
         <p class="text-sm text-gray-400 mt-1">인보이스 {{ summary.confirmedCount }}건 결제 완료</p>
       </div>
       <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <p class="text-sm text-gray-500 mb-1">미수금 (미결제)</p>
+        <p class="text-sm text-gray-500 mb-1">미수금 (미결제 + 연체)</p>
         <p class="text-3xl font-bold text-rose-500">{{ formatWon(summary.outstanding) }}</p>
         <p class="text-sm text-gray-400 mt-1">연체 {{ summary.outstandingOverdue }}건 포함</p>
-      </div>
-      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <p class="text-sm text-gray-500 mb-1">발행 대기</p>
-        <p class="text-3xl font-bold text-amber-500">{{ formatWon(summary.pendingIssue) }}</p>
-        <p class="text-sm text-gray-400 mt-1">다음 결제일: {{ summary.nextDueDate }}</p>
       </div>
     </div>
 
@@ -80,7 +86,7 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
                 ? 'border-brand-500 text-brand-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             "
-            @click="activeTab = tab; currentPage = 1"
+            @click="activeTab = tab; currentPage = 1; fetchAll()"
           >
             {{ tab }}
           </button>
@@ -93,7 +99,7 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
           <thead>
             <tr class="text-left text-gray-500 border-b border-gray-100">
               <th class="px-6 py-3.5 font-medium">인보이스 ID</th>
-              <th class="px-6 py-3.5 font-medium">고객사</th>
+              <th class="px-6 py-3.5 font-medium">워크스페이스</th>
               <th class="px-6 py-3.5 font-medium">요금제</th>
               <th class="px-6 py-3.5 font-medium">청구 기간</th>
               <th class="px-6 py-3.5 font-medium">금액</th>
@@ -103,13 +109,20 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
             </tr>
           </thead>
           <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="px-6 py-8 text-center text-gray-400">로딩 중...</td>
+            </tr>
+            <tr v-else-if="!invoices.length">
+              <td colspan="8" class="px-6 py-8 text-center text-gray-400">인보이스 데이터가 없습니다.</td>
+            </tr>
             <tr
-              v-for="inv in paginatedInvoices"
+              v-else
+              v-for="inv in invoices"
               :key="inv.id"
               class="border-b border-gray-50 hover:bg-slate-50/50 transition-colors"
             >
               <td class="px-6 py-4 text-gray-600 font-mono">{{ inv.id }}</td>
-              <td class="px-6 py-4 font-semibold text-gray-900">{{ inv.company }}</td>
+              <td class="px-6 py-4 text-xs font-mono text-gray-600 max-w-[120px] truncate">{{ inv.workspaceId }}</td>
               <td class="px-6 py-4 text-gray-600">{{ inv.plan }}</td>
               <td class="px-6 py-4 text-gray-500">{{ inv.period }}</td>
               <td class="px-6 py-4 font-semibold text-gray-800">{{ formatWon(inv.amount) }}</td>
@@ -127,7 +140,7 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 
       <!-- Pagination -->
       <div class="px-6 py-4 flex items-center justify-between border-t border-gray-100">
-        <p class="text-sm text-gray-500">총 {{ filteredInvoices.length }}건 중 {{ (currentPage - 1) * itemsPerPage + 1 }}-{{ Math.min(currentPage * itemsPerPage, filteredInvoices.length) }}</p>
+        <p class="text-sm text-gray-500">총 {{ invoices.length }}건</p>
         <div class="flex items-center gap-1">
           <button
             v-for="page in totalPages"

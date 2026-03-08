@@ -1,10 +1,10 @@
 [
     {
-        "id": "dept_dev",
+        "id": 100,
         "name": "개발본부",
         "teams": [
             {
-                "id": "team_fe",
+                "id": 1,
                 "name": "Frontend 팀",
                 "members": [
                     {
@@ -28,7 +28,7 @@
                 ]
             },
             {
-                "id": "team_be",
+                "id": 2,
                 "name": "Backend 팀",
                 "members": [
                     {
@@ -52,7 +52,7 @@
                 ]
             },
             {
-                "id": "team_data",
+                "id": 3,
                 "name": "Data 팀",
                 "members": [
                     {
@@ -70,7 +70,7 @@
                 ]
             },
             {
-                "id": "team_sec",
+                "id": 4,
                 "name": "보안팀",
                 "members": [
                     {
@@ -84,11 +84,11 @@
         ]
     },
     {
-        "id": "dept_hr",
+        "id": 200,
         "name": "인사본부",
         "teams": [
             {
-                "id": "team_hr",
+                "id": 5,
                 "name": "인사팀",
                 "members": [
                     {
@@ -106,7 +106,7 @@
                 ]
             },
             {
-                "id": "team_recruit",
+                "id": 6,
                 "name": "채용팀",
                 "members": [
                     {
@@ -120,11 +120,11 @@
         ]
     },
     {
-        "id": "dept_design",
+        "id": 300,
         "name": "디자인본부",
         "teams": [
             {
-                "id": "team_ux",
+                "id": 7,
                 "name": "UX/UI 팀",
                 "members": [
                     {
@@ -148,7 +148,7 @@
                 ]
             },
             {
-                "id": "team_brand",
+                "id": 8,
                 "name": "브랜드 팀",
                 "members": [
                     {
@@ -162,11 +162,11 @@
         ]
     },
     {
-        "id": "dept_plan",
+        "id": 400,
         "name": "기획본부",
         "teams": [
             {
-                "id": "team_service",
+                "id": 9,
                 "name": "서비스기획 팀",
                 "members": [
                     {

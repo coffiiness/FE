@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 /* Props */
 const props = defineProps({
@@ -9,7 +10,7 @@ const props = defineProps({
   announcements: Array
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'create', 'update', 'remove'])
 
 const isEditMode = ref(false)
 const showDeleteConfirm = ref(false)
@@ -52,50 +53,36 @@ const save = () => {
   if (!form.value.title || !form.value.content) return
 
   if (props.mode === 'create') {
-    props.announcements.unshift({
-      id: Date.now(),
-      ...form.value,
-      author: '김인사',
-      date: new Date().toISOString().slice(0, 10)
+    emit('create', {
+      title: form.value.title,
+      content: form.value.content,
+      pinned: form.value.pinned
     })
+    return
   }
 
   if (props.mode === 'detail') {
-    const idx = props.announcements.findIndex(
-        a => a.id === props.selectedId
-    )
-
-    if (idx !== -1) {
-      props.announcements[idx] = {
-        ...props.announcements[idx],
-        ...form.value
-      }
-    }
-
+    emit('update', {
+      id: props.selectedId,
+      title: form.value.title,
+      content: form.value.content,
+      pinned: form.value.pinned
+    })
     isEditMode.value = false
   }
 
-  emit('close')
 }
 
 const remove = () => {
-  const idx = props.announcements.findIndex(
-      a => a.id === props.selectedId
-  )
-
-  if (idx !== -1) {
-    props.announcements.splice(idx, 1)
-  }
-
+  emit('remove', props.selectedId)
   showDeleteConfirm.value = false
-  emit('close')
 }
 </script>
 
 <template>
   <div
       v-if="show"
-      class="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center"
+      class="fixed inset-0 bg-black/50 z-[90] flex items-center justify-center"
   >
     <div
         class="bg-white w-[720px] max-h-[90vh] rounded-2xl p-8 relative shadow-xl text-slate-900"
@@ -228,38 +215,17 @@ const remove = () => {
       </div>
     </div>
 
-    <div
-        v-if="showDeleteConfirm"
-        class="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center"
-    >
-      <div
-          class="bg-white w-[360px] rounded-xl p-6 text-center space-y-4 text-slate-900"
-      >
-        <h3 class="text-lg font-bold">삭제 확인</h3>
-
-        <p class="text-sm text-slate-600">
-          정말 삭제하시겠습니까?
-        </p>
-
-        <div class="flex justify-center gap-3 pt-3">
-
-          <button
-              @click="showDeleteConfirm = false"
-              class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold"
-          >
-            취소
-          </button>
-
-          <button
-              @click="remove"
-              class="px-4 py-2 rounded-lg bg-red-500 text-white"
-          >
-            삭제
-          </button>
-
-        </div>
-      </div>
-    </div>
+    <ConfirmModal
+        :show="showDeleteConfirm"
+        type="danger"
+        title="공지사항 삭제"
+        message="정말 삭제하시겠습니까? 삭제된 공지사항은 복구할 수 없습니다."
+        confirmText="삭제하기"
+        cancelText="취소"
+        :showCancel="true"
+        @confirm="remove"
+        @cancel="showDeleteConfirm = false"
+    />
 
   </div>
 </template>

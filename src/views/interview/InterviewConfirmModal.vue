@@ -30,7 +30,7 @@ const submit = () => {
 
     <div class="modal">
 
-      <h2 class="title">면접 일정 확인</h2>
+      <h2 class="title">일정 확정 확인</h2>
 
       <div class="info">
 
@@ -70,7 +70,7 @@ const submit = () => {
       <textarea
           v-model="memo"
           class="memo"
-          placeholder="초대 메시지를 입력하세요"
+          placeholder="일정 메모를 입력하세요"
       />
 
       <!-- 버튼 -->
@@ -81,7 +81,7 @@ const submit = () => {
         </button>
 
         <button class="confirm" @click="submit">
-          초대장 발송
+          일정 확정
         </button>
 
       </div>

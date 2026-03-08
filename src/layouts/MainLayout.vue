@@ -1,14 +1,36 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
-import { useNotificationStore } from '@/Stores/notification'
+import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
+import { useAuth } from '@/composables/useAuth'
+import { memberApi } from '@/api/member'
 
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
+
+const { user } = useAuth()
+const memberType = ref('')
+
+const userName = computed(() => user.value?.name || '사용자')
+const userInitial = computed(() => userName.value.charAt(0))
+const userRoleLabel = computed(() => {
+  if (memberType.value === 'HR') return '인사담당자'
+  if (memberType.value === 'IVW') return '면접관'
+  return '멤버'
+})
+
+onMounted(async () => {
+  try {
+    const res = await memberApi.getMyMember()
+    memberType.value = res.data.data.memberType
+  } catch (e) {
+    // 멤버 정보 조회 실패 시 기본값 유지
+  }
+})
 
 const isNotificationOpen = ref(false)
 const notificationStore = useNotificationStore()
@@ -202,11 +224,11 @@ watch(
       <div class="border-t border-slate-700/50 p-4 bg-slate-900/50">
         <div class="flex items-center">
           <div class="h-9 w-9 bg-brand-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ring-2 ring-slate-800">
-            K
+            {{ userInitial }}
           </div>
           <div v-if="sidebarOpen" class="ml-3 transition-opacity duration-300">
-            <p class="text-sm font-medium text-white">김철수</p>
-            <p class="text-[11px] text-slate-400 font-medium">채용담당자</p>
+            <p class="text-sm font-medium text-white">{{ userName }}</p>
+            <p class="text-[11px] text-slate-400 font-medium">{{ userRoleLabel }}</p>
           </div>
         </div>
       </div>
