@@ -13,17 +13,17 @@ const formatTime = (date) => {
   return `${h}:${m}`
 }
 
-const todayBookings = () => {
+const formatDate = (date) => {
+  const y = date.getFullYear()
+  const m = `${date.getMonth() + 1}`.padStart(2, '0')
+  const d = `${date.getDate()}`.padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const roomBookings = () => {
   if (!props.room) return []
-  const today = new Date()
   return props.bookings
-    .filter(
-      (b) =>
-        b.roomId === props.room.id &&
-        b.startTime.getFullYear() === today.getFullYear() &&
-        b.startTime.getMonth() === today.getMonth() &&
-        b.startTime.getDate() === today.getDate()
-    )
+    .filter((b) => b.roomId === props.room.id)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 </script>
@@ -60,27 +60,27 @@ const todayBookings = () => {
 
           <div>
             <div class="flex items-center justify-between mb-3">
-              <h4 class="font-semibold text-slate-900">오늘의 일정</h4>
+              <h4 class="font-semibold text-slate-900">예약 일정</h4>
               <button class="px-3 py-1 bg-emerald-600 text-white rounded text-sm" @click="emit('bookRoom', room)">
                 예약하기
               </button>
             </div>
-            <div v-if="todayBookings().length" class="space-y-2">
+            <div v-if="roomBookings().length" class="space-y-2 max-h-64 overflow-y-auto pr-1">
               <div
-                v-for="booking in todayBookings()"
+                v-for="booking in roomBookings()"
                 :key="booking.id"
                 class="p-4 bg-gray-50 rounded-lg border hover:border-emerald-500 transition-colors cursor-pointer"
                 @click="emit('bookingClick', booking)"
               >
                 <div class="font-semibold text-slate-900">{{ booking.title }}</div>
                 <div class="text-sm text-slate-700 mt-1">
-                  <span class="text-slate-900 font-medium">{{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
+                  <span class="text-slate-900 font-medium">{{ formatDate(booking.startTime) }} {{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
                   · {{ booking.organizer }}
                 </div>
               </div>
             </div>
             <div v-else class="text-center py-6 text-slate-800 bg-gray-50 rounded-lg">
-              오늘 예약된 일정이 없습니다
+              예약된 일정이 없습니다
             </div>
           </div>
       </div>

@@ -21,6 +21,7 @@ const onModalCancel  = () => { modal.value.show = false }
 
 const route = useRoute()
 const router = useRouter()
+const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
 
 const recruitmentId = Number(route.query.recruitmentId || 0)
 const recruitmentStageId = Number(route.query.recruitmentStageId || 0) || null
@@ -97,6 +98,7 @@ const resetSelection = () => {
 const rooms = ref([])
 const selectedRoomId = ref('')
 const selectedRoom = computed(() => rooms.value.find((r) => Number(r.id) === Number(selectedRoomId.value)) || rooms.value[0])
+const skipRoomResetOnce = ref(false)
 
 const parseCapacityRange = (capacityText) => {
   const normalized = String(capacityText || '').replace('인실', '').trim()
@@ -107,6 +109,11 @@ const parseCapacityRange = (capacityText) => {
   }
   const one = Number(normalized)
   return Number.isFinite(one) && one > 0 ? [1, one] : [1, Number.MAX_SAFE_INTEGER]
+}
+
+const canUseRoomByHeadcount = (capacityText, totalPeople) => {
+  const [, maxCapacity] = parseCapacityRange(capacityText)
+  return totalPeople <= maxCapacity
 }
 
 const meetingRoomBusySlots = ref([])
@@ -129,6 +136,32 @@ const toErrorText = (error) => {
 
 const toApiDateTime = (date, time = '00:00') => `${date}T${time}:00`
 const rangesOverlap = (targetStart, targetEnd, slotStart, slotEnd) => targetStart < slotEnd && slotStart < targetEnd
+const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
+  const roomId = Number(meetingRoomId)
+  const start = new Date(startDatetime).getTime()
+  const end = new Date(endDatetime).getTime()
+  if (!Number.isFinite(roomId) || Number.isNaN(start) || Number.isNaN(end)) return null
+  return `${roomId}|${start}|${end}`
+}
+const getInterviewSlotTitle = () => {
+  const recruitmentTitle = String(route.query.recruitmentTitle || '').trim()
+  const stageTitle = String(route.query.stage || '').trim()
+  return [recruitmentTitle, stageTitle].filter(Boolean).join(' - ') || '면접 일정'
+}
+const saveInterviewSlotTitle = (meetingRoomId, startDatetime, endDatetime) => {
+  const key = toDateTimeKey(meetingRoomId, startDatetime, endDatetime)
+  if (!key) return
+  const title = getInterviewSlotTitle()
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_TITLE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    const next = parsed && typeof parsed === 'object' ? parsed : {}
+    next[key] = title
+    localStorage.setItem(INTERVIEW_SLOT_TITLE_MAP_KEY, JSON.stringify(next))
+  } catch {
+    // ignore storage errors
+  }
+}
 
 const hasBusyOverlap = (date, time, slots, keyName, targetId = null) => {
   const cellStart = new Date(toApiDateTime(date, time))
@@ -161,10 +194,11 @@ const loadAvailability = async () => {
   const fromBase = weekStart > now ? weekStart : now
   const from = `${fromBase.getFullYear()}-${pad2(fromBase.getMonth() + 1)}-${pad2(fromBase.getDate())}T${pad2(fromBase.getHours())}:${pad2(fromBase.getMinutes())}:${pad2(fromBase.getSeconds())}`
   const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
   try {
     const response = await interviewApi.getAvailability({
       from,
-      meetingRoomIds: selectedRoomId.value ? [Number(selectedRoomId.value)] : [],
+      meetingRoomIds,
       interviewerIds
     })
     const data = response?.data?.data
@@ -198,6 +232,34 @@ const isBlocked = (date, time) => {
   const byRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', selectedRoom.value?.id)
   const byInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
   return byStatic || byRoomBusy || byInterviewerBusy
+}
+
+const toHourTime = (hour) => `${pad2(hour)}:00`
+const isSlotBlockedForRoom = (date, hour, room) => {
+  const time = toHourTime(hour)
+  if (isPastDate(date) || isPastDateTime(date, time) || isWeekend(date)) return true
+
+  const blockedByStatic = (room?.blocked || []).some((b) => b.date === date && b.time === time)
+  const blockedByRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', room?.id)
+  const blockedByInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
+
+  return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy
+}
+
+const canAssignContinuousHours = (date, startHour, durationHours, room) => {
+  for (let offset = 0; offset < durationHours; offset++) {
+    const hour = startHour + offset
+    if (isSlotBlockedForRoom(date, hour, room)) return false
+  }
+  return true
+}
+
+const buildSelectedKeysByRange = (date, startHour, durationHours) => {
+  const next = []
+  for (let offset = 0; offset < durationHours; offset++) {
+    next.push(keyOf(date, toHourTime(startHour + offset)))
+  }
+  return next
 }
 
 const MAX_HOURS = 6
@@ -272,52 +334,49 @@ const selectedTimeRanges = computed(() => {
   return ranges.map((r) => `${formatKoDate(r.date)} ${r.start} - ${r.end}`)
 })
 
-const selectedSlotPayloads = computed(() => {
-  return selectedKeys.value
-    .map(parseKey)
-    .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
-    .map(({ date, time }) => {
-      const startMin = timeToMin(time)
-      return {
-        date,
-        start: minToTime(startMin),
-        end: minToTime(startMin + 60),
-        durationMinutes: 60
+const selectedRangePayloads = computed(() => {
+  const items = selectedKeys.value.map(parseKey).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+  const map = new Map()
+  for (const it of items) {
+    if (!map.has(it.date)) map.set(it.date, [])
+    map.get(it.date).push(it.time)
+  }
+
+  const ranges = []
+  for (const [date, times] of map.entries()) {
+    const mins = times.map(timeToMin).sort((a, b) => a - b)
+    let start = mins[0]
+    let prev = mins[0]
+    for (let i = 1; i < mins.length; i++) {
+      if (mins[i] === prev + 60) prev = mins[i]
+      else {
+        ranges.push({ date, startMin: start, endMin: prev + 60 })
+        start = mins[i]
+        prev = mins[i]
       }
-    })
-})
-
-const selectedRangeForSubmit = computed(() => {
-  if (!selectedSlotPayloads.value.length) return null
-  const firstDate = selectedSlotPayloads.value[0].date
-  if (selectedSlotPayloads.value.some((slot) => slot.date !== firstDate)) return null
-
-  const mins = selectedSlotPayloads.value
-    .map((slot) => timeToMin(slot.start))
-    .sort((a, b) => a - b)
-
-  for (let i = 1; i < mins.length; i++) {
-    if (mins[i] !== mins[i - 1] + 60) return null
+    }
+    ranges.push({ date, startMin: start, endMin: prev + 60 })
   }
 
-  const startMin = mins[0]
-  const endMin = mins[mins.length - 1] + 60
-  return {
-    date: firstDate,
-    start: minToTime(startMin),
-    end: minToTime(endMin),
-    durationMinutes: endMin - startMin
-  }
+  return ranges.map((range) => ({
+    date: range.date,
+    start: minToTime(range.startMin),
+    end: minToTime(range.endMin),
+    durationMinutes: range.endMin - range.startMin
+  }))
 })
 
 const submitDateText = computed(() => {
-  if (!selectedRangeForSubmit.value) return '-'
-  return formatKoDate(selectedRangeForSubmit.value.date)
+  if (!selectedRangePayloads.value.length) return '-'
+  const uniqueDates = [...new Set(selectedRangePayloads.value.map((slot) => slot.date))]
+  if (uniqueDates.length === 1) return formatKoDate(uniqueDates[0])
+  return `${uniqueDates.length}일 선택`
 })
 
 const submitTimeText = computed(() => {
-  if (!selectedRangeForSubmit.value) return '-'
-  return `${selectedRangeForSubmit.value.start} - ${selectedRangeForSubmit.value.end}`
+  if (!selectedRangePayloads.value.length) return '-'
+  const totalHours = selectedKeys.value.length
+  return `${selectedRangePayloads.value.length}개 일정 구간 (${totalHours}시간)`
 })
 
 const confirmSchedule = async (memo) => {
@@ -329,12 +388,8 @@ const confirmSchedule = async (memo) => {
     openModal({ title: '일정 확정 실패', message: '회의실을 선택해주세요.', type: 'warning' })
     return
   }
-  if (!selectedSlotPayloads.value.length) {
+  if (!selectedRangePayloads.value.length) {
     openModal({ title: '일정 확정 실패', message: '최소 1개 이상의 시간을 선택해주세요.', type: 'warning' })
-    return
-  }
-  if (!selectedRangeForSubmit.value) {
-    openModal({ title: '일정 확정 실패', message: '같은 날짜의 연속된 시간만 선택할 수 있습니다.', type: 'warning' })
     return
   }
   const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
@@ -344,8 +399,7 @@ const confirmSchedule = async (memo) => {
     return
   }
   const totalParticipants = interviewerIds.length + applicantIds.length
-  const [minCapacity, maxCapacity] = parseCapacityRange(selectedRoom.value.capacity)
-  if (totalParticipants < minCapacity || totalParticipants > maxCapacity) {
+  if (!canUseRoomByHeadcount(selectedRoom.value.capacity, totalParticipants)) {
     openModal({
       title: '일정 확정 실패',
       message: `선택한 회의실 정원(${selectedRoom.value.capacity})과 면접 인원(${totalParticipants}명)이 맞지 않습니다.`,
@@ -356,22 +410,28 @@ const confirmSchedule = async (memo) => {
 
   submitting.value = true
   try {
-    const selectedRange = selectedRangeForSubmit.value
-    await interviewApi.create({
-      recruitmentId,
-      recruitmentStageId,
-      round,
-      interviewerIds,
-      applicantIds,
-      meetingRoomId: Number(selectedRoom.value.id),
-      scheduledAt: `${selectedRange.date}T${selectedRange.start}:00`,
-      durationMinutes: selectedRange.durationMinutes,
-      memo: memo || ''
-    })
+    for (const slot of selectedRangePayloads.value) {
+      await interviewApi.create({
+        recruitmentId,
+        recruitmentStageId,
+        round,
+        interviewerIds,
+        applicantIds,
+        meetingRoomId: Number(selectedRoom.value.id),
+        scheduledAt: `${slot.date}T${slot.start}:00`,
+        durationMinutes: slot.durationMinutes,
+        memo: memo || ''
+      })
+      saveInterviewSlotTitle(
+        Number(selectedRoom.value.id),
+        `${slot.date}T${slot.start}:00`,
+        `${slot.date}T${slot.end}:00`
+      )
+    }
     showModal.value = false
     openModal({
       title: '일정 확정 완료',
-      message: '면접 일정이 1건으로 저장되었습니다.',
+      message: `면접 일정이 ${selectedRangePayloads.value.length}건 저장되었습니다.`,
       type: 'success',
       onConfirm: () => router.push(`/recruitment/jobs/${recruitmentId}`)
     })
@@ -387,10 +447,6 @@ const goNext = () => {
     openModal({ title: '선택 확인', message: '최소 1개 이상의 시간을 선택해주세요.', type: 'warning' })
     return
   }
-  if (!selectedRangeForSubmit.value) {
-    openModal({ title: '선택 확인', message: '같은 날짜의 연속된 시간만 선택해주세요.', type: 'warning' })
-    return
-  }
   if (!selectedRoom.value?.id) {
     openModal({ title: '선택 확인', message: '회의실을 선택해주세요.', type: 'warning' })
     return
@@ -404,44 +460,79 @@ const dayHeaderClass = (dayIndex) => {
   return ''
 }
 
-const handleAutoAssign = ({ useTimeRange, start }) => {
+const handleAutoAssign = ({
+  useAllRooms = false,
+  useStartTime = false,
+  startHour = 9,
+  useDuration = false,
+  durationHours = 1
+}) => {
   selectedKeys.value = []
+
+  const normalizedDuration = useDuration
+    ? Math.max(1, Math.min(6, Number(durationHours) || 1))
+    : 1
+  const normalizedStartHour = Math.max(9, Math.min(18, Number(startHour) || 9))
+  const latestStartHour = 19 - normalizedDuration
+  if (latestStartHour < 9) {
+    openModal({ title: '배정 불가', message: '예약 시간 조건이 너무 큽니다.', type: 'warning' })
+    return
+  }
+
   const totalPeople = interviewers.value.length + applicants.value.length
-  const startMin = useTimeRange ? timeToMin(`${pad2(start)}:00`) : 0
-  const now = new Date()
-  const todayNow = todayStr()
-  const currentMin = now.getHours() * 60 + now.getMinutes()
+  const baseRooms = useAllRooms ? rooms.value : [selectedRoom.value].filter(Boolean)
+  const candidateRooms = baseRooms.filter((room) => canUseRoomByHeadcount(room.capacity, totalPeople))
 
-  const candidateRooms = rooms.value.filter((room) => {
-    const [min, max] = parseCapacityRange(room.capacity)
-    return totalPeople >= min && totalPeople <= max
-  })
+  if (!candidateRooms.length) {
+    openModal({ title: '배정 불가', message: '인원 수에 맞는 회의실이 없습니다.', type: 'warning' })
+    return
+  }
 
-  for (const day of weekDays.value) {
-    if (isPastDate(day.date)) continue
-    for (const time of timeSlots) {
-      const min = timeToMin(time)
-      if (min < startMin) continue
-      if (day.date === todayNow && min <= currentMin) continue
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const candidateDates = []
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today)
+    d.setDate(today.getDate() + i)
+    candidateDates.push(ymd(d))
+  }
+
+  for (const date of candidateDates) {
+    if (isWeekend(date)) continue
+
+    const startHourCandidates = useStartTime
+      ? [normalizedStartHour]
+      : Array.from({ length: latestStartHour - 9 + 1 }, (_, idx) => 9 + idx)
+
+    for (const candidateStartHour of startHourCandidates) {
+      if (candidateStartHour > latestStartHour) continue
 
       for (const room of candidateRooms) {
-        const blockedByStatic = (room.blocked || []).some((b) => b.date === day.date && b.time === time)
-        const blockedByRoomBusy = hasBusyOverlap(day.date, time, meetingRoomBusySlots.value, 'meetingRoomId', room.id)
-        const blockedByInterviewerBusy = hasBusyOverlap(day.date, time, interviewerBusySlots.value, 'interviewerId')
-        if (blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy) continue
+        if (!canAssignContinuousHours(date, candidateStartHour, normalizedDuration, room)) continue
 
+        skipRoomResetOnce.value = true
         selectedRoomId.value = room.id
-        selectedKeys.value = [keyOf(day.date, time)]
+        selectedKeys.value = buildSelectedKeysByRange(date, candidateStartHour, normalizedDuration)
+        anchorDate.value = date
         showAutoModal.value = false
-        openModal({ title: '자동 배정 완료', message: `${room.name} / ${day.date} ${time}`, type: 'success' })
+        openModal({
+          title: '자동 배정 완료',
+          message: `${room.name} / ${date} ${toHourTime(candidateStartHour)}~${toHourTime(candidateStartHour + normalizedDuration)}`,
+          type: 'success'
+        })
         return
       }
     }
   }
-  openModal({ title: '배정 불가', message: '조건에 맞는 시간이 없습니다.', type: 'warning' })
+
+  openModal({ title: '배정 불가', message: '조건에 맞는 가용 시간대가 없습니다.', type: 'warning' })
 }
 
 watch(selectedRoomId, () => {
+  if (skipRoomResetOnce.value) {
+    skipRoomResetOnce.value = false
+    return
+  }
   selectedKeys.value = []
 })
 
@@ -453,12 +544,10 @@ watch([selectedRoomId, interviewers, applicants], async () => {
   const total = interviewers.value.length + applicants.value.length
   const room = rooms.value.find((r) => Number(r.id) === Number(selectedRoomId.value))
   if (!room) return
-  const [min, max] = parseCapacityRange(room.capacity)
-  if (total < min || total > max) {
+  if (!canUseRoomByHeadcount(room.capacity, total)) {
     openModal({ title: '회의실 변경', message: '인원 수에 맞는 회의실로 자동 변경합니다.', type: 'warning' })
     const available = rooms.value.find((r) => {
-      const [a, b] = parseCapacityRange(r.capacity)
-      return total >= a && total <= b
+      return canUseRoomByHeadcount(r.capacity, total)
     })
     if (available) selectedRoomId.value = available.id
   }
