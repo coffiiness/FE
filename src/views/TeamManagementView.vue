@@ -364,37 +364,39 @@ const deleteGroup = (group) => {
               </div>
             </td>
             <td class="px-6 py-5">
-              <div class="flex flex-col gap-2">
+              <div class="flex flex-col gap-2.5">
                 <!-- 그룹 선택 -->
                 <div class="relative w-fit group/group">
                   <select
                     :value="getCurrentGroupId(member)"
                     @change="handleGroupChange(member, $event.target.value)"
-                    class="appearance-none pr-5 bg-transparent text-[11px] font-medium outline-none cursor-pointer transition-colors"
-                    :style="member.group ? getGroupStyle(member.group) : {}"
-                    :class="member.group ? 'px-2 py-0.5 rounded border' : 'text-slate-400 hover:text-teal-600'"
+                    class="appearance-none pl-3 pr-7 py-1.5 text-xs font-semibold rounded-lg outline-none cursor-pointer transition-all border"
+                    :class="member.group
+                      ? 'bg-white hover:shadow-sm'
+                      : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-teal-400 hover:text-teal-600'"
+                    :style="member.group ? { ...getGroupStyle(member.group), borderRadius: '0.5rem' } : {}"
                   >
                     <option value="">그룹 없음</option>
                     <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
                   </select>
-                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center">
-                    <svg class="h-2.5 w-2.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div class="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                    <svg class="h-3 w-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
                 </div>
 
                 <!-- 권한 선택 -->
-                <div class="relative w-fit ml-1 group/role">
+                <div class="relative w-fit group/role">
                   <select
                     :value="member.memberType"
                     @change="handleMemberTypeChange(member, $event.target.value)"
-                    class="appearance-none pr-5 bg-transparent text-[11px] font-medium text-slate-500 outline-none cursor-pointer hover:text-teal-600 transition-colors"
+                    class="appearance-none pl-3 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 outline-none cursor-pointer hover:border-teal-400 hover:text-teal-600 transition-all"
                   >
                     <option v-for="mt in memberTypes" :key="mt" :value="mt">{{ memberTypeLabels[mt] }}</option>
                   </select>
-                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center">
-                    <svg class="h-2.5 w-2.5 text-slate-400 group-hover/role:text-teal-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div class="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                    <svg class="h-3 w-3 text-slate-400 group-hover/role:text-teal-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>

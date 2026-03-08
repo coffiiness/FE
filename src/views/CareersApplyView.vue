@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { applicantApi } from '@/api/applicant'
 
 const route = useRoute()
 const router = useRouter()
@@ -8,22 +9,22 @@ const router = useRouter()
 const companySlug = computed(() => route.params.companySlug)
 const jobId = computed(() => route.params.jobId)
 
-// 더미 회사 정보
 const companyInfo = {
   naver: { name: 'NAVER', logo: 'N' },
-  kakao: { name: 'Kakao', logo: 'K' },
+  kakao: { name: 'Kakao', logo: 'K' }
 }
 
-const company = computed(() => companyInfo[companySlug.value] || { name: companySlug.value, logo: companySlug.value?.charAt(0)?.toUpperCase() })
+const company = computed(() => companyInfo[companySlug.value] || {
+  name: companySlug.value,
+  logo: companySlug.value?.charAt(0)?.toUpperCase()
+})
 
-// 템플릿 데이터 (API에서 받아올 JSON)
 const template = ref(null)
 const loading = ref(true)
 
-// 폼 데이터
 const formData = ref({})
+const submitting = ref(false)
 
-// 더미 템플릿 데이터 (실제로는 API에서 templateId로 조회)
 const dummyTemplates = {
   'tpl-1': {
     id: 'tpl-1',
@@ -35,8 +36,8 @@ const dummyTemplates = {
       { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
       { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
       { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'intro', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
-      { id: 'portfolio', type: 'text', label: '포트폴리오 URL', required: false, placeholder: 'https://github.com/...' },
+      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
+      { id: 'portfolio', type: 'text', label: '포트폴리오 URL', required: false, placeholder: 'https://github.com/...' }
     ]
   },
   'tpl-2': {
@@ -49,9 +50,9 @@ const dummyTemplates = {
       { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
       { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
       { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'intro', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
+      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
       { id: 'github', type: 'text', label: 'GitHub', required: false, placeholder: 'https://github.com/...' },
-      { id: 'blog', type: 'text', label: '기술 블로그', required: false, placeholder: 'https://...' },
+      { id: 'blog', type: 'text', label: '기술 블로그', required: false, placeholder: 'https://...' }
     ]
   },
   'tpl-3': {
@@ -64,29 +65,25 @@ const dummyTemplates = {
       { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
       { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
       { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'intro', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
+      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 }
     ]
   }
 }
 
-// 더미 공고-템플릿 매핑
 const jobTemplateMap = {
   '1': 'tpl-1',
   '2': 'tpl-2',
   '3': 'tpl-1',
   '4': 'tpl-3',
-  '5': 'tpl-3',
+  '5': 'tpl-3'
 }
 
-// 템플릿 로드
 onMounted(() => {
-  // 실제로는 API 호출: GET /api/jobs/:jobId/template
   setTimeout(() => {
     const templateId = jobTemplateMap[jobId.value] || 'tpl-3'
     template.value = dummyTemplates[templateId]
 
-    // 폼 데이터 초기화
-    template.value.fields.forEach(field => {
+    template.value.fields.forEach((field) => {
       formData.value[field.id] = ''
     })
 
@@ -94,30 +91,63 @@ onMounted(() => {
   }, 300)
 })
 
-// 취소
 const handleCancel = () => {
   router.push(`/careers/${companySlug.value}`)
 }
 
-// 제출
-const handleSubmit = () => {
-  // 필수 필드 검증
-  const missingFields = template.value.fields
-    .filter(f => f.required && !formData.value[f.id])
-    .map(f => f.label)
+const extractSubmitErrorMessage = (error) => {
+  const response = error?.response
+  if (!response) {
+    return '백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.'
+  }
 
-  if (missingFields.length > 0) {
-    alert(`다음 필수 항목을 입력해주세요: ${missingFields.join(', ')}`)
+  return (
+    response?.data?.message ||
+    response?.data?.error?.message ||
+    response?.data?.errorMessage ||
+    `지원서 제출에 실패했습니다. (HTTP ${response.status})`
+  )
+}
+
+const buildApplicationPayload = () => {
+  return {
+    name: formData.value.name || '',
+    gender: formData.value.gender || '',
+    birthDate: formData.value.birthdate || '',
+    phone: formData.value.phone || '',
+    email: formData.value.email || '',
+    shortBio: formData.value.shortBio || '',
+    portfolioUrl: formData.value.portfolio || formData.value.github || formData.value.blog || ''
+  }
+}
+
+const handleSubmit = async () => {
+  if (submitting.value) {
     return
   }
 
-  // TODO: API 연동 - POST /api/applications
-  console.log('Submit:', formData.value)
-  alert('지원서가 제출되었습니다.')
-  router.push(`/careers/${companySlug.value}`)
+  const missingFields = template.value.fields
+    .filter((field) => field.required && !formData.value[field.id])
+    .map((field) => field.label)
+
+  if (missingFields.length > 0) {
+    alert(`다음 필수 항목을 입력해 주세요: ${missingFields.join(', ')}`)
+    return
+  }
+
+  submitting.value = true
+  try {
+    const payload = buildApplicationPayload()
+    await applicantApi.submitCareerApplication(companySlug.value, jobId.value, payload)
+    alert('지원서가 제출되었습니다.')
+    router.push(`/careers/${companySlug.value}`)
+  } catch (error) {
+    alert(extractSubmitErrorMessage(error))
+  } finally {
+    submitting.value = false
+  }
 }
 
-// textarea 글자수
 const getTextLength = (fieldId) => {
   return formData.value[fieldId]?.length || 0
 }
@@ -125,7 +155,6 @@ const getTextLength = (fieldId) => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- 헤더 -->
     <header class="bg-white border-b border-gray-200">
       <div class="max-w-2xl mx-auto px-6 h-16 flex items-center justify-between">
         <button @click="handleCancel" class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
@@ -143,16 +172,14 @@ const getTextLength = (fieldId) => {
       </div>
     </header>
 
-    <!-- 로딩 -->
     <div v-if="loading" class="max-w-2xl mx-auto px-6 py-12 text-center text-gray-500">
       로딩 중...
     </div>
 
-    <!-- 지원서 폼 -->
     <main v-else class="max-w-2xl mx-auto px-6 py-8">
       <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
         <div class="text-sm">
-          중복 지원 관리를 위해 지원 전에 간단 로그인해주세요.
+          중복 지원 관리를 위해 지원 전에 간단 로그인해 주세요.
         </div>
         <button
           @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
@@ -161,21 +188,18 @@ const getTextLength = (fieldId) => {
           로그인하기
         </button>
       </div>
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-        <!-- 제목 -->
-        <h1 class="text-2xl font-bold text-gray-900 mb-2">지원서 작성</h1>
-        <p class="text-gray-600 mb-8">아래 양식을 작성하고 지원서를 제출해 주세요.</p>
 
-        <!-- 폼 필드 -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">지원서 작성</h1>
+        <p class="text-gray-600 mb-8 font-semibold">아래 양식을 작성하고 지원서를 제출해 주세요.</p>
+
         <form @submit.prevent="handleSubmit" class="space-y-6">
           <div v-for="field in template.fields" :key="field.id">
-            <!-- 라벨 -->
-            <label class="block text-sm font-medium text-gray-700 mb-2">
+            <label class="block text-sm font-semibold text-gray-800 mb-2">
               {{ field.label }}
               <span v-if="field.required" class="text-red-500 ml-1">*</span>
             </label>
 
-            <!-- 텍스트 입력 -->
             <div v-if="field.type === 'text' || field.type === 'email'" class="relative">
               <span v-if="field.id === 'name'" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -196,11 +220,10 @@ const getTextLength = (fieldId) => {
                 v-model="formData[field.id]"
                 :type="field.type"
                 :placeholder="field.placeholder"
-                :class="['w-full py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500', field.id === 'name' || field.id === 'email' || field.id === 'phone' ? 'pl-10 pr-4' : 'px-4']"
+                :class="['w-full py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-semibold', field.id === 'name' || field.id === 'email' || field.id === 'phone' ? 'pl-10 pr-4' : 'px-4']"
               />
             </div>
 
-            <!-- 날짜 입력 -->
             <div v-else-if="field.type === 'date'" class="relative">
               <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -211,11 +234,10 @@ const getTextLength = (fieldId) => {
                 v-model="formData[field.id]"
                 type="date"
                 :placeholder="field.placeholder"
-                class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-semibold"
               />
             </div>
 
-            <!-- 라디오 버튼 -->
             <div v-else-if="field.type === 'radio'" class="flex gap-6">
               <label
                 v-for="option in field.options"
@@ -229,35 +251,32 @@ const getTextLength = (fieldId) => {
                   v-model="formData[field.id]"
                   class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500"
                 />
-                <span class="text-gray-700">{{ option }}</span>
+                <span class="text-gray-800 font-semibold">{{ option }}</span>
               </label>
             </div>
 
-            <!-- 텍스트영역 -->
             <div v-else-if="field.type === 'textarea'" class="relative">
               <textarea
                 v-model="formData[field.id]"
                 :placeholder="field.placeholder"
                 :maxlength="field.maxLength"
                 rows="4"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none font-semibold"
               ></textarea>
               <span v-if="field.maxLength" class="absolute bottom-3 right-3 text-xs text-gray-400">
                 {{ getTextLength(field.id) }} / {{ field.maxLength }}
               </span>
             </div>
 
-            <!-- 파일 업로드 -->
             <div v-else-if="field.type === 'file'">
               <input
                 type="file"
                 :id="field.id"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
               />
             </div>
           </div>
 
-          <!-- 버튼 영역 -->
           <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
             <button
               type="button"
@@ -268,14 +287,14 @@ const getTextLength = (fieldId) => {
             </button>
             <button
               type="submit"
-              class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium"
+              :disabled="submitting"
+              class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
             >
               지원서 제출
             </button>
           </div>
         </form>
 
-        <!-- 개인정보 동의 문구 -->
         <p class="text-sm text-gray-500 text-center mt-6">
           지원서를 제출하면 '<span class="text-brand-600 underline cursor-pointer">개인정보</span>' 처리방침에 동의하게 됩니다.
         </p>

@@ -5,8 +5,12 @@ import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { announcementBoardApi } from '@/api/announcementBoard'
+import { useAuth } from '@/composables/useAuth'
+import { memberApi } from '@/api/member'
 
 const router = useRouter()
+const { user } = useAuth()
+const memberType = ref('')
 
 const showAnnouncementModal = ref(false)
 const announcementMode = ref('list') // list | create | detail
@@ -49,8 +53,12 @@ const closeAnnouncement = () => {
 }
 
 // --- Data: User & Stats ---
-const userName = '김철수'
-const userRole = '관리자'
+const userName = computed(() => user.value?.name || '사용자')
+const userRole = computed(() => {
+  if (memberType.value === 'HR') return '인사담당자'
+  if (memberType.value === 'IVW') return '면접관'
+  return '멤버'
+})
 const stats = [
   { label: '오늘의 일정', value: 3, icon: 'calendar', color: 'text-orange-500 bg-orange-50' },
   { label: '진행 중 공고', value: 5, icon: 'briefcase', color: 'text-brand-600 bg-brand-50' },
@@ -319,8 +327,14 @@ const openScheduleDetail = (schedule) => {
 
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadAnnouncements()
+  try {
+    const res = await memberApi.getMyMember()
+    memberType.value = res.data.data.memberType
+  } catch (e) {
+    // 멤버 정보 조회 실패 시 기본값 유지
+  }
 })
 </script>
 

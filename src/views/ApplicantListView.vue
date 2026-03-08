@@ -1,81 +1,192 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import * as XLSX from 'xlsx'
+import { applicantApi, extractResponseData } from '@/api/applicant'
 
 const router = useRouter()
 
-// 검색 및 필터
 const searchQuery = ref('')
 const selectedJob = ref('')
 const selectedStatus = ref('')
 
-// 페이지네이션
 const currentPage = ref(1)
 const itemsPerPage = 5
 
-// 더미 데이터
-const applicants = ref([
-  { id: 1, name: '박지원', email: 'parkjiwon@email.com', job: '백엔드 개발자', status: '1차 면접', nextSchedule: '2024.02.06 10:00', appliedDate: '2024.02.01' },
-  { id: 2, name: '김철수', email: 'kimcs@email.com', job: '백엔드 개발자', status: '2차 면접', nextSchedule: '2024.02.07 14:00', appliedDate: '2024.01.28' },
-  { id: 3, name: '이영희', email: 'leeyh@email.com', job: '프론트엔드 개발자', status: '서류 검토', nextSchedule: null, appliedDate: '2024.02.03' },
-  { id: 4, name: '최민수', email: 'choi.ms@email.com', job: '백엔드 개발자', status: '처우 협의', nextSchedule: '2024.02.08 15:00', appliedDate: '2024.01.20' },
-  { id: 5, name: '정수현', email: 'jung.sh@email.com', job: '백엔드 개발자', status: '불합격', nextSchedule: null, appliedDate: '2024.01.25' },
-  { id: 6, name: '한소영', email: 'hansoy@email.com', job: '프론트엔드 개발자', status: '1차 면접', nextSchedule: '2024.02.09 11:00', appliedDate: '2024.02.02' },
-  { id: 7, name: '오준석', email: 'ohjs@email.com', job: 'DevOps 엔지니어', status: '서류 검토', nextSchedule: null, appliedDate: '2024.02.04' },
-  { id: 8, name: '윤지민', email: 'yoonjm@email.com', job: '백엔드 개발자', status: '합격', nextSchedule: null, appliedDate: '2024.01.15' },
-])
+const applicants = ref([])
+const loading = ref(false)
+const loadError = ref('')
+const isExporting = ref(false)
 
-const jobs = ['백엔드 개발자', '프론트엔드 개발자', 'DevOps 엔지니어']
-const statuses = ['서류 검토', '1차 면접', '2차 면접', '처우 협의', '합격', '불합격']
+const defaultStatuses = ['서류 검토', '1차 면접', '2차 면접', '처우 협의', '합격', '불합격']
 
-// 필터링된 지원자 목록
+const statusLabelMap = {
+  DOCUMENT_REVIEW: '서류 검토',
+  FIRST_INTERVIEW: '1차 면접',
+  SECOND_INTERVIEW: '2차 면접',
+  OFFER_NEGOTIATION: '처우 협의',
+  HIRED: '합격',
+  PASSED: '합격',
+  REJECTED: '불합격',
+  FAILED: '불합격'
+}
+
+const normalizeStatus = (status) => {
+  if (!status) return '서류 검토'
+  return statusLabelMap[status] || status
+}
+
+const formatDate = (value) => {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}.${month}.${day}`
+}
+
+const formatDateTime = (value) => {
+  if (!value) return null
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+
+  const base = formatDate(date)
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${base} ${hour}:${minute}`
+}
+
+const toApplicantArray = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.content)) return payload.content
+  if (Array.isArray(payload?.items)) return payload.items
+  if (Array.isArray(payload?.applicants)) return payload.applicants
+  return []
+}
+
+const toDisplayApplicant = (item, index) => {
+  const detailId = item?.applicationId ?? item?.applicantId ?? item?.id ?? `applicant-${index}`
+  const id = item?.id ?? detailId
+  const name = item?.name ?? item?.applicantName ?? '-'
+  const email = item?.email ?? item?.applicantEmail ?? '-'
+  const job = item?.recruitmentTitle ?? item?.jobTitle ?? item?.job ?? '-'
+  const status = normalizeStatus(item?.status ?? item?.applicationStatus ?? item?.progressStatus)
+  const nextSchedule = formatDateTime(item?.nextSchedule ?? item?.nextInterviewAt ?? item?.nextScheduleAt)
+  const appliedDate = formatDate(item?.appliedAt ?? item?.appliedDate ?? item?.createdAt)
+
+  return {
+    id,
+    detailId,
+    name,
+    email,
+    job,
+    status,
+    nextSchedule,
+    appliedDate
+  }
+}
+
+const getListErrorMessage = (error) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error?.message ||
+    '지원자 목록을 불러오지 못했습니다.'
+  )
+}
+
+const loadApplicants = async () => {
+  loading.value = true
+  loadError.value = ''
+
+  try {
+    const response = await applicantApi.getApplicantsWithFallback()
+    const payload = extractResponseData(response)
+    const list = toApplicantArray(payload)
+    applicants.value = list.map(toDisplayApplicant)
+  } catch (error) {
+    applicants.value = []
+    loadError.value = getListErrorMessage(error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadApplicants()
+})
+
+const jobs = computed(() => {
+  return [...new Set(applicants.value.map((applicant) => applicant.job).filter((job) => job && job !== '-'))]
+})
+
+const statuses = computed(() => {
+  return [...new Set([...defaultStatuses, ...applicants.value.map((applicant) => applicant.status).filter(Boolean)])]
+})
+
 const filteredApplicants = computed(() => {
-  return applicants.value.filter(applicant => {
-    const matchesSearch = !searchQuery.value ||
-      applicant.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      applicant.email.toLowerCase().includes(searchQuery.value.toLowerCase())
+  return applicants.value.filter((applicant) => {
+    const keyword = searchQuery.value.trim().toLowerCase()
+    const name = (applicant.name || '').toLowerCase()
+    const email = (applicant.email || '').toLowerCase()
+
+    const matchesSearch = !keyword || name.includes(keyword) || email.includes(keyword)
     const matchesJob = !selectedJob.value || applicant.job === selectedJob.value
     const matchesStatus = !selectedStatus.value || applicant.status === selectedStatus.value
+
     return matchesSearch && matchesJob && matchesStatus
   })
 })
 
-// 페이지네이션
-const totalPages = computed(() => Math.ceil(filteredApplicants.value.length / itemsPerPage))
+const totalPages = computed(() => {
+  return Math.max(1, Math.ceil(filteredApplicants.value.length / itemsPerPage))
+})
+
 const paginatedApplicants = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage
   return filteredApplicants.value.slice(start, start + itemsPerPage)
 })
 
 const totalCount = computed(() => filteredApplicants.value.length)
-const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage + 1)
-const endIndex = computed(() => Math.min(currentPage.value * itemsPerPage, totalCount.value))
+const startIndex = computed(() => (totalCount.value === 0 ? 0 : (currentPage.value - 1) * itemsPerPage + 1))
+const endIndex = computed(() => (totalCount.value === 0 ? 0 : Math.min(currentPage.value * itemsPerPage, totalCount.value)))
 
-// 상태별 배지 스타일
+watch([searchQuery, selectedJob, selectedStatus], () => {
+  currentPage.value = 1
+})
+
+watch(filteredApplicants, () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
+})
+
 const getStatusStyle = (status) => {
   const styles = {
     '서류 검토': 'bg-teal-100 text-teal-700 border-teal-200',
     '1차 면접': 'bg-blue-100 text-blue-700 border-blue-200',
     '2차 면접': 'bg-blue-100 text-blue-700 border-blue-200',
     '처우 협의': 'bg-amber-100 text-amber-700 border-amber-200',
-    '합격': 'bg-green-100 text-green-700 border-green-200',
-    '불합격': 'bg-gray-100 text-gray-500 border-gray-200',
+    합격: 'bg-green-100 text-green-700 border-green-200',
+    불합격: 'bg-gray-100 text-gray-500 border-gray-200'
   }
   return styles[status] || 'bg-gray-100 text-gray-700 border-gray-200'
 }
 
-// 이니셜 추출
-const getInitial = (name) => name.charAt(0)
+const getInitial = (name) => (name ? name.charAt(0) : '-')
 
-// 페이지 변경
 const goToPage = (page) => {
   if (page >= 1 && page <= totalPages.value) {
     currentPage.value = page
   }
 }
 
-// 페이지 번호 목록
 const pageNumbers = computed(() => {
   const pages = []
   const total = totalPages.value
@@ -83,59 +194,108 @@ const pageNumbers = computed(() => {
 
   if (total <= 5) {
     for (let i = 1; i <= total; i++) pages.push(i)
+  } else if (current <= 3) {
+    pages.push(1, 2, 3, '...', total)
+  } else if (current >= total - 2) {
+    pages.push(1, '...', total - 2, total - 1, total)
   } else {
-    if (current <= 3) {
-      pages.push(1, 2, 3, '...', total)
-    } else if (current >= total - 2) {
-      pages.push(1, '...', total - 2, total - 1, total)
-    } else {
-      pages.push(1, '...', current, '...', total)
-    }
+    pages.push(1, '...', current, '...', total)
   }
+
   return pages
 })
 
-// 지원자 상세보기
-const goToDetail = (applicantId) => {
-  router.push(`/recruitment/applicants/${applicantId}`)
+const goToDetail = (detailId) => {
+  router.push(`/recruitment/applicants/${detailId}`)
 }
 
-// 엑셀 다운로드
-const exportToExcel = () => {
-  // 1) 엑셀에 들어갈 데이터 준비 (현재 필터링된 전체 데이터)
-  const excelData = filteredApplicants.value.map(applicant => ({
-    '이름': applicant.name,
-    '이메일': applicant.email,
-    '지원 공고': applicant.job,
-    '진행 상태': applicant.status,
-    '다음 일정': applicant.nextSchedule || '-',
-    '지원일': applicant.appliedDate
-  }))
+const buildExportParams = () => {
+  const params = {}
+  const search = searchQuery.value.trim()
 
-  // 데이터가 없을 경우 처리
-  if (excelData.length === 0) {
-    alert('다운로드할 지원자 데이터가 없습니다.')
-    return
+  if (search) params.search = search
+  if (selectedJob.value) params.job = selectedJob.value
+  if (selectedStatus.value) params.status = selectedStatus.value
+
+  return params
+}
+
+const getDefaultExportFilename = () => {
+  const today = new Date().toISOString().split('T')[0]
+  return `applicants_${today}.xlsx`
+}
+
+const getFilenameFromContentDisposition = (contentDisposition) => {
+  if (!contentDisposition) return null
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].replace(/\"/g, '').trim())
+    } catch {
+      return utf8Match[1].replace(/\"/g, '').trim()
+    }
   }
 
-  // 2) 엑셀 워크시트(Sheet)와 워크북(파일) 생성
-  const worksheet = XLSX.utils.json_to_sheet(excelData)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, '지원자 목록')
+  const asciiMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i)
+  if (asciiMatch?.[1]) {
+    return asciiMatch[1].trim()
+  }
 
-  // 3) 파일명에 오늘 날짜 붙여서 다운로드 실행
-  const today = new Date().toISOString().split('T')[0] // 예: 2024-02-20
-  XLSX.writeFile(workbook, `지원자_목록_${today}.xlsx`)
+  return null
 }
+
+const triggerDownload = (blob, filename) => {
+  const blobUrl = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = blobUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(blobUrl)
+}
+
+const getExportErrorMessage = (error) => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error?.message ||
+    '엑셀 파일 다운로드에 실패했습니다.'
+  )
+}
+
+const exportToExcel = async () => {
+  if (isExporting.value) return
+
+  isExporting.value = true
+
+  try {
+    const response = await applicantApi.exportApplicantsWithFallback(buildExportParams())
+    const contentType = response?.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const blob = response?.data instanceof Blob
+      ? response.data
+      : new Blob([response?.data], { type: contentType })
+
+    const filename = getFilenameFromContentDisposition(response?.headers?.['content-disposition']) || getDefaultExportFilename()
+    triggerDownload(blob, filename)
+  } catch (error) {
+    alert(getExportErrorMessage(error))
+  } finally {
+    isExporting.value = false
+  }
+}
+
+const emptyMessage = computed(() => {
+  if (loading.value) return '지원자 목록을 불러오는 중입니다.'
+  if (loadError.value) return loadError.value
+  return '검색 결과가 없습니다.'
+})
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- 헤더 -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <!-- 필터 영역 -->
       <div class="flex flex-wrap items-center gap-3">
-        <!-- 검색 -->
         <div class="relative">
           <input
             v-model="searchQuery"
@@ -148,7 +308,6 @@ const exportToExcel = () => {
           </svg>
         </div>
 
-        <!-- 공고 필터 -->
         <select
           v-model="selectedJob"
           class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
@@ -157,7 +316,6 @@ const exportToExcel = () => {
           <option v-for="job in jobs" :key="job" :value="job">{{ job }}</option>
         </select>
 
-        <!-- 상태 필터 -->
         <select
           v-model="selectedStatus"
           class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
@@ -165,13 +323,12 @@ const exportToExcel = () => {
           <option value="">모든 상태</option>
           <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
         </select>
-
       </div>
 
-      <!-- 엑셀 다운로드 버튼 -->
       <button
         @click="exportToExcel"
-        class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors sm:ml-auto"
+        :disabled="isExporting || loading"
+        class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors sm:ml-auto disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -180,7 +337,6 @@ const exportToExcel = () => {
       </button>
     </div>
 
-    <!-- 테이블 -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <table class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200">
@@ -199,7 +355,6 @@ const exportToExcel = () => {
             :key="applicant.id"
             class="hover:bg-gray-50 transition-colors"
           >
-            <!-- 지원자 정보 -->
             <td class="px-6 py-4">
               <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
@@ -207,7 +362,7 @@ const exportToExcel = () => {
                 </div>
                 <div>
                   <button
-                    @click="goToDetail(applicant.id)"
+                    @click="goToDetail(applicant.detailId)"
                     class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
                   >
                     {{ applicant.name }}
@@ -217,10 +372,8 @@ const exportToExcel = () => {
               </div>
             </td>
 
-            <!-- 공고 -->
             <td class="px-6 py-4 text-gray-700">{{ applicant.job }}</td>
 
-            <!-- 진행 상태 -->
             <td class="px-6 py-4">
               <span
                 :class="[getStatusStyle(applicant.status), 'px-3 py-1 rounded-full text-sm font-medium border']"
@@ -229,19 +382,16 @@ const exportToExcel = () => {
               </span>
             </td>
 
-            <!-- 다음 일정 -->
             <td class="px-6 py-4 text-gray-700">
               {{ applicant.nextSchedule || '-' }}
             </td>
 
-            <!-- 지원일 -->
             <td class="px-6 py-4 text-gray-700">{{ applicant.appliedDate }}</td>
 
-            <!-- 액션 -->
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-3">
                 <button
-                  @click="goToDetail(applicant.id)"
+                  @click="goToDetail(applicant.detailId)"
                   class="text-brand-600 hover:text-brand-700 text-sm font-medium"
                 >
                   상세
@@ -250,23 +400,20 @@ const exportToExcel = () => {
             </td>
           </tr>
 
-          <!-- 빈 상태 -->
           <tr v-if="paginatedApplicants.length === 0">
             <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-              검색 결과가 없습니다.
+              {{ emptyMessage }}
             </td>
           </tr>
         </tbody>
       </table>
 
-      <!-- 페이지네이션 -->
       <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
         <p class="text-sm text-gray-600">
           총 {{ totalCount }}명 중 {{ startIndex }}-{{ endIndex }}
         </p>
 
         <div class="flex items-center gap-1">
-          <!-- 이전 -->
           <button
             @click="goToPage(currentPage - 1)"
             :disabled="currentPage === 1"
@@ -277,7 +424,6 @@ const exportToExcel = () => {
             </svg>
           </button>
 
-          <!-- 페이지 번호 -->
           <template v-for="(page, index) in pageNumbers" :key="index">
             <span v-if="page === '...'" class="px-2 text-gray-400">...</span>
             <button
@@ -294,7 +440,6 @@ const exportToExcel = () => {
             </button>
           </template>
 
-          <!-- 다음 -->
           <button
             @click="goToPage(currentPage + 1)"
             :disabled="currentPage === totalPages"

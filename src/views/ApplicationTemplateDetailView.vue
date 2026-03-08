@@ -9,19 +9,17 @@ const recruitmentStore = useRecruitmentStore()
 
 const templateId = computed(() => route.params.id)
 const loading = ref(true)
-
-// 템플릿 데이터
 const template = ref(null)
 
-// 기본 필드 (항상 포함)
 const defaultFields = [
   { id: 'name', label: '이름', type: 'text', required: true },
   { id: 'gender', label: '성별', type: 'select', options: '남성 / 여성', required: true },
   { id: 'birthdate', label: '생년월일', type: 'date', placeholder: 'YYYY-MM-DD', required: true },
   { id: 'phone', label: '연락처', type: 'text', required: true },
+  { id: 'email', label: '이메일', type: 'email', required: true },
+  { id: 'shortBio', label: '간단 자기소개', type: 'long_text', required: true }
 ]
 
-// 필드 타입 라벨
 const fieldTypeLabels = {
   text: '텍스트',
   date: '날짜',
@@ -29,10 +27,9 @@ const fieldTypeLabels = {
   short_text: '단답형 질문',
   long_text: '장문형 질문',
   checkbox: '체크박스',
-  file: '첨부파일',
+  file: '첨부 파일'
 }
 
-// 템플릿 데이터 로드
 onMounted(async () => {
   await loadTemplate()
 })
@@ -40,26 +37,23 @@ onMounted(async () => {
 const loadTemplate = async () => {
   loading.value = true
   try {
-    const foundData = recruitmentStore.templates.find(t => t.id === Number(templateId.value))
+    const foundData = recruitmentStore.templates.find((item) => item.id === Number(templateId.value))
     template.value = foundData || null
   } catch (error) {
-    console.error('템플릿을 불러올 수 없습니다:', error)
+    console.error('템플릿을 불러오지 못했습니다:', error)
   } finally {
     loading.value = false
   }
 }
 
-// 필드 타입 라벨 가져오기
 const getFieldTypeLabel = (type) => {
   return fieldTypeLabels[type] || type
 }
 
-// 편집 페이지로 이동
 const goToEdit = () => {
   router.push(`/recruitment/templates/${templateId.value}/edit`)
 }
 
-// 목록으로 돌아가기
 const goBack = () => {
   router.push('/recruitment/templates')
 }
@@ -67,12 +61,10 @@ const goBack = () => {
 
 <template>
   <div class="max-w-3xl mx-auto space-y-6">
-    <!-- 로딩 -->
     <div v-if="loading" class="text-center py-12 text-gray-500">
       로딩 중...
     </div>
 
-    <!-- 템플릿을 찾을 수 없음 -->
     <div v-else-if="!template" class="text-center py-12">
       <p class="text-gray-500 mb-4">템플릿을 찾을 수 없습니다.</p>
       <button
@@ -84,7 +76,6 @@ const goBack = () => {
     </div>
 
     <template v-else>
-      <!-- 헤더 -->
       <div class="flex items-center justify-between">
         <div>
           <div class="flex items-center gap-3 mb-2">
@@ -99,7 +90,7 @@ const goBack = () => {
             <h1 class="text-2xl font-bold text-gray-900">{{ template.title }}</h1>
             <span
               :class="[
-                template.status === '사용중'
+                template.status === '사용중' || template.status === '사용 중'
                   ? 'bg-green-100 text-green-700 border-green-200'
                   : 'bg-gray-100 text-gray-500 border-gray-200',
                 'px-3 py-1 rounded-full text-sm font-medium border'
@@ -109,7 +100,7 @@ const goBack = () => {
             </span>
           </div>
           <p class="text-gray-500 text-sm ml-8">
-            생성일: {{ template.createdAt }} · 수정일: {{ template.updatedAt }}
+            생성일 {{ template.createdAt }} · 수정일 {{ template.updatedAt }}
           </p>
         </div>
         <button
@@ -119,11 +110,10 @@ const goBack = () => {
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
           </svg>
-          편집
+          수정
         </button>
       </div>
 
-      <!-- 기본 필드 섹션 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">기본 항목</h2>
         <p class="text-sm text-gray-500 mb-4">모든 지원서에 기본으로 포함되는 항목입니다.</p>
@@ -147,7 +137,6 @@ const goBack = () => {
         </div>
       </div>
 
-      <!-- 추가 질문 섹션 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 class="text-lg font-semibold text-gray-900 mb-4">추가 질문</h2>
 
@@ -170,11 +159,10 @@ const goBack = () => {
         </div>
 
         <div v-else class="text-center py-8 text-gray-500">
-          추가된 질문이 없습니다.
+          추가한 질문이 없습니다.
         </div>
       </div>
 
-      <!-- 하단 버튼 -->
       <div class="flex items-center justify-between pt-4">
         <button
           @click="goBack"
@@ -186,7 +174,7 @@ const goBack = () => {
           @click="goToEdit"
           class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium"
         >
-          편집하기
+          수정하기
         </button>
       </div>
     </template>

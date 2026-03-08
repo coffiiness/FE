@@ -7,90 +7,80 @@ const router = useRouter()
 const route = useRoute()
 const recruitmentStore = useRecruitmentStore()
 
-// 편집 모드 여부
 const templateId = computed(() => route.params.id)
 const isEditMode = computed(() => !!templateId.value)
 const loading = ref(false)
 
-// 템플릿 데이터
 const templateTitle = ref('')
 
-// 기본 필드 (삭제 불가)
 const defaultFields = ref([
   { id: 'name', label: '이름', type: 'text', required: true, editable: false },
   { id: 'gender', label: '성별', type: 'select', options: '남성 / 여성', required: true, editable: false },
   { id: 'birthdate', label: '생년월일', type: 'date', placeholder: 'YYYY-MM-DD', required: true, editable: false },
   { id: 'phone', label: '연락처', type: 'text', required: true, editable: false },
+  { id: 'email', label: '이메일', type: 'email', required: true, editable: false },
+  { id: 'shortBio', label: '간단 자기소개', type: 'long_text', required: true, editable: false }
 ])
 
-// 추가 질문 필드
 const customFields = ref([])
 
-// 필드 타입 옵션
 const fieldTypeOptions = [
   { value: 'short_text', label: '단답형 질문', icon: 'text' },
   { value: 'long_text', label: '장문형 질문', icon: 'paragraph' },
   { value: 'select', label: '선택형 질문', icon: 'list' },
   { value: 'checkbox', label: '체크박스', icon: 'check' },
-  { value: 'file', label: '첨부파일', icon: 'attachment' },
+  { value: 'file', label: '첨부 파일', icon: 'attachment' }
 ]
 
-// 드롭다운 상태
 const showFieldTypeDropdown = ref(false)
 const newFieldLabel = ref('')
 
-// 편집 모드일 때 데이터 로드
 onMounted(async () => {
   if (isEditMode.value) {
     await loadTemplate()
   }
 })
 
-// 템플릿 데이터 로드
 const loadTemplate = async () => {
   loading.value = true
   try {
-    const data = recruitmentStore.templates.find(t => t.id === Number(templateId.value))
+    const data = recruitmentStore.templates.find((template) => template.id === Number(templateId.value))
     if (data) {
       templateTitle.value = data.title
       customFields.value = data.customFields || []
     }
   } catch (error) {
-    console.error('Failed to load template:', error)
+    console.error('템플릿을 불러오지 못했습니다:', error)
   } finally {
     loading.value = false
   }
 }
 
-// 새 필드 추가
 const addField = (type) => {
-  const typeOption = fieldTypeOptions.find(opt => opt.value === type)
+  const typeOption = fieldTypeOptions.find((option) => option.value === type)
   customFields.value.push({
     id: `custom_${Date.now()}`,
     label: newFieldLabel.value || `새 ${typeOption.label}`,
-    type: type,
+    type,
     required: false,
-    options: type === 'select' ? '옵션1 / 옵션2' : '',
+    options: type === 'select' ? '옵션1 / 옵션2' : ''
   })
   newFieldLabel.value = ''
   showFieldTypeDropdown.value = false
 }
 
-// 필드 삭제
 const removeField = (index) => {
   customFields.value.splice(index, 1)
 }
 
-// 취소
 const handleCancel = () => {
   router.push('/recruitment/templates')
 }
 
-// 저장
 const handleSave = async () => {
   const payload = {
     title: templateTitle.value,
-    customFields: customFields.value,
+    customFields: customFields.value
   }
 
   if (isEditMode.value) {
@@ -98,54 +88,48 @@ const handleSave = async () => {
   } else {
     recruitmentStore.addTemplate(payload)
   }
+
   router.push('/recruitment/templates')
 }
 
-// 필드 타입 라벨 가져오기
 const getFieldTypeLabel = (type) => {
-  const option = fieldTypeOptions.find(opt => opt.value === type)
+  const option = fieldTypeOptions.find((value) => value.value === type)
   return option ? option.label : type
 }
 
-// 페이지 제목
-const pageTitle = computed(() => isEditMode.value ? '지원서 템플릿 수정' : '지원서 템플릿 작성')
-const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
+const pageTitle = computed(() => (isEditMode.value ? '지원서 템플릿 수정' : '지원서 템플릿 생성'))
+const saveButtonText = computed(() => (isEditMode.value ? '저장' : '적용'))
 </script>
 
 <template>
   <div class="max-w-3xl mx-auto space-y-6">
-    <!-- 로딩 -->
     <div v-if="loading" class="text-center py-12 text-gray-500">
       로딩 중...
     </div>
 
     <template v-else>
-      <!-- 헤더 -->
       <div>
         <h1 class="text-2xl font-bold text-gray-900">{{ pageTitle }}</h1>
         <p class="mt-2 text-gray-600">
-          지원서 템플릿의 제목을 설정하고 필요한 질문 항목을 추가하여 지원서를 작성할 수 있도록 설정해 주세요.
+          지원서 템플릿의 제목을 설정하고 필요한 질문 항목을 추가하여 지원서 양식을 만들어 주세요.
         </p>
       </div>
 
-      <!-- 템플릿 제목 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <label class="block text-sm font-bold text-gray-900 mb-2">제목</label>
         <input
-            v-model="templateTitle"
-            type="text"
-            placeholder="지원서 템플릿의 제목을 입력하세요..."
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
+          v-model="templateTitle"
+          type="text"
+          placeholder="지원서 템플릿 제목을 입력해 주세요..."
+          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
         />
       </div>
 
-      <!-- 질문 필드 -->
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <label class="text-sm font-bold text-gray-900">질문 추가</label>
         </div>
 
-        <!-- 기본 필드 (삭제 불가) -->
         <div class="space-y-3 mb-6">
           <div
             v-for="field in defaultFields"
@@ -165,10 +149,10 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
             <div class="flex items-center gap-3">
               <label class="flex items-center gap-2 text-sm text-gray-600" @click.prevent>
                 <input
-                    type="checkbox"
-                    :checked="field.required"
-                    readonly
-                    class="w-4 h-4 text-brand-600 rounded border-gray-300 pointer-events-none"
+                  type="checkbox"
+                  :checked="field.required"
+                  readonly
+                  class="w-4 h-4 text-brand-600 rounded border-gray-300 pointer-events-none"
                 />
                 필수
               </label>
@@ -177,10 +161,8 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
           </div>
         </div>
 
-        <!-- 구분선 -->
         <div class="border-t border-gray-200 my-6"></div>
 
-        <!-- 추가 질문 필드 -->
         <div class="space-y-3 mb-6">
           <div
             v-for="(field, index) in customFields"
@@ -197,7 +179,7 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
                 v-model="field.label"
                 type="text"
                 class="w-full bg-transparent border-none focus:ring-0 p-0 text-gray-700"
-                placeholder="질문을 입력하세요..."
+                placeholder="질문을 입력해 주세요..."
               />
               <span class="text-xs text-gray-400">{{ getFieldTypeLabel(field.type) }}</span>
             </div>
@@ -222,15 +204,14 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
           </div>
         </div>
 
-        <!-- 새 질문 추가 -->
         <div class="flex items-center gap-3">
           <div class="flex-1 relative">
             <input
-                v-model="newFieldLabel"
-                type="text"
-                placeholder="+ 질문 항목을 추가하세요..."
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
-                @focus="showFieldTypeDropdown = false"
+              v-model="newFieldLabel"
+              type="text"
+              placeholder="+ 질문 항목을 추가해 주세요..."
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-gray-700 placeholder:text-gray-400"
+              @focus="showFieldTypeDropdown = false"
             />
           </div>
           <div class="relative">
@@ -244,7 +225,6 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
               필드 추가
             </button>
 
-            <!-- 드롭다운 메뉴 -->
             <div
               v-if="showFieldTypeDropdown"
               class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10"
@@ -277,12 +257,10 @@ const saveButtonText = computed(() => isEditMode.value ? '저장' : '적용')
         </div>
       </div>
 
-      <!-- 안내 문구 -->
       <p class="text-sm text-gray-500 text-center">
         지원서를 제출하면 '<span class="text-brand-600 underline cursor-pointer">개인정보</span>' 처리방침에 동의하게 됩니다.
       </p>
 
-      <!-- 버튼 영역 -->
       <div class="flex items-center justify-end gap-3 pt-4">
         <button
           @click="handleCancel"
