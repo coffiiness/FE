@@ -7,7 +7,7 @@ defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
-const useStartTime = ref(true)
+const useStartTime = ref(false)
 const useDuration = ref(true)
 
 const hourOptions = computed(() => {

@@ -85,7 +85,7 @@ const roomBookings = () => {
           </div>
       </div>
       <div class="p-6 border-t flex justify-end gap-2">
-        <button class="px-4 py-2 border rounded-lg" @click="emit('close')">닫기</button>
+        <button class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-medium transition-colors" @click="emit('close')">닫기</button>
       </div>
     </div>
   </div>

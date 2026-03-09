@@ -1,6 +1,5 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -8,7 +7,6 @@ import { announcementBoardApi } from '@/api/announcementBoard'
 import { useAuth } from '@/composables/useAuth'
 import { memberApi } from '@/api/member'
 
-const router = useRouter()
 const { user } = useAuth()
 const memberType = ref('')
 
@@ -254,15 +252,6 @@ const handleRemoveAnnouncement = async (id) => {
 }
 
 
-// --- Data: Meeting Rooms (Replacement for Work Status) ---
-const meetingRooms = ref([
-  { id: 1, name: '1층 미팅룸 A', status: 'available', info: '오후 2시까지 예약 없음' },
-  { id: 2, name: '1층 미팅룸 B', status: 'occupied', info: '주간 회의 진행 중 (~12:00)' },
-  { id: 3, name: '2층 대회의실', status: 'available', info: '종일 예약 가능' },
-  { id: 4, name: '화상 면접실 1', status: 'occupied', info: 'FE 개발자 면접 (~13:30)' },
-  { id: 5, name: '화상 면접실 2', status: 'available', info: '다음 일정: 15:00 임원 면접' },
-])
-
 // --- Calendar Logic ---
 const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -495,43 +484,6 @@ onMounted(async () => {
                   <span class="text-xs text-slate-400 font-mono">{{ item.date }}</span>
                </li>
              </ul>
-          </div>
-        </div>
-
-        <!-- Meeting Room Status (Replacement) -->
-        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex-1 flex flex-col">
-          <div class="flex justify-between items-center mb-6">
-            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <span class="w-1.5 h-5 bg-orange-500 rounded-full"></span>
-              실시간 회의실 현황
-            </h2>
-            <button @click="router.push('/meeting-rooms/list')" class="text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors">예약하기</button>
-          </div>
-          
-          <div class="flex-1 overflow-hidden">
-             <div class="overflow-y-auto h-full custom-scrollbar pr-2 space-y-3">
-                <div v-for="room in meetingRooms" :key="room.id" 
-                     @click="router.push('/meeting-rooms/list')"
-                     class="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-orange-200 hover:bg-orange-50/30 transition-all cursor-pointer">
-                   <div class="flex items-center gap-3">
-                     <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg bg-white border border-slate-100 shadow-sm"
-                          :class="room.status === 'available' ? 'text-emerald-500' : 'text-slate-400'">
-                       <!-- Room Icon -->
-                       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                     </div>
-                     <div>
-                       <p class="text-sm font-bold text-slate-800">{{ room.name }}</p>
-                       <p class="text-xs text-slate-500 truncate max-w-[150px]">{{ room.info }}</p>
-                     </div>
-                   </div>
-                   <span class="px-2.5 py-1 rounded-lg text-xs font-bold border"
-                         :class="room.status === 'available' 
-                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                           : 'bg-rose-50 text-rose-600 border-rose-100'">
-                     {{ room.status === 'available' ? '예약 가능' : '사용 중' }}
-                   </span>
-                </div>
-             </div>
           </div>
         </div>
 
