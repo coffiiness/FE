@@ -51,8 +51,8 @@ const fetchAll = async () => {
 
 onMounted(fetchAll)
 
-const maxRevenue = computed(() =>
-  Math.max(1, ...trendData.value.map(d => d.revenue))
+const maxValue = computed(() =>
+  Math.max(1, ...trendData.value.map(d => Math.max(d.revenue, d.cost)))
 )
 
 const formatWon = (v) => {
@@ -164,12 +164,12 @@ const formatWon = (v) => {
               <!-- Revenue bar -->
               <div
                 class="w-5 bg-brand-400 rounded-t transition-all duration-500"
-                :style="{ height: (d.revenue / maxRevenue * 100) + '%' }"
+                :style="{ height: (d.revenue / maxValue * 100) + '%' }"
               />
               <!-- Cost bar -->
               <div
                 class="w-5 bg-gray-200 rounded-t transition-all duration-500"
-                :style="{ height: (d.cost / maxRevenue * 100) + '%' }"
+                :style="{ height: (d.cost / maxValue * 100) + '%' }"
               />
             </div>
             <span class="text-xs text-gray-500 mt-1">{{ d.month }}</span>

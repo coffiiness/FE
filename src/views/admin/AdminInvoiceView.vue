@@ -18,6 +18,7 @@ const currentMonth = now.getMonth() + 1
 
 const summary = ref({ confirmedRevenue: 0, confirmedCount: 0, outstanding: 0, outstandingOverdue: 0 })
 const invoices = ref([])
+const hasNextPage = ref(false)
 const loading = ref(false)
 
 const fetchAll = async () => {
@@ -29,7 +30,9 @@ const fetchAll = async () => {
       adminApi.getInvoices({ status: TAB_STATUS[activeTab.value], page: currentPage.value - 1, size: itemsPerPage })
     ])
     summary.value = summaryRes.data.data
-    invoices.value = (invoicesRes.data.data || []).map(inv => ({
+    const invoiceList = invoicesRes.data.data || []
+    hasNextPage.value = invoiceList.length === itemsPerPage
+    invoices.value = invoiceList.map(inv => ({
       id: inv.id,
       workspaceId: inv.workspaceId,
       plan: inv.planType,
@@ -51,7 +54,7 @@ const fetchAll = async () => {
 onMounted(fetchAll)
 watch([activeTab, currentPage], fetchAll)
 
-const totalPages = computed(() => Math.ceil(invoices.value.length / itemsPerPage) || 1)
+const hasPrevPage = computed(() => currentPage.value > 1)
 
 const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 </script>
@@ -140,16 +143,26 @@ const formatWon = (v) => '₩' + v.toLocaleString('ko-KR')
 
       <!-- Pagination -->
       <div class="px-6 py-4 flex items-center justify-between border-t border-gray-100">
-        <p class="text-sm text-gray-500">총 {{ invoices.length }}건</p>
-        <div class="flex items-center gap-1">
+        <p class="text-sm text-gray-500">페이지 {{ currentPage }}</p>
+        <div class="flex items-center gap-2">
           <button
-            v-for="page in totalPages"
-            :key="page"
-            class="w-9 h-9 rounded-lg text-sm font-medium transition-colors"
-            :class="currentPage === page ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
-            @click="currentPage = page"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="hasPrevPage ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'"
+            :disabled="!hasPrevPage"
+            @click="currentPage--"
           >
-            {{ page }}
+            ← 이전
+          </button>
+          <span class="w-9 h-9 rounded-lg text-sm font-medium bg-gray-900 text-white flex items-center justify-center">
+            {{ currentPage }}
+          </span>
+          <button
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="hasNextPage ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'"
+            :disabled="!hasNextPage"
+            @click="currentPage++"
+          >
+            다음 →
           </button>
         </div>
       </div>

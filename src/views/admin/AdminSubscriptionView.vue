@@ -14,15 +14,10 @@ const currentPage = ref(1)
 const itemsPerPage = 8
 
 const subscriptions = ref([])
-const totalCount = ref(0)
+const hasNextPage = ref(false)
 const loading = ref(false)
 
-const tabs = computed(() => [
-  { name: '전체', count: totalCount.value },
-  { name: '활성', count: 0 },
-  { name: '체험 중', count: 0 },
-  { name: '해지', count: 0 }
-])
+const tabs = ['전체', '활성', '체험 중', '해지']
 
 const fetchSubscriptions = async () => {
   loading.value = true
@@ -35,6 +30,7 @@ const fetchSubscriptions = async () => {
     }
     const res = await adminApi.getSubscriptions(params)
     const list = res.data.data || []
+    hasNextPage.value = list.length === itemsPerPage
     subscriptions.value = list.map(sub => ({
       ...sub,
       plan: PLAN_LABEL[sub.planType] || sub.planType,
@@ -46,7 +42,6 @@ const fetchSubscriptions = async () => {
       startDate: sub.startDate,
       monthlyCharge: sub.monthlyAmount || 0
     }))
-    totalCount.value = list.length
   } catch (e) {
     console.error('구독 목록 로드 실패', e)
   } finally {
@@ -58,7 +53,7 @@ onMounted(fetchSubscriptions)
 watch([activeTab, searchQuery], () => { currentPage.value = 1; fetchSubscriptions() })
 watch(currentPage, fetchSubscriptions)
 
-const totalPages = computed(() => Math.ceil(totalCount.value / itemsPerPage) || 1)
+const hasPrevPage = computed(() => currentPage.value > 1)
 
 const formatWon = (v) => {
   if (v === 0) return '무료'
@@ -123,16 +118,16 @@ const openDetail = async (sub) => {
       <div class="flex items-center gap-2">
         <button
           v-for="tab in tabs"
-          :key="tab.name"
+          :key="tab"
           class="px-4 py-1.5 rounded-full text-sm font-medium border transition-colors"
           :class="
-            activeTab === tab.name
+            activeTab === tab
               ? 'bg-brand-500 text-white border-brand-500'
               : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
           "
-          @click="activeTab = tab.name"
+          @click="activeTab = tab"
         >
-          {{ tab.name }} {{ tab.count }}
+          {{ tab }}
         </button>
       </div>
     </div>
@@ -192,16 +187,26 @@ const openDetail = async (sub) => {
 
       <!-- Pagination -->
       <div class="px-6 py-4 flex items-center justify-between border-t border-gray-100">
-        <p class="text-sm text-gray-500">총 {{ totalCount }}개</p>
-        <div class="flex items-center gap-1">
+        <p class="text-sm text-gray-500">페이지 {{ currentPage }}</p>
+        <div class="flex items-center gap-2">
           <button
-            v-for="page in totalPages"
-            :key="page"
-            class="w-9 h-9 rounded-lg text-sm font-medium transition-colors"
-            :class="currentPage === page ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'"
-            @click="currentPage = page"
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="hasPrevPage ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'"
+            :disabled="!hasPrevPage"
+            @click="currentPage--"
           >
-            {{ page }}
+            ← 이전
+          </button>
+          <span class="w-9 h-9 rounded-lg text-sm font-medium bg-gray-900 text-white flex items-center justify-center">
+            {{ currentPage }}
+          </span>
+          <button
+            class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            :class="hasNextPage ? 'text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'"
+            :disabled="!hasNextPage"
+            @click="currentPage++"
+          >
+            다음 →
           </button>
         </div>
       </div>
