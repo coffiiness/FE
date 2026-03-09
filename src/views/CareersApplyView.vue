@@ -1,155 +1,159 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { applicantApi } from '@/api/applicant'
+import { careerApi } from '@/api/career'
+import applicantClient from '@/api/applicantClient'
+import { useApplicantAuth } from '@/composables/useApplicantAuth'
 
 const route = useRoute()
 const router = useRouter()
+const { isAuthenticated, applicant, logout } = useApplicantAuth()
 
 const companySlug = computed(() => route.params.companySlug)
 const jobId = computed(() => route.params.jobId)
 
-const companyInfo = {
-  naver: { name: 'NAVER', logo: 'N' },
-  kakao: { name: 'Kakao', logo: 'K' }
-}
+const companyName = ref('')
+const applyForm = ref(null)
+const loading = ref(true)
+const submitting = ref(false)
+const errorMsg = ref('')
+const successMsg = ref('')
 
-const company = computed(() => companyInfo[companySlug.value] || {
-  name: companySlug.value,
-  logo: companySlug.value?.charAt(0)?.toUpperCase()
+// Base fields (always required)
+const formData = ref({
+  name: '',
+  gender: '',
+  birthDate: '',
+  phone: '',
+  email: ''
 })
 
-const template = ref(null)
-const loading = ref(true)
+// Custom field answers keyed by field id
+const customAnswers = ref({})
 
-const formData = ref({})
-const submitting = ref(false)
+onMounted(async () => {
+  try {
+    // Fetch company name
+    const companiesRes = await careerApi.getCompanies()
+    const companies = companiesRes.data.data || []
+    const matched = companies.find(c => c.workspaceId === companySlug.value)
+    companyName.value = matched ? matched.companyName : companySlug.value
 
-const dummyTemplates = {
-  'tpl-1': {
-    id: 'tpl-1',
-    title: '백엔드 개발자 지원서',
-    jobTitle: '백엔드 개발자',
-    fields: [
-      { id: 'name', type: 'text', label: '이름', required: true, placeholder: '이름' },
-      { id: 'gender', type: 'radio', label: '성별', required: true, options: ['남성', '여성'] },
-      { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
-      { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
-      { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
-      { id: 'portfolio', type: 'text', label: '포트폴리오 URL', required: false, placeholder: 'https://github.com/...' }
-    ]
-  },
-  'tpl-2': {
-    id: 'tpl-2',
-    title: '프론트엔드 개발자 지원서',
-    jobTitle: '프론트엔드 개발자',
-    fields: [
-      { id: 'name', type: 'text', label: '이름', required: true, placeholder: '이름' },
-      { id: 'gender', type: 'radio', label: '성별', required: true, options: ['남성', '여성'] },
-      { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
-      { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
-      { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 },
-      { id: 'github', type: 'text', label: 'GitHub', required: false, placeholder: 'https://github.com/...' },
-      { id: 'blog', type: 'text', label: '기술 블로그', required: false, placeholder: 'https://...' }
-    ]
-  },
-  'tpl-3': {
-    id: 'tpl-3',
-    title: '일반 지원서',
-    jobTitle: '서비스 기획자',
-    fields: [
-      { id: 'name', type: 'text', label: '이름', required: true, placeholder: '이름' },
-      { id: 'gender', type: 'radio', label: '성별', required: true, options: ['남성', '여성'] },
-      { id: 'birthdate', type: 'date', label: '생년월일', required: true, placeholder: 'YYYY-MM-DD' },
-      { id: 'phone', type: 'text', label: '번호', required: true, placeholder: '010-0000-0000' },
-      { id: 'email', type: 'email', label: '이메일', required: true, placeholder: 'example@email.com' },
-      { id: 'shortBio', type: 'textarea', label: '간단 자기소개', required: true, placeholder: '자기소개를 입력하세요...', maxLength: 500 }
-    ]
+    // Fetch apply form info
+    const formRes = await careerApi.getApplyForm(companySlug.value, jobId.value)
+    applyForm.value = formRes.data.data
+
+    // Parse custom fields from JSON string
+    if (applyForm.value.customFields) {
+      try {
+        const parsed = JSON.parse(applyForm.value.customFields)
+        if (Array.isArray(parsed)) {
+          applyForm.value.parsedCustomFields = parsed
+          parsed.forEach(f => {
+            customAnswers.value[f.id] = ''
+          })
+        } else {
+          applyForm.value.parsedCustomFields = []
+        }
+      } catch {
+        applyForm.value.parsedCustomFields = []
+      }
+    } else {
+      applyForm.value.parsedCustomFields = []
+    }
+
+    // Pre-fill email from applicant info if logged in
+    if (applicant.value) {
+      formData.value.email = applicant.value.email || ''
+      formData.value.name = applicant.value.name || ''
+    }
+  } catch (e) {
+    console.error('지원서 양식 로드 실패', e)
+    errorMsg.value = '지원서 양식을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+})
+
+const company = computed(() => ({
+  name: companyName.value || companySlug.value,
+  logo: (companyName.value || companySlug.value)?.charAt(0)?.toUpperCase() || '?'
+}))
+
+const handleAuthAction = () => {
+  if (isAuthenticated.value) {
+    logout()
+    router.push(`/careers/${companySlug.value}`)
+  } else {
+    router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })
   }
 }
-
-const jobTemplateMap = {
-  '1': 'tpl-1',
-  '2': 'tpl-2',
-  '3': 'tpl-1',
-  '4': 'tpl-3',
-  '5': 'tpl-3'
-}
-
-onMounted(() => {
-  setTimeout(() => {
-    const templateId = jobTemplateMap[jobId.value] || 'tpl-3'
-    template.value = dummyTemplates[templateId]
-
-    template.value.fields.forEach((field) => {
-      formData.value[field.id] = ''
-    })
-
-    loading.value = false
-  }, 300)
-})
 
 const handleCancel = () => {
   router.push(`/careers/${companySlug.value}`)
 }
 
-const extractSubmitErrorMessage = (error) => {
-  const response = error?.response
-  if (!response) {
-    return '백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.'
-  }
-
-  return (
-    response?.data?.message ||
-    response?.data?.error?.message ||
-    response?.data?.errorMessage ||
-    `지원서 제출에 실패했습니다. (HTTP ${response.status})`
-  )
-}
-
-const buildApplicationPayload = () => {
-  return {
-    name: formData.value.name || '',
-    gender: formData.value.gender || '',
-    birthDate: formData.value.birthdate || '',
-    phone: formData.value.phone || '',
-    email: formData.value.email || '',
-    shortBio: formData.value.shortBio || '',
-    portfolioUrl: formData.value.portfolio || formData.value.github || formData.value.blog || ''
-  }
-}
-
 const handleSubmit = async () => {
-  if (submitting.value) {
+  errorMsg.value = ''
+  successMsg.value = ''
+
+  if (!isAuthenticated.value) {
+    router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })
     return
   }
 
-  const missingFields = template.value.fields
-    .filter((field) => field.required && !formData.value[field.id])
-    .map((field) => field.label)
+  // Validate base fields
+  if (!formData.value.name.trim()) { errorMsg.value = '이름을 입력해주세요.'; return }
+  if (!formData.value.gender) { errorMsg.value = '성별을 선택해주세요.'; return }
+  if (!formData.value.birthDate) { errorMsg.value = '생년월일을 입력해주세요.'; return }
+  if (!formData.value.phone.trim()) { errorMsg.value = '연락처를 입력해주세요.'; return }
+  if (!formData.value.email.trim()) { errorMsg.value = '이메일을 입력해주세요.'; return }
 
-  if (missingFields.length > 0) {
-    alert(`다음 필수 항목을 입력해 주세요: ${missingFields.join(', ')}`)
-    return
+  // Validate required custom fields
+  const customFields = applyForm.value?.parsedCustomFields || []
+  for (const field of customFields) {
+    if (field.required && !customAnswers.value[field.id]?.trim()) {
+      errorMsg.value = `"${field.label}" 항목을 입력해주세요.`
+      return
+    }
   }
 
   submitting.value = true
+
   try {
-    const payload = buildApplicationPayload()
-    await applicantApi.submitCareerApplication(companySlug.value, jobId.value, payload)
-    alert('지원서가 제출되었습니다.')
-    router.push(`/careers/${companySlug.value}`)
-  } catch (error) {
-    alert(extractSubmitErrorMessage(error))
+    const payload = {
+      recruitmentId: Number(jobId.value),
+      recruitmentProcessId: applyForm.value.firstStageId,
+      templateId: applyForm.value.templateId,
+      name: formData.value.name.trim(),
+      gender: formData.value.gender,
+      birthDate: formData.value.birthDate,
+      phone: formData.value.phone.trim(),
+      email: formData.value.email.trim(),
+      schema: customAnswers.value
+    }
+
+    await applicantClient.post('/applications', payload)
+    successMsg.value = '지원서가 성공적으로 제출되었습니다!'
+    setTimeout(() => {
+      router.push(`/careers/${companySlug.value}`)
+    }, 1500)
+  } catch (e) {
+    const msg = e.response?.data?.error?.message || e.response?.data?.message || e.message
+    if (e.response?.status === 401) {
+      errorMsg.value = '로그인이 필요합니다. 로그인 후 다시 시도해주세요.'
+    } else if (msg?.includes('VALIDATION')) {
+      errorMsg.value = '이미 해당 공고에 지원하셨습니다.'
+    } else {
+      errorMsg.value = msg || '지원서 제출에 실패했습니다.'
+    }
   } finally {
     submitting.value = false
   }
 }
 
 const getTextLength = (fieldId) => {
-  return formData.value[fieldId]?.length || 0
+  return customAnswers.value[fieldId]?.length || 0
 }
 </script>
 
@@ -164,10 +168,10 @@ const getTextLength = (fieldId) => {
           <span class="font-medium">{{ company.name }} Careers</span>
         </button>
         <button
-          @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
+          @click="handleAuthAction"
           class="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors"
         >
-          로그인
+          {{ isAuthenticated ? '로그아웃' : '로그인' }}
         </button>
       </div>
     </header>
@@ -177,9 +181,10 @@ const getTextLength = (fieldId) => {
     </div>
 
     <main v-else class="max-w-2xl mx-auto px-6 py-8">
-      <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
+      <!-- Login prompt -->
+      <div v-if="!isAuthenticated" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
         <div class="text-sm">
-          중복 지원 관리를 위해 지원 전에 간단 로그인해 주세요.
+          지원서를 제출하려면 먼저 로그인해주세요.
         </div>
         <button
           @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
@@ -189,90 +194,168 @@ const getTextLength = (fieldId) => {
         </button>
       </div>
 
+      <!-- Success message -->
+      <div v-if="successMsg" class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">
+        {{ successMsg }}
+      </div>
+
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <h1 class="text-2xl font-bold text-gray-900 mb-2">지원서 작성</h1>
-        <p class="text-gray-600 mb-8 font-semibold">아래 양식을 작성하고 지원서를 제출해 주세요.</p>
+        <p class="text-gray-600 mb-1">{{ applyForm?.title }}</p>
+        <p class="text-sm text-gray-400 mb-8">아래 양식을 작성하고 지원서를 제출해 주세요.</p>
+
+        <!-- Error message -->
+        <div v-if="errorMsg" class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">
+          {{ errorMsg }}
+        </div>
 
         <form @submit.prevent="handleSubmit" class="space-y-6">
-          <div v-for="field in template.fields" :key="field.id">
-            <label class="block text-sm font-semibold text-gray-800 mb-2">
-              {{ field.label }}
-              <span v-if="field.required" class="text-red-500 ml-1">*</span>
-            </label>
+          <!-- Base Fields -->
+          <div class="pb-4 border-b border-gray-100">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">기본 정보</h2>
 
-            <div v-if="field.type === 'text' || field.type === 'email'" class="relative">
-              <span v-if="field.id === 'name'" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </span>
-              <span v-else-if="field.id === 'email'" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </span>
-              <span v-else-if="field.id === 'phone'" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                </svg>
-              </span>
-              <input
-                v-model="formData[field.id]"
-                :type="field.type"
-                :placeholder="field.placeholder"
-                :class="['w-full py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-semibold', field.id === 'name' || field.id === 'email' || field.id === 'phone' ? 'pl-10 pr-4' : 'px-4']"
-              />
-            </div>
-
-            <div v-else-if="field.type === 'date'" class="relative">
-              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </span>
-              <input
-                v-model="formData[field.id]"
-                type="date"
-                :placeholder="field.placeholder"
-                class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-semibold"
-              />
-            </div>
-
-            <div v-else-if="field.type === 'radio'" class="flex gap-6">
-              <label
-                v-for="option in field.options"
-                :key="option"
-                class="flex items-center gap-2 cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  :name="field.id"
-                  :value="option"
-                  v-model="formData[field.id]"
-                  class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500"
-                />
-                <span class="text-gray-800 font-semibold">{{ option }}</span>
+            <!-- Name -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                이름 <span class="text-red-500">*</span>
               </label>
-            </div>
-
-            <div v-else-if="field.type === 'textarea'" class="relative">
-              <textarea
-                v-model="formData[field.id]"
-                :placeholder="field.placeholder"
-                :maxlength="field.maxLength"
-                rows="4"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none font-semibold"
-              ></textarea>
-              <span v-if="field.maxLength" class="absolute bottom-3 right-3 text-xs text-gray-400">
-                {{ getTextLength(field.id) }} / {{ field.maxLength }}
-              </span>
-            </div>
-
-            <div v-else-if="field.type === 'file'">
               <input
-                type="file"
-                :id="field.id"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                v-model="formData.name"
+                type="text"
+                placeholder="이름을 입력해주세요"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+
+            <!-- Gender -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                성별 <span class="text-red-500">*</span>
+              </label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="formData.gender" value="MALE" class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500" />
+                  <span class="text-sm text-gray-700">남성</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" v-model="formData.gender" value="FEMALE" class="w-4 h-4 text-brand-600 border-gray-300 focus:ring-brand-500" />
+                  <span class="text-sm text-gray-700">여성</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Birth Date -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                생년월일 <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model="formData.birthDate"
+                type="date"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+
+            <!-- Phone -->
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                연락처 <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model="formData.phone"
+                type="tel"
+                placeholder="010-1234-5678"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+
+            <!-- Email -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                이메일 <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model="formData.email"
+                type="email"
+                placeholder="example@email.com"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+            </div>
+          </div>
+
+          <!-- Custom Fields (from template) -->
+          <div v-if="applyForm?.parsedCustomFields?.length > 0">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">추가 질문</h2>
+
+            <div v-for="field in applyForm.parsedCustomFields" :key="field.id" class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                {{ field.label }}
+                <span v-if="field.required" class="text-red-500 ml-1">*</span>
+              </label>
+
+              <!-- short_text / text -->
+              <input
+                v-if="field.type === 'short_text' || field.type === 'text'"
+                v-model="customAnswers[field.id]"
+                type="text"
+                :placeholder="field.placeholder || ''"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+
+              <!-- long_text / textarea -->
+              <div v-else-if="field.type === 'long_text' || field.type === 'textarea'" class="relative">
+                <textarea
+                  v-model="customAnswers[field.id]"
+                  :placeholder="field.placeholder || ''"
+                  :maxlength="field.maxLength || 1000"
+                  rows="4"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                ></textarea>
+                <span class="absolute bottom-3 right-3 text-xs text-gray-400">
+                  {{ getTextLength(field.id) }} / {{ field.maxLength || 1000 }}
+                </span>
+              </div>
+
+              <!-- select -->
+              <select
+                v-else-if="field.type === 'select'"
+                v-model="customAnswers[field.id]"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              >
+                <option value="">선택해주세요</option>
+                <option
+                  v-for="opt in (field.options || '').split('/').map(o => o.trim()).filter(Boolean)"
+                  :key="opt"
+                  :value="opt"
+                >{{ opt }}</option>
+              </select>
+
+              <!-- checkbox -->
+              <label v-else-if="field.type === 'checkbox'" class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="customAnswers[field.id]"
+                  class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                />
+                <span class="text-sm text-gray-700">{{ field.label }}</span>
+              </label>
+
+              <!-- email -->
+              <input
+                v-else-if="field.type === 'email'"
+                v-model="customAnswers[field.id]"
+                type="email"
+                :placeholder="field.placeholder || 'example@email.com'"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              />
+
+              <!-- fallback: text input -->
+              <input
+                v-else
+                v-model="customAnswers[field.id]"
+                type="text"
+                :placeholder="field.placeholder || ''"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
               />
             </div>
           </div>
@@ -287,10 +370,10 @@ const getTextLength = (fieldId) => {
             </button>
             <button
               type="submit"
-              :disabled="submitting"
+              :disabled="submitting || !isAuthenticated"
               class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              지원서 제출
+              {{ submitting ? '제출 중...' : '지원하기' }}
             </button>
           </div>
         </form>

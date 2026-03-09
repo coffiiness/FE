@@ -14,25 +14,17 @@ const formatTime = (date) => {
   return `${h}:${m}`
 }
 
-const parseDateOnly = (value) => {
-  const [year, month, day] = String(value || '').split('-').map(Number)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return new Date()
-  }
-  return new Date(year, month - 1, day, 0, 0, 0, 0)
+const formatDate = (date) => {
+  const y = date.getFullYear()
+  const m = `${date.getMonth() + 1}`.padStart(2, '0')
+  const d = `${date.getDate()}`.padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
-const visibleBookings = () => {
+const roomBookings = () => {
   if (!props.room) return []
-  const targetDate = props.selectedDate ? parseDateOnly(props.selectedDate) : new Date()
   return props.bookings
-    .filter(
-      (b) =>
-        b.roomId === props.room.id &&
-        b.startTime.getFullYear() === targetDate.getFullYear() &&
-        b.startTime.getMonth() === targetDate.getMonth() &&
-        b.startTime.getDate() === targetDate.getDate()
-    )
+    .filter((b) => b.roomId === props.room.id)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
 </script>
@@ -69,27 +61,27 @@ const visibleBookings = () => {
 
           <div>
             <div class="flex items-center justify-between mb-3">
-              <h4 class="font-semibold text-slate-900">선택 날짜 일정</h4>
+              <h4 class="font-semibold text-slate-900">예약 일정</h4>
               <button class="px-3 py-1 bg-emerald-600 text-white rounded text-sm" @click="emit('bookRoom', room)">
                 예약하기
               </button>
             </div>
-            <div v-if="visibleBookings().length" class="space-y-2">
+            <div v-if="roomBookings().length" class="space-y-2 max-h-64 overflow-y-auto pr-1">
               <div
-                v-for="booking in visibleBookings()"
+                v-for="booking in roomBookings()"
                 :key="booking.id"
                 class="p-4 bg-gray-50 rounded-lg border hover:border-emerald-500 transition-colors cursor-pointer"
                 @click="emit('bookingClick', booking)"
               >
                 <div class="font-semibold text-slate-900">{{ booking.title }}</div>
                 <div class="text-sm text-slate-700 mt-1">
-                  <span class="text-slate-900 font-medium">{{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
+                  <span class="text-slate-900 font-medium">{{ formatDate(booking.startTime) }} {{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
                   · {{ booking.organizer }}
                 </div>
               </div>
             </div>
             <div v-else class="text-center py-6 text-slate-800 bg-gray-50 rounded-lg">
-              선택한 날짜에 예약된 일정이 없습니다
+              예약된 일정이 없습니다
             </div>
           </div>
       </div>
