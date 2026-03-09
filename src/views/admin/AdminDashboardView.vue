@@ -55,10 +55,13 @@ const maxValue = computed(() =>
   Math.max(1, ...trendData.value.map(d => Math.max(d.revenue, d.cost)))
 )
 
-const formatWon = (v) => {
-  if (v === 0) return '무료'
-  return '₩' + v.toLocaleString('ko-KR')
-}
+const formatWon = (v) => '₩' + (v || 0).toLocaleString('ko-KR')
+
+const growthClass = (v) => v >= 0 ? 'text-brand-500' : 'text-rose-500'
+const growthPrefix = (v) => v > 0 ? '+' : ''
+const growthIcon = (v) => v >= 0
+  ? 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'   // up-right arrow
+  : 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6'   // down-right arrow
 </script>
 
 <template>
@@ -75,11 +78,11 @@ const formatWon = (v) => {
           MRR (월간 반복 매출)
         </div>
         <p class="text-3xl font-bold text-gray-900">{{ formatWon(summary.mrr) }}</p>
-        <p class="text-sm mt-1 text-brand-500">
+        <p class="text-sm mt-1" :class="growthClass(summary.mrrGrowth)">
           <svg class="w-3.5 h-3.5 inline mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="growthIcon(summary.mrrGrowth)" />
           </svg>
-          +{{ summary.mrrGrowth }}% vs 전월
+          {{ growthPrefix(summary.mrrGrowth) }}{{ summary.mrrGrowth }}% vs 전월
         </p>
       </div>
 
@@ -97,7 +100,7 @@ const formatWon = (v) => {
           <svg class="w-3.5 h-3.5 inline mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
           </svg>
-          +{{ summary.newThisMonth }} 신규 (이번 달)
+          {{ summary.newThisMonth }} 신규 (이번 달)
         </p>
       </div>
 
@@ -110,11 +113,12 @@ const formatWon = (v) => {
           이탈률 (Churn Rate)
         </div>
         <p class="text-3xl font-bold text-gray-900">{{ summary.churnRate }}%</p>
-        <p class="text-sm mt-1 text-brand-500">
+        <p class="text-sm mt-1" :class="summary.churnImprove >= 0 ? 'text-brand-500' : 'text-rose-500'">
           <svg class="w-3.5 h-3.5 inline mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              :d="summary.churnImprove >= 0 ? 'M13 17h8m0 0V9m0 8l-8-8-4 4-6-6' : 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'" />
           </svg>
-          {{ summary.churnImprove }}%p 개선
+          {{ Math.abs(summary.churnImprove) }}%p {{ summary.churnImprove >= 0 ? '개선' : '악화' }}
         </p>
       </div>
 
@@ -128,11 +132,11 @@ const formatWon = (v) => {
           월간 비용 합계
         </div>
         <p class="text-3xl font-bold text-gray-900">{{ formatWon(summary.totalCost) }}</p>
-        <p class="text-sm mt-1 text-rose-500">
+        <p class="text-sm mt-1" :class="summary.costGrowth > 0 ? 'text-rose-500' : 'text-brand-500'">
           <svg class="w-3.5 h-3.5 inline mr-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="growthIcon(summary.costGrowth)" />
           </svg>
-          +{{ summary.costGrowth }}% vs 전월
+          {{ growthPrefix(summary.costGrowth) }}{{ summary.costGrowth }}% vs 전월
         </p>
       </div>
     </div>
