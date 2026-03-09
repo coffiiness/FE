@@ -1,10 +1,10 @@
 import applicantApi from './applicantClient'
 
 export const applicantAuthApi = {
-  signup(data) {
-    return applicantApi.post('/applicants/signup', data)
+  signup(workspaceId, data) {
+    return applicantApi.post(`/workspaces/${workspaceId}/applicants/signup`, data)
   },
-  login(data) {
-    return applicantApi.post('/applicants/login', data)
+  login(workspaceId, data) {
+    return applicantApi.post(`/workspaces/${workspaceId}/applicants/login`, data)
   }
 }

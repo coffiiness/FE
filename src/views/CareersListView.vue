@@ -129,7 +129,7 @@ const handleAuthAction = () => {
     logout()
     router.push(`/careers/${companySlug.value}`)
   } else {
-    router.push({ path: '/applicants/login', query: { redirect: route.fullPath } })
+    router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })
   }
 }
 </script>

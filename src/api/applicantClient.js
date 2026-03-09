@@ -1,5 +1,9 @@
 import axios from 'axios'
 import router from '@/router'
+import {
+  clearApplicantWorkspaceId,
+  getApplicantWorkspaceId
+} from '@/utils/applicantWorkspace'
 
 const resolveBaseUrl = () => {
   const rawBase =
@@ -11,7 +15,7 @@ const resolveBaseUrl = () => {
     .replace(/\/api\/public\/v1\/?$/, '')
     .replace(/\/api\/v1\/?$/, '')
 
-  return `${normalized}/api/public/v1`
+  return `${normalized}/api/v1`
 }
 
 const applicantApi = axios.create({
@@ -23,9 +27,6 @@ const applicantApi = axios.create({
 
 applicantApi.interceptors.request.use(
   (config) => {
-    const tenantId = import.meta.env.VITE_TENANT_ID || ''
-    config.headers['X-Tenant-ID'] = tenantId
-
     const token = localStorage.getItem('applicantAccessToken')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -49,10 +50,15 @@ applicantApi.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
+      const workspaceId = getApplicantWorkspaceId()
       localStorage.removeItem('applicantAccessToken')
       localStorage.removeItem('applicant')
+      clearApplicantWorkspaceId()
       const redirect = router.currentRoute.value?.fullPath || '/'
-      router.push({ path: '/applicants/login', query: { redirect } })
+      router.push({
+        path: workspaceId ? `/careers/${workspaceId}/login` : '/careers',
+        query: { redirect }
+      })
     }
     return Promise.reject(error)
   }

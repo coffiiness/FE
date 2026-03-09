@@ -1,5 +1,10 @@
 import { ref, computed } from 'vue'
 import { applicantAuthApi } from '@/api/applicants'
+import {
+  clearApplicantWorkspaceId,
+  getApplicantWorkspaceId,
+  setApplicantWorkspaceId
+} from '@/utils/applicantWorkspace'
 
 const applicant = ref(JSON.parse(localStorage.getItem('applicant') || 'null'))
 const accessToken = ref(localStorage.getItem('applicantAccessToken') || '')
@@ -42,12 +47,18 @@ export function useApplicantAuth() {
     })
   }
 
-  const login = async (email, password) => {
-    const response = await applicantAuthApi.login({ email, password })
+  const login = async (workspaceId, email, password) => {
+    const resolvedWorkspaceId = workspaceId || getApplicantWorkspaceId()
+    if (!resolvedWorkspaceId) {
+      throw new Error('workspaceId is required.')
+    }
+
+    const response = await applicantAuthApi.login(resolvedWorkspaceId, { email, password })
     const { accessToken: token, applicant: applicantData } = response.data.data
 
     localStorage.setItem('applicantAccessToken', token)
     localStorage.setItem('applicant', JSON.stringify(applicantData))
+    setApplicantWorkspaceId(resolvedWorkspaceId)
 
     accessToken.value = token
     applicant.value = applicantData
@@ -56,14 +67,21 @@ export function useApplicantAuth() {
     return response.data.data
   }
 
-  const signup = async (name, email, password) => {
-    const response = await applicantAuthApi.signup({ name, email, password })
+  const signup = async (workspaceId, name, email, password) => {
+    const resolvedWorkspaceId = workspaceId || getApplicantWorkspaceId()
+    if (!resolvedWorkspaceId) {
+      throw new Error('workspaceId is required.')
+    }
+
+    const response = await applicantAuthApi.signup(resolvedWorkspaceId, { name, email, password })
+    setApplicantWorkspaceId(resolvedWorkspaceId)
     return response.data.data
   }
 
   const logout = () => {
     localStorage.removeItem('applicantAccessToken')
     localStorage.removeItem('applicant')
+    clearApplicantWorkspaceId()
     accessToken.value = ''
     applicant.value = null
     notifyAuthChange()
