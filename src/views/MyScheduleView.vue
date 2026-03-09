@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
@@ -8,8 +8,8 @@ import { useRoute } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
-import { useRoomStore } from '@/stores/room'
+import { meetingRoomApi } from '@/api/meetingRoom'
+import { useModal } from '@/composables/useModal'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -24,15 +24,12 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}
 
 const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
-const isDeleteModalOpen = ref(false)
-const isSuccessModalOpen = ref(false)
 const isDetailModalOpen = ref(false)
-const isDisconnectConfirmModalOpen = ref(false)
-const isDisconnectSuccessModalOpen = ref(false)
+const { modal, openModal, onModalConfirm, onModalCancel } = useModal()
 
 // Store
 const scheduleStore = useScheduleStore()
-const { schedules: allSchedules } = storeToRefs(scheduleStore)
+const { schedules: allSchedules, loading } = storeToRefs(scheduleStore)
 const { getToday } = scheduleStore
 
 // 초기값: 진짜 오늘 날짜로 설정
@@ -43,16 +40,40 @@ const targetDeleteId = ref(null)
 const route = useRoute()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
+const meetingRooms = ref([])
 
-// 2. 통합 데이터 (오늘 기준으로 자동 생성되어 항상 데이터가 보임) - Store로 이동됨
+// [유틸] 현재 뷰 기준으로 API 조회 범위 계산
+const getVisibleRange = () => {
+  const curr = new Date(selectedDate.value)
+  const year = curr.getFullYear()
+  const month = curr.getMonth()
+  // 월 뷰: 이전달 마지막주 ~ 다음달 첫주까지 포함
+  const firstDay = new Date(year, month, 1)
+  const startOffset = firstDay.getDay()
+  const start = new Date(firstDay)
+  start.setDate(start.getDate() - startOffset)
+
+  const lastDay = new Date(year, month + 1, 0)
+  const endOffset = 6 - lastDay.getDay()
+  const end = new Date(lastDay)
+  end.setDate(end.getDate() + endOffset)
+
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { startDate: fmt(start), endDate: fmt(end) }
+}
+
+const loadSchedules = async () => {
+  const { startDate, endDate } = getVisibleRange()
+  await scheduleStore.fetchSchedules(startDate, endDate)
+}
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
 const upcomingEvents = computed(() => {
   const today = getToday()
   return allSchedules.value
-      .filter(e => e.date >= today && e.type === 'INTERVIEW') // 오늘 포함 미래의 면접 일정만 필터링
+      .filter(e => e.date >= today)
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
-      .slice(0, 3) // 최대 3개
+      .slice(0, 3)
 })
 
 // [월간 뷰용] 동적 캘린더 데이터 생성
@@ -208,32 +229,130 @@ const getEventStyle = (event) => {
 
 const getEventClass = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
     case 'MEETING': return 'bg-amber-50 text-amber-700 border-amber-100'
-    case 'BUSINESS_TRIP': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    case 'BUSINESS': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
     case 'VACATION': return 'bg-rose-50 text-rose-700 border-rose-100'
-    default: return 'bg-slate-50 text-slate-700 border-slate-200'
+    case 'OTHERS': return 'bg-slate-50 text-slate-700 border-slate-200'
+    default: return 'bg-indigo-50 text-indigo-700 border-indigo-100'
   }
 }
 
 const getEventClassWeek = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-600 text-white border-indigo-800'
     case 'MEETING': return 'bg-amber-100 text-amber-800 border-amber-400'
-    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
+    case 'BUSINESS': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
     case 'VACATION': return 'bg-rose-100 text-rose-800 border-rose-400'
-    default: return 'bg-slate-100 text-slate-800 border-slate-400'
+    case 'OTHERS': return 'bg-slate-100 text-slate-800 border-slate-400'
+    default: return 'bg-indigo-600 text-white border-indigo-800'
   }
 }
 
 const getEventClassList = (type) => {
   switch (type) {
-    case 'INTERVIEW': return 'bg-indigo-100 text-indigo-600'
     case 'MEETING': return 'bg-amber-100 text-amber-600'
-    case 'BUSINESS_TRIP': return 'bg-emerald-100 text-emerald-600'
+    case 'BUSINESS': return 'bg-emerald-100 text-emerald-600'
     case 'VACATION': return 'bg-rose-100 text-rose-600'
-    default: return 'bg-slate-100 text-slate-600'
+    case 'OTHERS': return 'bg-slate-100 text-slate-600'
+    default: return 'bg-indigo-100 text-indigo-600'
   }
+}
+
+const DEFAULT_SAVE_ERROR_MESSAGE = '일정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+const DEFAULT_DELETE_ERROR_MESSAGE = '일정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+
+const toErrorText = (error) => {
+  const payload = error?.response?.data
+
+  if (!payload) {
+    return error?.message || ''
+  }
+
+  if (typeof payload === 'string') return payload
+  if (typeof payload?.message === 'string') return payload.message
+  if (typeof payload?.error === 'string') return payload.error
+  if (typeof payload?.error?.message === 'string') return payload.error.message
+  if (typeof payload?.error?.detail === 'string') return payload.error.detail
+  if (Array.isArray(payload?.errors)) {
+    const first = payload.errors[0]
+    if (typeof first === 'string') return first
+    if (typeof first?.message === 'string') return first.message
+  }
+
+  return ''
+}
+
+const sanitizeErrorMessage = (message) => {
+  const value = String(message || '').trim()
+  if (!value) return ''
+
+  const hasLocalhost = /https?:\/\/localhost[:/]?\d*/i.test(value) || /\blocalhost\b/i.test(value)
+  const hasTechnicalTrace = /(AxiosError|Network Error|Request failed with status code|ECONNREFUSED|ETIMEDOUT|XMLHttpRequest)/i.test(value)
+
+  if (hasLocalhost || hasTechnicalTrace) return ''
+  if (value.length > 180) return ''
+
+  return value
+}
+
+const toScheduleErrorMessage = (error, action = 'save') => {
+  const status = error?.response?.status
+  const code = error?.response?.data?.error?.code
+  const extracted = toErrorText(error)
+  const cleanMessage = sanitizeErrorMessage(extracted)
+
+  if (/workspace is missing|create or join a workspace/i.test(extracted)) {
+    return '워크스페이스가 없습니다. 워크스페이스를 생성하거나 초대를 수락해 주세요.'
+  }
+
+  if (status === 401 || code === 'E401') {
+    return '로그인 정보가 만료되었거나 권한이 없습니다. 다시 로그인 후 시도해 주세요.'
+  }
+
+  if (status === 403 || code === 'E403') {
+    return '해당 일정에 대한 권한이 없습니다.'
+  }
+
+  if (status === 404 || code === 'E404') {
+    return action === 'delete'
+      ? '삭제할 일정을 찾을 수 없습니다.'
+      : '수정할 일정을 찾을 수 없습니다.'
+  }
+
+  if (status === 409 || code === 'E409') {
+    return '같은 시간대에 충돌하는 일정이 있습니다. 시간을 변경해 주세요.'
+  }
+
+  if (status === 400 || code === 'E400') {
+    if (/workspace|tenant|member/i.test(extracted)) {
+      return '워크스페이스 정보가 올바르지 않습니다. 다시 로그인 후 시도해 주세요.'
+    }
+
+    if (action === 'delete') {
+      return cleanMessage || '이미 삭제되었거나 삭제할 수 없는 일정입니다.'
+    }
+
+    return cleanMessage || '입력값을 확인해 주세요. 날짜와 시작/종료 시간을 다시 확인해 주세요.'
+  }
+
+  if (!error?.response) {
+    return '서버에 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+  }
+
+  if (cleanMessage) {
+    return cleanMessage
+  }
+
+  return action === 'delete' ? DEFAULT_DELETE_ERROR_MESSAGE : DEFAULT_SAVE_ERROR_MESSAGE
+}
+
+const openAlertModal = ({ title, message, type = 'warning' }) => {
+  openModal({
+    title,
+    message,
+    type,
+    showCancel: false,
+    confirmText: '확인'
+  })
 }
 
 
@@ -259,11 +378,14 @@ const mergeAcceptedSchedules = (items) => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await Promise.all([loadSchedules(), loadMeetingRooms()])
+
   const scheduleId = Number(route.query.scheduleId)
-  if (Number.isNaN(scheduleId)) return
-  const target = allSchedules.value.find((e) => e.id === scheduleId)
-  if (target) openDetailModal(target)
+  if (!Number.isNaN(scheduleId)) {
+    const target = allSchedules.value.find((e) => e.id === scheduleId)
+    if (target) openDetailModal(target)
+  }
 })
 
 watch(
@@ -274,61 +396,145 @@ watch(
   { deep: true, immediate: true }
 )
 
-const openCreateForm = (date = null) => {
+// 날짜/뷰 변경 시 API 재조회
+watch(
+  () => selectedDate.value,
+  async () => {
+    await loadSchedules()
+  }
+)
+
+const openCreateForm = async (date = null) => {
+  const loaded = await ensureMeetingRoomsLoaded()
+  if (!loaded) {
+    openAlertModal({
+      title: '회의실 목록 조회 실패',
+      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이 일정 생성은 가능합니다.'
+    })
+  }
+
   selectedDate.value = date || selectedDate.value
   selectedEventToEdit.value = null
   isFormModalOpen.value = true
 }
 
-const openEditForm = (event) => {
+const openEditForm = async (event) => {
+  const loaded = await ensureMeetingRoomsLoaded()
+  if (!loaded) {
+    openAlertModal({
+      title: '회의실 목록 조회 실패',
+      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이 일정 수정은 가능합니다.'
+    })
+  }
+
   isDetailModalOpen.value = false
   selectedEventToEdit.value = event
   isFormModalOpen.value = true
 }
 
-const handleSave = (formData) => {
-  if (formData.id) {
-    scheduleStore.updateSchedule(formData)
-  } else {
-    scheduleStore.addSchedule(formData)
+const handleSave = async (formData) => {
+  try {
+    if (formData.id) {
+      await scheduleStore.updateSchedule(formData.id, formData)
+    } else {
+      await scheduleStore.createSchedule(formData)
+    }
+
+    isFormModalOpen.value = false
+    await loadSchedules()
+
+    openAlertModal({
+      title: '일정 저장 완료',
+      message: '일정이 성공적으로 저장되었습니다.',
+      type: 'success'
+    })
+  } catch (err) {
+    const detail = toErrorText(err)
+    console.error('일정 저장 실패:', detail || err?.message, err)
+
+    openAlertModal({
+      title: '일정 저장 실패',
+      message: toScheduleErrorMessage(err, 'save'),
+      type: 'warning'
+    })
   }
-  isFormModalOpen.value = false
-  setTimeout(() => {
-    isSuccessModalOpen.value = true
-  }, 300)
 }
 
 const openDeleteConfirm = (id) => {
   isDetailModalOpen.value = false
   targetDeleteId.value = id
-  isDeleteModalOpen.value = true
+
+  openModal({
+    title: '일정 삭제',
+    message: '정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다.',
+    type: 'danger',
+    showCancel: true,
+    confirmText: '삭제하기',
+    cancelText: '취소',
+    onConfirm: confirmDelete,
+    onCancel: () => {
+      targetDeleteId.value = null
+    }
+  })
 }
 
-const confirmDelete = () => {
-  if (targetDeleteId.value) {
-    scheduleStore.deleteSchedule(targetDeleteId.value)
-  }
-  isDeleteModalOpen.value = false
-  isFormModalOpen.value = false
+const confirmDelete = async () => {
+  const scheduleId = targetDeleteId.value
   targetDeleteId.value = null
+
+  if (!scheduleId) {
+    return
+  }
+
+  try {
+    await scheduleStore.deleteSchedule(scheduleId)
+    isFormModalOpen.value = false
+    await loadSchedules()
+  } catch (err) {
+    const detail = toErrorText(err)
+    console.error('일정 삭제 실패:', detail || err?.message, err)
+
+    openAlertModal({
+      title: '일정 삭제 실패',
+      message: toScheduleErrorMessage(err, 'delete'),
+      type: 'warning'
+    })
+  }
 }
 
-// 면접관 응답 확인 연결
-const router = useRouter()
 
-const goToInterviewResponse = () => {
-  router.push('/recruitment/interview/response')
+const loadMeetingRooms = async () => {
+  try {
+    const response = await meetingRoomApi.list()
+    const data = response?.data?.data
+    meetingRooms.value = Array.isArray(data) ? data : []
+    return true
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 목록 조회 실패:', detail || error?.message, error)
+    meetingRooms.value = []
+    return false
+  }
 }
 
-// Room Store
-const roomStore = useRoomStore()
+const ensureMeetingRoomsLoaded = async () => {
+  if (meetingRooms.value.length > 0) return true
+  return await loadMeetingRooms()
+}
 
 const getRoomInfo = (schedule) => {
-  if (schedule.roomId) {
-    const r = roomStore.getRoomById(schedule.roomId)
-    if (r) return r
+  const roomId = Number(schedule?.roomId)
+  if (!Number.isFinite(roomId)) return null
+
+  const room = meetingRooms.value.find((item) => Number(item.id) === roomId)
+  if (!room) return null
+
+  return {
+    id: room.id,
+    name: room.name,
+    floor: room.location ?? room.floor ?? '-',
+    capacity: room.capacity
   }
-  return null
 }
 
 // Google Calendar 연동
@@ -346,7 +552,15 @@ const connectGoogleCalendar = () => {
 }
 
 const disconnectGoogleCalendar = () => {
-  isDisconnectConfirmModalOpen.value = true
+  openModal({
+    title: '연동 해제',
+    message: '정말로 구글 캘린더 연동을 해제하시겠습니까?',
+    type: 'danger',
+    showCancel: true,
+    confirmText: '해제하기',
+    cancelText: '취소',
+    onConfirm: confirmDisconnectGoogleCalendar
+  })
 }
 
 const confirmDisconnectGoogleCalendar = () => {
@@ -354,10 +568,12 @@ const confirmDisconnectGoogleCalendar = () => {
   localStorage.removeItem('googleCalendarEmail')
   isGoogleConnected.value = false
   googleConnectedEmail.value = ''
-  isDisconnectConfirmModalOpen.value = false
-  setTimeout(() => {
-    isDisconnectSuccessModalOpen.value = true
-  }, 300)
+
+  openAlertModal({
+    title: '해제 완료',
+    message: '구글 캘린더 연동이 성공적으로 해제되었습니다.',
+    type: 'success'
+  })
 }
 
 </script>
@@ -653,29 +869,17 @@ const confirmDisconnectGoogleCalendar = () => {
     />
 
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
-    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" @close="isFormModalOpen = false" @save="handleSave" @delete="openDeleteConfirm" />
-    <ConfirmModal :show="isDeleteModalOpen" title="일정 삭제" message="정말로 이 일정을 삭제하시겠습니까? 삭제된 데이터는 복구할 수 없습니다." confirmText="삭제하기" type="danger" @confirm="confirmDelete" @cancel="isDeleteModalOpen = false" />
-    <ConfirmModal :show="isSuccessModalOpen" title="일정 생성 완료" message="새로운 일정이 성공적으로 생성되었습니다." confirmText="확인" type="success" :showCancel="false" @confirm="isSuccessModalOpen = false" @cancel="isSuccessModalOpen = false" />
-    
-    <!-- 구글 캘린더 연동 해제 모달 -->
-    <ConfirmModal 
-      :show="isDisconnectConfirmModalOpen" 
-      title="연동 해제" 
-      message="정말로 구글 캘린더 연동을 해제하시겠습니까?" 
-      confirmText="해제하기" 
-      type="danger" 
-      @confirm="confirmDisconnectGoogleCalendar" 
-      @cancel="isDisconnectConfirmModalOpen = false" 
-    />
-    <ConfirmModal 
-      :show="isDisconnectSuccessModalOpen" 
-      title="해제 완료" 
-      message="구글 캘린더 연동이 성공적으로 해제되었습니다." 
-      confirmText="확인" 
-      type="success" 
-      :showCancel="false" 
-      @confirm="isDisconnectSuccessModalOpen = false" 
-      @cancel="isDisconnectSuccessModalOpen = false" 
+    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" :roomOptions="meetingRooms" @close="isFormModalOpen = false" @save="handleSave" />
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :type="modal.type"
+      :show-cancel="modal.showCancel"
+      :confirm-text="modal.confirmText"
+      :cancel-text="modal.cancelText"
+      @confirm="onModalConfirm"
+      @cancel="onModalCancel"
     />
   </div>
 </template>
@@ -686,3 +890,7 @@ const confirmDisconnectGoogleCalendar = () => {
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 </style>
+
+
+
+

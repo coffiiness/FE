@@ -70,19 +70,33 @@ const handleSubmit = () => {
   errorMessage.value = ''
   const capacity = parseInt(form.capacity, 10)
   const floor = parseInt(form.floor, 10)
-  if (!form.name || Number.isNaN(capacity) || Number.isNaN(floor)) {
+  const trimmedName = form.name.trim()
+
+  if (!trimmedName || Number.isNaN(capacity) || Number.isNaN(floor)) {
     errorMessage.value = '필수 항목을 입력해 주세요.'
     return
   }
+  if (trimmedName.length < 2 || trimmedName.length > 20) {
+    errorMessage.value = '회의실 이름은 2자 이상 20자 이하여야 합니다.'
+    return
+  }
+  if (capacity < 2) {
+    errorMessage.value = '수용 인원은 2명 이상이어야 합니다.'
+    return
+  }
+  if (floor < 1 || floor > 100) {
+    errorMessage.value = '층수는 1층 이상 100층 이하여야 합니다.'
+    return
+  }
+
   emit('confirm', {
-    name: form.name,
+    name: trimmedName,
     capacity,
     floor,
     facilities: form.facilities,
     description: form.description,
     color: form.color
   })
-  emit('close')
 }
 </script>
 
@@ -98,16 +112,16 @@ const handleSubmit = () => {
         </p>
         <div>
           <label class="text-sm font-medium text-slate-800">회의실 이름 *</label>
-          <input v-model="form.name" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
+          <input v-model="form.name" minlength="2" maxlength="20" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium text-slate-800">수용 인원 *</label>
-            <input v-model="form.capacity" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
+            <input v-model="form.capacity" type="number" min="2" step="1" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
           <div>
             <label class="text-sm font-medium text-slate-800">층수 *</label>
-            <input v-model="form.floor" type="number" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
+            <input v-model="form.floor" type="number" min="1" max="100" step="1" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
           </div>
         </div>
         <div>

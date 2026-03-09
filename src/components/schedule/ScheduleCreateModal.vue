@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
@@ -8,7 +8,8 @@ import { storeToRefs } from 'pinia'
 const props = defineProps({
   isOpen: Boolean,
   initialDate: String,
-  initialData: { type: Object, default: null }
+  initialData: { type: Object, default: null },
+  roomOptions: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -46,15 +47,17 @@ const form = ref({
   endTime: '14:00',
   type: 'INTERVIEW',
   description: '',
+  roomId: null,
   attendees: []
 })
 
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
+const validationMessage = ref('')
 
 const scheduleTypes = [
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
-  { value: 'BUSINESS_TRIP', label: '외근/출장', activeClass: 'bg-emerald-50 border-emerald-200 text-emerald-600' },
+  { value: 'BUSINESS', label: '외근/출장', activeClass: 'bg-emerald-50 border-emerald-200 text-emerald-600' },
   { value: 'VACATION', label: '휴가', activeClass: 'bg-rose-50 border-rose-200 text-rose-600' },
   { value: 'OTHERS', label: '기타', activeClass: 'bg-slate-100 border-slate-300 text-slate-700' }
 ]
@@ -62,7 +65,7 @@ const scheduleTypes = [
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     if (props.initialData) {
-      form.value = { ...props.initialData, attendees: props.initialData.attendees || [] }
+      form.value = { ...props.initialData, roomId: props.initialData.roomId ?? null, attendees: props.initialData.attendees || [] }
     } else {
       form.value = {
         title: '',
@@ -71,6 +74,7 @@ watch(() => props.isOpen, (newVal) => {
         endTime: '14:00',
         type: 'MEETING',
         description: '',
+        roomId: null,
         attendees: []
       }
     }
@@ -87,13 +91,41 @@ const addAttendee = () => {
 
 const removeAttendee = (index) => { form.value.attendees.splice(index, 1) }
 
+const openValidationModal = (message) => {
+  validationMessage.value = message
+  validationModalOpen.value = true
+}
+
 const save = () => {
-  if (!form.value.title) {
-    validationModalOpen.value = true
+  if (!form.value.title?.trim()) {
+    openValidationModal('일정 제목을 입력해주세요.')
     return
   }
-  // 타입 보정을 위해 복사본 생성
+
+  if (!form.value.date) {
+    openValidationModal('일정 날짜를 입력해주세요.')
+    return
+  }
+
+  if (!form.value.startTime || !form.value.endTime) {
+    openValidationModal('시작 시간과 종료 시간을 모두 입력해주세요.')
+    return
+  }
+
+  if (form.value.startTime >= form.value.endTime) {
+    openValidationModal('종료 시간은 시작 시간보다 늦어야 합니다.')
+    return
+  }
+
   const payload = { ...form.value }
+  const rawRoomId = payload.roomId
+  if (rawRoomId === null || rawRoomId === '' || rawRoomId === undefined) {
+    payload.roomId = null
+  } else {
+    const parsedRoomId = Number(rawRoomId)
+    payload.roomId = Number.isFinite(parsedRoomId) && parsedRoomId > 0 ? parsedRoomId : null
+  }
+
   emit('save', payload)
 }
 
@@ -157,6 +189,17 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                 <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">종료 시간</label>
                 <input v-model="form.endTime" type="time" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium text-center shadow-sm"> </div>
             </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">회의실 선택</label>
+            <select v-model="form.roomId" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium shadow-sm">
+              <option :value="null">선택 안 함</option>
+              <option v-for="room in roomOptions" :key="room.id" :value="room.id">
+                {{ room.name }} ({{ room.location ?? room.floor ?? '-' }}층 / {{ room.capacity }}명)
+              </option>
+            </select>
+            <p class="mt-1.5 text-[11px] text-slate-500">회의실을 선택해 일정을 생성하면 회의실 예약 캘린더에도 반영됩니다.</p>
           </div>
 
           <!-- 참석자 선택 -->
@@ -254,7 +297,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
       :show="validationModalOpen"
       type="warning"
       title="입력 확인"
-      message="일정 제목을 입력해주세요."
+      :message="validationMessage"
       confirmText="확인"
       :showCancel="false"
       @confirm="validationModalOpen = false"
@@ -268,3 +311,4 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
 </style>
+

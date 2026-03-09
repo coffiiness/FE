@@ -1,6 +1,5 @@
 <script setup>
-import { reactive, watch, ref, computed, onMounted, onUnmounted } from 'vue'
-import { useScheduleStore } from '@/stores/schedule'
+import { reactive, watch, ref, computed } from 'vue'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 
@@ -12,13 +11,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
-const scheduleStore = useScheduleStore()
 const orgStore = useOrganizationStore()
 const { departments } = storeToRefs(orgStore)
 
 const selectedDeptId = ref(null)
 const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
 const attendeeInput = ref('')
+const submitError = ref('')
 
 const toggleDept = (deptId) => {
   selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
@@ -72,50 +71,79 @@ watch(
   (open) => {
     if (!open) return
     const baseDate = props.selectedDate || new Date()
-    const defaultHour = props.selectedHour ?? 9
+    const now = new Date()
+
+    const isToday =
+      baseDate.getFullYear() === now.getFullYear() &&
+      baseDate.getMonth() === now.getMonth() &&
+      baseDate.getDate() === now.getDate()
+
+    let defaultHour = props.selectedHour
+    if (defaultHour == null) {
+      defaultHour = isToday ? Math.min(Math.max(now.getHours() + 1, 8), 20) : 9
+    }
+
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
-    state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
+    state.endTime = `${String(Math.min(defaultHour + 1, 21)).padStart(2, '0')}:00`
     state.organizer = getCurrentUserName()
     state.attendees = [] // 초기화
+    submitError.value = ''
     selectedDeptId.value = null
     attendeeInput.value = ''
   }
 )
 
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(value)
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+
 const handleSubmit = () => {
-  if (!props.room || !state.title || !state.organizer) return
+  submitError.value = ''
+  if (!props.room || !state.title.trim() || !state.organizer.trim()) {
+    submitError.value = '회의 제목과 주최자 이름을 입력해 주세요.'
+    return
+  }
+
   const [startHour, startMinute] = state.startTime.split(':').map(Number)
   const [endHour, endMinute] = state.endTime.split(':').map(Number)
-  const base = new Date(state.date)
+  const base = parseDateOnly(state.date)
   const startDateTime = new Date(base)
   startDateTime.setHours(startHour, startMinute, 0, 0)
   const endDateTime = new Date(base)
   endDateTime.setHours(endHour, endMinute, 0, 0)
 
-  // 문자열로 변환하지 않고 배열 그대로 전송
+  if (startDateTime >= endDateTime) {
+    submitError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
+    return
+  }
+
+  if (startHour < 8 || startHour > 20 || endHour < 8 || endHour > 21) {
+    submitError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
+    return
+  }
+
+  const now = new Date()
+  if (startDateTime < now) {
+    submitError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
+    return
+  }
+
   const attendeesList = [...state.attendees]
 
   emit('confirm', {
     roomId: props.room.id,
-    title: state.title,
+    title: state.title.trim(),
     description: state.description,
     startTime: startDateTime,
     endTime: endDateTime,
-    organizer: state.organizer,
+    organizer: state.organizer.trim(),
     attendees: attendeesList,
     status: 'confirmed'
-  })
-
-  // [연동] ScheduleStore에 일정 추가
-  scheduleStore.addSchedule({
-    title: `[회의실] ${state.title}`,
-    date: state.date,
-    startTime: state.startTime,
-    endTime: state.endTime,
-    type: 'MEETING',
-    description: `장소: ${props.room.name}\n주최자: ${state.organizer}\n참석자: ${attendeesList.join(', ')}\n내용: ${state.description || '-'}`,
-    roomId: props.room.id
   })
 
   state.title = ''
@@ -140,6 +168,10 @@ const handleSubmit = () => {
         </button>
       </div>
       <div class="p-6 space-y-5 overflow-y-auto text-slate-900">
+        <p v-if="submitError" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {{ submitError }}
+        </p>
+
         <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3">
           <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: room?.color || '#94a3b8' }"></span>
           <div>
@@ -165,11 +197,11 @@ const handleSubmit = () => {
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-slate-900">시작 시간</label>
-            <input v-model="state.startTime" type="time" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <input v-model="state.startTime" type="time" min="08:00" max="20:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-slate-900">종료 시간</label>
-            <input v-model="state.endTime" type="time" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <input v-model="state.endTime" type="time" min="08:00" max="21:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
           </div>
         </div>
 
@@ -268,3 +300,4 @@ const handleSubmit = () => {
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
 </style>
+

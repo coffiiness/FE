@@ -19,6 +19,8 @@ const handleLogin = async () => {
     const data = await login(email.value, password.value)
     if (data.user.role === 'ADMIN') {
       router.push('/admin/dashboard')
+    } else if (!data.workspaceId) {
+      router.push('/workspace/create')
     } else {
       router.push('/dashboard')
     }
