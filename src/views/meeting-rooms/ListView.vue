@@ -9,15 +9,21 @@ const props = defineProps({
 })
 
 const selectedFloor = ref('all')
+const floorValue = (value) => {
+  const parsed = Number(String(value).replace(/[^0-9-]/g, ''))
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 const floorOptions = computed(() => {
-  const floors = Array.from(new Set(props.rooms.map((r) => r.floor))).sort((a, b) => a - b)
+  const floors = Array.from(
+    new Set(props.rooms.map((r) => floorValue(r.floor)).filter((v) => v !== null))
+  ).sort((a, b) => a - b)
   return floors
 })
 
 const filteredRooms = computed(() => {
   if (selectedFloor.value === 'all') return props.rooms
-  return props.rooms.filter((r) => r.floor === Number(selectedFloor.value))
+  return props.rooms.filter((r) => floorValue(r.floor) === Number(selectedFloor.value))
 })
 </script>
 

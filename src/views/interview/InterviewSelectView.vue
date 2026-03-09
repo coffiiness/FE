@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
+import { recruitmentApi } from '@/api/recruitment'
 
 const router = useRouter()
 const route = useRoute()
@@ -13,6 +14,7 @@ const recruitmentStore = useRecruitmentStore()
 const organizationStore = useOrganizationStore()
 const { jobs } = storeToRefs(recruitmentStore)
 const { organizations: organization } = storeToRefs(organizationStore)
+const recruitmentDetail = ref(null)
 
 // State
 const currentStep = ref(1) // 1: 단계, 2: 면접관, 3: 지원자
@@ -23,14 +25,23 @@ const jobId = Number(route.query.jobId)
 */
 const recruitment = computed(() => {
   const job = jobs.value.find(j => Number(j.id) === Number(jobId))
-  if (!job) {
+  const detail = recruitmentDetail.value
+
+  if (!job && !detail) {
     return { title: '공고 정보를 불러올 수 없습니다.', stages: [], team: '' }
   }
+
+  const source = {
+    ...(job || {}),
+    ...(detail || {}),
+    assignees: Array.isArray(job?.assignees) ? job.assignees : detail?.interviewers || []
+  }
+
   return {
-    ...job,
-    title: job.title || '공고 정보를 불러올 수 없습니다.',
-    stages: Array.isArray(job.stages) ? job.stages : [],
-    team: job.leadGroupName || job.team || ''
+    ...source,
+    title: source.title || '공고 정보를 불러올 수 없습니다.',
+    stages: Array.isArray(source.stages) ? source.stages : [],
+    team: source.leadGroupName || source.team || ''
   }
 })
 
@@ -71,30 +82,20 @@ const selectStep = (step) => {
 const searchInterviewer = ref('')
 const selectedInterviewers = ref([])
 
-// 2-1. 팀 데이터 (필터용)
-const allTeams = computed(() => {
-  return organization.value.flatMap(dept => dept.teams)
-})
-
 const selectedFilterTeams = ref([])
 
-const recommendedInterviewerIds = computed(() => {
-  const explicitIds = Array.isArray(recruitment.value?.interviewerIds) ? recruitment.value.interviewerIds : []
+const configuredInterviewerIds = computed(() => {
+  const explicitIds = Array.isArray(recruitment.value?.interviewerIds)
+    ? recruitment.value.interviewerIds
+    : []
+  const detailInterviewers = Array.isArray(recruitmentDetail.value?.interviewers)
+    ? recruitmentDetail.value.interviewers
+    : []
   const assignees = Array.isArray(recruitment.value?.assignees) ? recruitment.value.assignees : []
   return new Set(
-    [...explicitIds, ...assignees.map((a) => a?.id)]
+    [...explicitIds, ...assignees.map((a) => a?.id), ...detailInterviewers.map((a) => a?.memberId)]
       .map((id) => Number(id))
       .filter((id) => Number.isFinite(id))
-  )
-})
-
-const recommendedInterviewerNames = computed(() => {
-  const explicitNames = Array.isArray(recruitment.value?.interviewers) ? recruitment.value.interviewers : []
-  const assignees = Array.isArray(recruitment.value?.assignees) ? recruitment.value.assignees : []
-  return new Set(
-    [...explicitNames, ...assignees.map((a) => a?.name)]
-      .map((name) => String(name || '').trim())
-      .filter(Boolean)
   )
 })
 
@@ -108,18 +109,6 @@ const toggleTeamFilter = (teamId) => {
   }
 }
 
-// 2-3. 초기 진입 시 공고 담당 팀 자동 선택
-watch(recruitment, (newVal) => {
-    if (newVal && newVal.team) {
-        // 공고의 팀 이름과 일치하는 팀 찾기
-        const teamObj = allTeams.value.find(t => t.name === newVal.team)
-        if (teamObj && selectedFilterTeams.value.length === 0) {
-            selectedFilterTeams.value.push(teamObj.id)
-        }
-    }
-}, { immediate: true })
-
-
 // 전체 직원 목록 Flatten (기존 유지)
 const allEmployees = computed(() => {
   const employees = []
@@ -127,11 +116,7 @@ const allEmployees = computed(() => {
     dept.teams.forEach(team => {
       team.members.forEach(member => {
         const memberId = Number(member.id)
-        const memberName = String(member.name || '').trim()
-        const byAssignee = recommendedInterviewerIds.value.has(memberId) || recommendedInterviewerNames.value.has(memberName)
-        // 하위 호환: 기존 팀 기반 추천
-        const byTeam = recruitment.value.team && recruitment.value.team === team.name
-        const isRecomm = byAssignee || byTeam
+        const isRecomm = configuredInterviewerIds.value.has(memberId)
         employees.push({
           ...member,
           deptName: dept.name,
@@ -142,17 +127,31 @@ const allEmployees = computed(() => {
       })
     })
   })
-  // 추천 면접관이 상단에 오도록 정렬
-  return employees.sort((a, b) => (b.isRecommended ? 1 : 0) - (a.isRecommended ? 1 : 0))
+  return employees
+})
+
+const allowedInterviewers = computed(() => {
+  return allEmployees.value
+    .filter((member) => member.isRecommended)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko-KR'))
+})
+
+const allTeams = computed(() => {
+  const allowedTeamIds = new Set(allowedInterviewers.value.map((member) => Number(member.teamId)))
+  return organization.value
+    .flatMap((dept) =>
+      dept.teams
+        .filter((team) => allowedTeamIds.has(Number(team.id)))
+        .map((team) => ({ id: team.id, name: team.name }))
+    )
 })
 
 const filteredInterviewers = computed(() => {
   // 1. 팀 필터 적용
-  let filtered = allEmployees.value
+  let filtered = allowedInterviewers.value
   
   if (selectedFilterTeams.value.length > 0) {
-      // 추천 면접관은 팀 필터와 관계없이 항상 노출
-      filtered = filtered.filter(e => selectedFilterTeams.value.includes(e.teamId) || e.isRecommended)
+      filtered = filtered.filter(e => selectedFilterTeams.value.includes(e.teamId))
   }
 
   // 2. 검색어 필터 적용
@@ -179,6 +178,27 @@ const removeInterviewer = (id) => {
   const idx = selectedInterviewers.value.findIndex(i => i.id === id)
   if (idx > -1) selectedInterviewers.value.splice(idx, 1)
 }
+
+watch(
+  allowedInterviewers,
+  (members) => {
+    const allowedIds = new Set(members.map((m) => Number(m.id)))
+    selectedInterviewers.value = selectedInterviewers.value.filter((m) =>
+      allowedIds.has(Number(m.id))
+    )
+  },
+  { immediate: true }
+)
+
+watch(
+  allTeams,
+  (teams) => {
+    const availableTeamIds = new Set(teams.map((t) => Number(t.id)))
+    const nextSelected = selectedFilterTeams.value.filter((id) => availableTeamIds.has(Number(id)))
+    selectedFilterTeams.value = nextSelected.length ? nextSelected : teams.map((t) => t.id)
+  },
+  { immediate: true }
+)
 
 /* 
   3. 지원자 데이터 (Mock + Store 연동 예시)
@@ -237,6 +257,7 @@ const goNext = () => {
       path: '/recruitment/interview/schedule',
       query: {
         recruitmentId: jobId,
+        recruitmentTitle: recruitment.value?.title || '',
         recruitmentStageId: selectedStep.value?.id ?? '',
         round,
         stage: selectedStep.value.step,
@@ -266,6 +287,16 @@ onMounted(() => {
     recruitmentStore.fetchRecruitments().catch((error) => {
       console.error('채용 공고 데이터 조회 실패:', error)
     })
+  }
+  if (jobId) {
+    recruitmentApi
+      .getRecruitmentDetail(jobId)
+      .then((res) => {
+        recruitmentDetail.value = res?.data?.data || null
+      })
+      .catch((error) => {
+        console.error('채용 공고 상세 조회 실패:', error)
+      })
   }
 })
 </script>
@@ -331,7 +362,13 @@ onMounted(() => {
       <!-- Step 2: 면접관 선택 -->
       <div v-else-if="currentStep === 2" class="step-container animate-fade-in">
         <h2 class="step-title">면접관을 선택해주세요</h2>
-        <p class="step-desc">참여할 팀을 선택하고 면접관을 지정해주세요.</p>
+        <p class="step-desc">공고 생성 시 지정한 면접관만 표시됩니다.</p>
+
+        <div class="mt-4 mb-2 flex items-center gap-3">
+          <span class="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded-md px-2 py-1">
+            선택된 인원 {{ selectedInterviewers.length }}명
+          </span>
+        </div>
 
         <!-- 팀 필터 -->
         <div class="mt-4 mb-2">
@@ -367,7 +404,9 @@ onMounted(() => {
                 :key="member.id"
                 @click="toggleInterviewer(member)"
                 class="flex items-center p-3 rounded-lg cursor-pointer transition-colors"
-                :class="selectedInterviewers.find(i => i.id === member.id) ? 'bg-brand-50 border border-brand-200' : 'hover:bg-slate-50 border border-transparent'"
+                :class="selectedInterviewers.find(i => i.id === member.id)
+                  ? 'bg-brand-50 border border-brand-200'
+                  : 'hover:bg-slate-50 border border-transparent'"
               >
                 <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 mr-3">
                   {{ member.name[0] }}
@@ -375,7 +414,6 @@ onMounted(() => {
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                      <span class="font-bold text-sm text-slate-900">{{ member.name }}</span>
-                     <span v-if="member.isRecommended" class="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded font-bold">추천</span>
                   </div>
                   <div class="text-xs text-slate-500">{{ member.teamName }} · {{ member.position }}</div>
                 </div>

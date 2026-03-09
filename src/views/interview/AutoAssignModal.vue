@@ -8,7 +8,7 @@ defineProps({
 const emit = defineEmits(['close', 'submit'])
 
 const useStartTime = ref(true)
-const useMaxHour = ref(true)
+const useDuration = ref(true)
 
 const hourOptions = computed(() => {
   const list = []
@@ -27,18 +27,16 @@ const useAllRooms = ref(false)
 
 const startHour = ref(9)
 
-const maxHour = ref(1)
+const durationHours = ref(1)
 
 const submit = () => {
 
   const options = {
     useAllRooms: useAllRooms.value,
-
-    useTimeRange: useStartTime.value,
-    start: startHour.value,
-
-    useMaxHour: useMaxHour.value,
-    hours: maxHour.value
+    useStartTime: useStartTime.value,
+    startHour: startHour.value,
+    useDuration: useDuration.value,
+    durationHours: durationHours.value
   }
 
   emit('submit', options)
@@ -63,13 +61,13 @@ const submit = () => {
       <div class="row">
 
         <label class="checkLabel">
-          <input type="checkbox" v-model="useTimeRange" />
+          <input type="checkbox" v-model="useStartTime" />
           시작 시간
         </label>
 
         <select
             v-model="startHour"
-            :disabled="!useTimeRange"
+            :disabled="!useStartTime"
             class="cleanSelect"
         >
           <option v-for="h in hourOptions" :key="h.value" :value="h.value">
@@ -81,14 +79,14 @@ const submit = () => {
       <div class="row">
 
         <label class="checkLabel">
-          <input type="checkbox" v-model="useMaxHour" />
+          <input type="checkbox" v-model="useDuration" />
           예약 시간(시간)
         </label>
 
         <select
-            v-model="maxHour"
-            :disabled="!useMaxHour"
-            :class="{ disabled: !useMaxHour }"
+            v-model="durationHours"
+            :disabled="!useDuration"
+            :class="{ disabled: !useDuration }"
             class="cleanSelect"
         >
           <option v-for="h in 6" :key="h" :value="h">
