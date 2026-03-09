@@ -2,18 +2,20 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { careerApi } from '@/api/career'
+import { useApplicantAuth } from '@/composables/useApplicantAuth'
 
 const route = useRoute()
 const router = useRouter()
+const { isAuthenticated, logout } = useApplicantAuth()
 
 const companySlug = computed(() => route.params.companySlug)
+
 
 // API 데이터
 const jobs = ref([])
 const loading = ref(true)
 const error = ref(null)
 
-// 검색 및 필터
 const searchQuery = ref('')
 const selectedCareerType = ref('')
 
@@ -121,6 +123,15 @@ const goToApply = (recruitmentId) => {
 const toggleCareerType = (type) => {
   selectedCareerType.value = selectedCareerType.value === type ? '' : type
 }
+
+const handleAuthAction = () => {
+  if (isAuthenticated.value) {
+    logout()
+    router.push(`/careers/${companySlug.value}`)
+  } else {
+    router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })
+  }
+}
 </script>
 
 <template>
@@ -142,10 +153,10 @@ const toggleCareerType = (type) => {
             <span class="text-gray-900 font-medium border-b-2 border-gray-900 pb-1">APPLY</span>
           </nav>
           <button
-            @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
+            @click="handleAuthAction"
             class="px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors"
           >
-            로그인
+            {{ isAuthenticated ? '로그아웃' : '로그인' }}
           </button>
         </div>
       </div>
@@ -167,7 +178,7 @@ const toggleCareerType = (type) => {
         <!-- Sidebar Filter -->
         <aside class="w-56 flex-shrink-0">
           <div class="sticky top-8">
-            <h3 class="text-sm font-semibold text-gray-900 mb-4">Filters</h3>
+            <h3 class="text-sm font-semibold text-gray-900 mb-4">필터</h3>
 
             <!-- Career Type Filter -->
             <div class="mb-6">
