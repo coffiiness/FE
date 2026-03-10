@@ -23,7 +23,7 @@ const hourOptions = computed(() => {
   return list
 })
 
-const useAllRooms = ref(false)
+const useAllRooms = ref(true)
 
 const startHour = ref(9)
 

@@ -118,6 +118,8 @@ const canUseRoomByHeadcount = (capacityText, totalPeople) => {
 
 const meetingRoomBusySlots = ref([])
 const interviewerBusySlots = ref([])
+const applicantBusySlots = ref([])
+const participantBusySlots = ref([])
 
 const toErrorText = (error) => {
   const payload = error?.response?.data
@@ -194,6 +196,52 @@ const normalizeRoomBusySlots = (slots) => {
     )
 }
 
+const normalizeAttendeeNames = (raw) => {
+  if (Array.isArray(raw)) {
+    return raw.map((name) => String(name || '').trim()).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    return raw
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+const loadParticipantBusyFromLocalReservations = (reservationRows) => {
+  const selectedParticipantNames = new Set(
+    [
+      ...interviewers.value.map((item) => String(item?.name || '').trim()),
+      ...applicants.value.map((item) => String(item?.name || '').trim())
+    ].filter(Boolean)
+  )
+  if (!selectedParticipantNames.size || !Array.isArray(reservationRows)) {
+    participantBusySlots.value = []
+    return
+  }
+
+  let attendeeMap = {}
+  try {
+    const raw = localStorage.getItem('meetingRoomReservationAttendees')
+    const parsed = raw ? JSON.parse(raw) : {}
+    attendeeMap = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    attendeeMap = {}
+  }
+
+  participantBusySlots.value = reservationRows
+    .filter((reservation) => {
+      const attendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
+      return attendees.some((name) => selectedParticipantNames.has(name))
+    })
+    .map((reservation) => ({
+      start: reservation?.startDatetime,
+      end: reservation?.endDatetime
+    }))
+    .filter((slot) => typeof slot.start === 'string' && typeof slot.end === 'string')
+}
+
 const loadMeetingRooms = async () => {
   try {
     const response = await meetingRoomApi.list()
@@ -215,12 +263,14 @@ const loadAvailability = async () => {
   const fromBase = weekStart > now ? weekStart : now
   const from = `${fromBase.getFullYear()}-${pad2(fromBase.getMonth() + 1)}-${pad2(fromBase.getDate())}T${pad2(fromBase.getHours())}:${pad2(fromBase.getMinutes())}:${pad2(fromBase.getSeconds())}`
   const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
   const interviewResult = await interviewApi
     .getAvailability({
       from,
       meetingRoomIds,
-      interviewerIds
+      interviewerIds,
+      applicantIds
     })
     .catch((error) => {
       console.error('면접 가용시간 조회 실패:', toErrorText(error))
@@ -239,7 +289,9 @@ const loadAvailability = async () => {
 
   const interviewData = interviewResult?.data?.data
   const roomBusyFromInterview = normalizeRoomBusySlots(interviewData?.meetingRoomBusySlots)
-  const roomBusyFromReservations = normalizeRoomBusySlots(reservationResult?.data?.data)
+  const reservationRows = Array.isArray(reservationResult?.data?.data) ? reservationResult.data.data : []
+  const roomBusyFromReservations = normalizeRoomBusySlots(reservationRows)
+  loadParticipantBusyFromLocalReservations(reservationRows)
 
   const mergedRoomBusy = [...roomBusyFromInterview, ...roomBusyFromReservations]
   const uniqueRoomBusy = new Map()
@@ -253,6 +305,9 @@ const loadAvailability = async () => {
 
   interviewerBusySlots.value = Array.isArray(interviewData?.interviewerBusySlots)
     ? interviewData.interviewerBusySlots
+    : []
+  applicantBusySlots.value = Array.isArray(interviewData?.applicantBusySlots)
+    ? interviewData.applicantBusySlots
     : []
 }
 
@@ -276,7 +331,9 @@ const isBlocked = (date, time) => {
   const byStatic = blockedArr.some((b) => b.date === date && b.time === time)
   const byRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', selectedRoom.value?.id)
   const byInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
-  return byStatic || byRoomBusy || byInterviewerBusy
+  const byApplicantBusy = hasBusyOverlap(date, time, applicantBusySlots.value, 'applicantId')
+  const byParticipantBusy = hasBusyOverlap(date, time, participantBusySlots.value, 'unused', null)
+  return byStatic || byRoomBusy || byInterviewerBusy || byApplicantBusy || byParticipantBusy
 }
 
 const toHourTime = (hour) => `${pad2(hour)}:00`
@@ -287,7 +344,9 @@ const isSlotBlockedForRoom = (date, hour, room) => {
   const blockedByStatic = (room?.blocked || []).some((b) => b.date === date && b.time === time)
   const blockedByRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', room?.id)
   const blockedByInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
-  return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy
+  const blockedByApplicantBusy = hasBusyOverlap(date, time, applicantBusySlots.value, 'applicantId')
+  const blockedByParticipantBusy = hasBusyOverlap(date, time, participantBusySlots.value, 'unused', null)
+  return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy || blockedByApplicantBusy || blockedByParticipantBusy
 }
 
 const canAssignContinuousHours = (date, startHour, durationHours, room) => {

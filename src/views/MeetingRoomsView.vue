@@ -119,11 +119,15 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 const reservationTitleMap = ref({})
+const reservationAttendeeMap = ref({})
 const interviewReservationTitleMap = ref({})
 const interviewReservationAttendeeMap = ref({})
+const interviewReservationInterviewerMap = ref({})
+const interviewReservationApplicantMap = ref({})
 const interviewSlotTitleMap = ref({})
 
 const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
+const RESERVATION_ATTENDEE_MAP_KEY = 'meetingRoomReservationAttendees'
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
 
 const loadReservationTitleMap = () => {
@@ -144,6 +148,24 @@ const saveReservationTitleMap = () => {
   }
 }
 
+const loadReservationAttendeeMap = () => {
+  try {
+    const raw = localStorage.getItem(RESERVATION_ATTENDEE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    reservationAttendeeMap.value = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    reservationAttendeeMap.value = {}
+  }
+}
+
+const saveReservationAttendeeMap = () => {
+  try {
+    localStorage.setItem(RESERVATION_ATTENDEE_MAP_KEY, JSON.stringify(reservationAttendeeMap.value))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 const loadInterviewSlotTitleMap = () => {
   try {
     const raw = localStorage.getItem(INTERVIEW_SLOT_TITLE_MAP_KEY)
@@ -158,6 +180,12 @@ const setReservationTitle = (reservationId, title) => {
   if (!reservationId || !title) return
   reservationTitleMap.value[String(reservationId)] = title
   saveReservationTitleMap()
+}
+
+const setReservationAttendees = (reservationId, attendees) => {
+  if (!reservationId) return
+  reservationAttendeeMap.value[String(reservationId)] = sanitizeAttendeeNames(attendees || [])
+  saveReservationAttendeeMap()
 }
 
 const openErrorModal = (title, message) => {
@@ -233,6 +261,21 @@ const parseAttendeesFromText = (text) => {
     .map((line) => line.trim())
     .filter(Boolean)
   const prefixes = ['참석자:', '면접관:', '지원자:']
+  const collected = []
+  lines.forEach((line) => {
+    const prefix = prefixes.find((p) => line.startsWith(p))
+    if (!prefix) return
+    collected.push(...parseNameTokens(line.replace(prefix, '')))
+  })
+  return uniqueNames(collected)
+}
+
+const parseNamesByPrefixes = (text, prefixes = []) => {
+  if (typeof text !== 'string' || !text.trim()) return []
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
   const collected = []
   lines.forEach((line) => {
     const prefix = prefixes.find((p) => line.startsWith(p))
@@ -327,6 +370,8 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
 
     const nextMap = {}
     const nextAttendeeMap = {}
+    const nextInterviewerMap = {}
+    const nextApplicantMap = {}
     const timeOnlyBucket = {}
     scheduleResults.forEach((result, idx) => {
       if (result.status !== 'fulfilled') return
@@ -344,6 +389,18 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         const stageTitle = String(item?.title || '').trim()
         const recruitmentTitle = String(recruitment?.title || '').trim()
         const mergedTitle = [recruitmentTitle, stageTitle].filter(Boolean).join(' - ') || '면접 일정'
+        const interviewerNames = sanitizeAttendeeNames(
+          flattenNames([
+            item?.interviewerName,
+            item?.interviewerNames,
+            item?.interviewerMemberName,
+            item?.interviewerMemberNames,
+            item?.interviewers
+          ])
+        )
+        const applicantNames = sanitizeAttendeeNames(
+          flattenNames([item?.applicantName, item?.applicantNames, item?.applicants])
+        )
         const attendeeNamesFromApi = flattenNames([
           item?.interviewerName,
           item?.interviewerNames,
@@ -362,6 +419,8 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         if (Number.isFinite(scheduleId)) {
           nextMap[`schedule:${scheduleId}`] = mergedTitle
           nextAttendeeMap[`schedule:${scheduleId}`] = normalizedAttendees
+          nextInterviewerMap[`schedule:${scheduleId}`] = interviewerNames
+          nextApplicantMap[`schedule:${scheduleId}`] = applicantNames
         }
 
         const roomAndTimeKey = toDateTimeKey(
@@ -372,6 +431,8 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         if (roomAndTimeKey) {
           nextMap[roomAndTimeKey] = mergedTitle
           nextAttendeeMap[roomAndTimeKey] = normalizedAttendees
+          nextInterviewerMap[roomAndTimeKey] = interviewerNames
+          nextApplicantMap[roomAndTimeKey] = applicantNames
           return
         }
 
@@ -381,6 +442,12 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         timeOnlyBucket[timeOnlyKey].add(mergedTitle)
         if (!nextAttendeeMap[timeOnlyKey]) {
           nextAttendeeMap[timeOnlyKey] = normalizedAttendees
+        }
+        if (!nextInterviewerMap[timeOnlyKey]) {
+          nextInterviewerMap[timeOnlyKey] = interviewerNames
+        }
+        if (!nextApplicantMap[timeOnlyKey]) {
+          nextApplicantMap[timeOnlyKey] = applicantNames
         }
       })
     })
@@ -393,9 +460,13 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
 
     interviewReservationTitleMap.value = nextMap
     interviewReservationAttendeeMap.value = nextAttendeeMap
+    interviewReservationInterviewerMap.value = nextInterviewerMap
+    interviewReservationApplicantMap.value = nextApplicantMap
   } catch (error) {
     interviewReservationTitleMap.value = {}
     interviewReservationAttendeeMap.value = {}
+    interviewReservationInterviewerMap.value = {}
+    interviewReservationApplicantMap.value = {}
     console.error('면접 예약 제목 매핑 조회 실패:', error)
   }
 }
@@ -406,6 +477,7 @@ const toViewBookingFromApi = (reservation) => {
   const titleFromApi =
     reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
   const titleFromLocal = reservationTitleMap.value[String(reservationId)]
+  const attendeesFromLocal = reservationAttendeeMap.value[String(reservationId)] || []
   const roomAndTimeKey = toDateTimeKey(reservation?.meetingRoomId, reservation?.startDatetime, reservation?.endDatetime)
   const timeOnlyKey = toTimeOnlyKey(reservation?.startDatetime, reservation?.endDatetime)
   const titleFromScheduleId = Number.isFinite(scheduleId)
@@ -425,17 +497,49 @@ const toViewBookingFromApi = (reservation) => {
     reservation?.applicantName,
     reservation?.applicantNames
   ])
+  const interviewersFromPayload = flattenNames([reservation?.interviewerName, reservation?.interviewerNames, reservation?.interviewers])
+  const applicantsFromPayload = flattenNames([reservation?.applicantName, reservation?.applicantNames, reservation?.applicants])
   const attendeesFromInterview =
     (Number.isFinite(scheduleId) ? interviewReservationAttendeeMap.value[`schedule:${scheduleId}`] : null) ||
     (roomAndTimeKey ? interviewReservationAttendeeMap.value[roomAndTimeKey] : null) ||
     (timeOnlyKey ? interviewReservationAttendeeMap.value[timeOnlyKey] : null) ||
     []
+  const interviewersFromInterview =
+    (Number.isFinite(scheduleId) ? interviewReservationInterviewerMap.value[`schedule:${scheduleId}`] : null) ||
+    (roomAndTimeKey ? interviewReservationInterviewerMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationInterviewerMap.value[timeOnlyKey] : null) ||
+    []
+  const applicantsFromInterview =
+    (Number.isFinite(scheduleId) ? interviewReservationApplicantMap.value[`schedule:${scheduleId}`] : null) ||
+    (roomAndTimeKey ? interviewReservationApplicantMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationApplicantMap.value[timeOnlyKey] : null) ||
+    []
+  const interviewersFromDescription = parseNamesByPrefixes(
+    reservation?.description || reservation?.memo || '',
+    ['면접관:']
+  )
+  const applicantsFromDescription = parseNamesByPrefixes(
+    reservation?.description || reservation?.memo || '',
+    ['지원자:']
+  )
+  const interviewers = sanitizeAttendeeNames(interviewersFromPayload).length
+    ? sanitizeAttendeeNames(interviewersFromPayload)
+    : sanitizeAttendeeNames(interviewersFromInterview).length
+      ? sanitizeAttendeeNames(interviewersFromInterview)
+      : sanitizeAttendeeNames(interviewersFromDescription)
+  const applicants = sanitizeAttendeeNames(applicantsFromPayload).length
+    ? sanitizeAttendeeNames(applicantsFromPayload)
+    : sanitizeAttendeeNames(applicantsFromInterview).length
+      ? sanitizeAttendeeNames(applicantsFromInterview)
+      : sanitizeAttendeeNames(applicantsFromDescription)
   const attendeesFromInterviewResolved = sanitizeAttendeeNames(attendeesFromInterview)
   const attendeesFromDescription = parseAttendeesFromText(
     reservation?.description || reservation?.memo || ''
   )
   const attendees = sanitizeAttendeeNames(attendeesFromPayload).length
     ? sanitizeAttendeeNames(attendeesFromPayload)
+    : sanitizeAttendeeNames(attendeesFromLocal).length
+      ? sanitizeAttendeeNames(attendeesFromLocal)
     : attendeesFromInterviewResolved.length
       ? attendeesFromInterviewResolved
       : sanitizeAttendeeNames(attendeesFromDescription)
@@ -448,6 +552,8 @@ const toViewBookingFromApi = (reservation) => {
     title: titleFromLocalInterview || titleFromInterview || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
     organizer: resolveOrganizerName(reservation),
+    interviewers,
+    applicants,
     attendees,
     status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
     startTime: new Date(reservation.startDatetime),
@@ -487,6 +593,7 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
 
 onMounted(async () => {
   loadReservationTitleMap()
+  loadReservationAttendeeMap()
   loadInterviewSlotTitleMap()
   await loadInterviewReservationTitles()
   await loadRoomsFromApi()
@@ -541,6 +648,7 @@ const handleBookingConfirm = async (booking) => {
     const saved = response?.data?.data
     if (!saved?.id) return
     setReservationTitle(saved.id, booking.title)
+    setReservationAttendees(saved.id, booking.attendees || [])
 
     bookings.value.push({
       id: `b-${saved.id}`,
@@ -550,6 +658,8 @@ const handleBookingConfirm = async (booking) => {
       title: booking.title || '회의실 예약',
       description: booking.description || '',
       organizer: booking.organizer || getCurrentUser()?.name || '',
+      interviewers: [],
+      applicants: [],
       attendees: booking.attendees || [],
       status: 'confirmed',
       startTime: new Date(saved.startDatetime),
@@ -582,6 +692,8 @@ const confirmDeleteBooking = async () => {
     if (idx >= 0) bookings.value.splice(idx, 1)
     delete reservationTitleMap.value[String(target.serverId)]
     saveReservationTitleMap()
+    delete reservationAttendeeMap.value[String(target.serverId)]
+    saveReservationAttendeeMap()
     deleteBookingModalOpen.value = false
     deleteTargetBookingId.value = null
     detailModalOpen.value = false
