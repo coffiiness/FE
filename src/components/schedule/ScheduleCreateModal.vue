@@ -62,6 +62,7 @@ const scheduleTypes = [
   { value: 'VACATION', label: '휴가', activeClass: 'bg-rose-50 border-rose-200 text-rose-600' },
   { value: 'OTHERS', label: '기타', activeClass: 'bg-slate-100 border-slate-300 text-slate-700' }
 ]
+const isMeetingType = computed(() => form.value.type === 'MEETING')
 
 const toMinutes = (timeValue) => {
   if (!timeValue) return null
@@ -202,18 +203,22 @@ const save = () => {
     return
   }
 
-  if (overlappingRoomSchedules.value.length > 0) {
+  if (isMeetingType.value && overlappingRoomSchedules.value.length > 0) {
     openValidationModal('선택한 회의실은 해당 시간에 이미 예약이 있습니다. 시간 또는 회의실을 변경해주세요.')
     return
   }
 
   const payload = { ...form.value }
-  const rawRoomId = payload.roomId
-  if (rawRoomId === null || rawRoomId === '' || rawRoomId === undefined) {
+  if (!isMeetingType.value) {
     payload.roomId = null
   } else {
-    const parsedRoomId = Number(rawRoomId)
-    payload.roomId = Number.isFinite(parsedRoomId) && parsedRoomId > 0 ? parsedRoomId : null
+    const rawRoomId = payload.roomId
+    if (rawRoomId === null || rawRoomId === '' || rawRoomId === undefined) {
+      payload.roomId = null
+    } else {
+      const parsedRoomId = Number(rawRoomId)
+      payload.roomId = Number.isFinite(parsedRoomId) && parsedRoomId > 0 ? parsedRoomId : null
+    }
   }
 
   emit('save', payload)
@@ -289,7 +294,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </div>
           </div>
 
-          <div>
+          <div v-if="isMeetingType">
             <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">회의실 선택</label>
             <select v-model="form.roomId" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium shadow-sm">
               <option :value="null">선택 안 함</option>
