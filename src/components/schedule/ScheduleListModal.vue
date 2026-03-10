@@ -17,22 +17,22 @@ const formattedDateTitle = computed(() => {
 
 const getEventStyle = (type) => {
   switch (type) {
-    case 'INTERVIEW':
-    case 'interview': return { bg: 'bg-brand-50', border: 'border-brand-100', text: 'text-brand-700', badge: 'bg-white border-brand-200 text-brand-700' }
-    case 'MEETING':
-    case 'meeting': return { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700', badge: 'bg-white border-amber-200 text-amber-700' }
-    case 'BUSINESS_TRIP':
-    case 'business_trip': return { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', badge: 'bg-white border-emerald-200 text-emerald-700' }
-    case 'off': return { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-white border-rose-200 text-rose-700' }
-    default: return { bg: 'bg-slate-50', border: 'border-slate-100', text: 'text-slate-700', badge: 'bg-white border-slate-200 text-slate-700' }
+    case 'MEETING': return { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700', badge: 'bg-white border-amber-200 text-amber-700' }
+    case 'BUSINESS': return { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', badge: 'bg-white border-emerald-200 text-emerald-700' }
+    case 'VACATION': return { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-white border-rose-200 text-rose-700' }
+    case 'OTHERS': return { bg: 'bg-slate-50', border: 'border-slate-100', text: 'text-slate-700', badge: 'bg-white border-slate-200 text-slate-700' }
+    default: return { bg: 'bg-brand-50', border: 'border-brand-100', text: 'text-brand-700', badge: 'bg-white border-brand-200 text-brand-700' }
   }
 }
 
 const typeLabel = (type) => {
-  if (type === 'interview') return '면접'
-  if (type === 'meeting') return '회의'
-  if (type === 'off') return '휴가'
-  return '기타'
+  const labels = {
+    MEETING: '회의',
+    BUSINESS: '외근/출장',
+    VACATION: '휴가',
+    OTHERS: '기타'
+  }
+  return labels[type] || type
 }
 </script>
 

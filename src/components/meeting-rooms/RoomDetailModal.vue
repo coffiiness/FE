@@ -2,7 +2,8 @@
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
-  bookings: { type: Array, required: true }
+  bookings: { type: Array, required: true },
+  selectedDate: { type: String, default: '' }
 })
 
 const emit = defineEmits(['close', 'bookRoom', 'bookingClick'])
@@ -90,3 +91,5 @@ const roomBookings = () => {
     </div>
   </div>
 </template>
+
+

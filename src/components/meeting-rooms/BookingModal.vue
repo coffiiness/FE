@@ -1,6 +1,5 @@
 <script setup>
-import { reactive, watch, ref, computed, onMounted, onUnmounted } from 'vue'
-import { useScheduleStore } from '@/stores/schedule'
+import { reactive, watch, ref, computed } from 'vue'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 
@@ -12,7 +11,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
-const scheduleStore = useScheduleStore()
 const orgStore = useOrganizationStore()
 const { departments } = storeToRefs(orgStore)
 
@@ -105,6 +103,7 @@ watch(
     endHour12.value = endParts.hour12
     state.organizer = getCurrentUserName()
     state.attendees = [] // 초기화
+    submitError.value = ''
     selectedDeptId.value = null
     attendeeInput.value = ''
     formError.value = ''
@@ -158,7 +157,7 @@ const handleSubmit = () => {
   }
   const [startHour, startMinute] = state.startTime.split(':').map(Number)
   const [endHour, endMinute] = state.endTime.split(':').map(Number)
-  const base = new Date(state.date)
+  const base = parseDateOnly(state.date)
   const startDateTime = new Date(base)
   startDateTime.setHours(startHour, startMinute, 0, 0)
   const endDateTime = new Date(base)
@@ -168,13 +167,28 @@ const handleSubmit = () => {
     return
   }
 
-  // 문자열로 변환하지 않고 배열 그대로 전송
+  if (startDateTime >= endDateTime) {
+    submitError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
+    return
+  }
+
+  if (startHour < 8 || startHour > 20 || endHour < 8 || endHour > 21) {
+    submitError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
+    return
+  }
+
+  const now = new Date()
+  if (startDateTime < now) {
+    submitError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
+    return
+  }
+
   const attendeesList = [...state.attendees]
   const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
 
   emit('confirm', {
     roomId: props.room.id,
-    title: state.title,
+    title: state.title.trim(),
     description: state.description,
     startTime: startDateTime,
     endTime: endDateTime,
@@ -216,6 +230,10 @@ const handleSubmit = () => {
         </button>
       </div>
       <div class="p-6 space-y-5 overflow-y-auto text-slate-900">
+        <p v-if="submitError" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+          {{ submitError }}
+        </p>
+
         <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3">
           <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: room?.color || '#94a3b8' }"></span>
           <div>
@@ -361,3 +379,4 @@ const handleSubmit = () => {
 @keyframes fadeInUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in-up { animation: fadeInUp 0.2s ease-out forwards; }
 </style>
+

@@ -1,6 +1,30 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { adminApi } from '@/api/admin'
+
+const now = new Date()
+const selectedYear = ref(now.getFullYear())
+const selectedMonth = ref(now.getMonth() + 1)
+
+const selectedMonthLabel = computed(() => `${selectedYear.value}년 ${selectedMonth.value}월`)
+const monthParam = computed(() => `${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`)
+
+const prevMonth = () => {
+  if (selectedMonth.value === 1) {
+    selectedYear.value--
+    selectedMonth.value = 12
+  } else {
+    selectedMonth.value--
+  }
+}
+const nextMonth = () => {
+  if (selectedMonth.value === 12) {
+    selectedYear.value++
+    selectedMonth.value = 1
+  } else {
+    selectedMonth.value++
+  }
+}
 
 const summary = ref({
   totalRevenue: 0, revenueGrowth: 0, totalCost: 0,
@@ -15,14 +39,13 @@ const pnlData = ref({
 })
 
 const loading = ref(false)
+const exporting = ref(false)
 
 const fetchAll = async () => {
   loading.value = true
   try {
-    const now = new Date()
-    const monthParam = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const [summaryRes, reportRes] = await Promise.all([
-      adminApi.getPnlSummary(monthParam),
+      adminApi.getPnlSummary(monthParam.value),
       adminApi.getPnlReport()
     ])
     summary.value = summaryRes.data.data
@@ -46,7 +69,26 @@ const fetchAll = async () => {
   }
 }
 
+const exportExcel = async () => {
+  exporting.value = true
+  try {
+    const res = await adminApi.exportPnlExcel(monthParam.value)
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `PnL_${monthParam.value}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    console.error('Excel 다운로드 실패', e)
+  } finally {
+    exporting.value = false
+  }
+}
+
 onMounted(fetchAll)
+watch([selectedYear, selectedMonth], fetchAll)
 
 const getGrowth = (arr) => {
   if (!arr || arr.length < 2) return null
@@ -71,25 +113,45 @@ const formatGrowth = (growth) => {
 
 <template>
   <div class="space-y-6">
-    <!-- Header with Actions -->
+    <!-- Header with Month Picker & Excel Download -->
     <div class="flex items-center justify-between">
-      <div />
-      <div class="flex items-center gap-3">
-        <span class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600">
+      <div class="flex items-center gap-2">
+        <button
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+          @click="prevMonth"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span class="inline-flex items-center px-4 py-1.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 min-w-[120px] justify-center">
           <svg class="w-4 h-4 mr-1.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
-          2025년 2월
+          {{ selectedMonthLabel }}
         </span>
-        <button class="inline-flex items-center px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors">
-          <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        <button
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+          @click="nextMonth"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
-          Excel 다운로드
         </button>
       </div>
+      <button
+        class="inline-flex items-center px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+        :class="{ 'opacity-50 cursor-not-allowed': exporting }"
+        :disabled="exporting"
+        @click="exportExcel"
+      >
+        <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+        {{ exporting ? '다운로드 중...' : 'Excel 다운로드' }}
+      </button>
     </div>
 
     <!-- Summary Cards -->

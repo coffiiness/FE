@@ -1,12 +1,34 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-
-import scheduleData from '@/data/schedule.json'
-import roomsData from '@/data/rooms.json'
-import organizationData from '@/data/organization.json'
+import { scheduleApi } from '@/api/schedule'
+import { workspaceApi } from '@/api/workspace'
 
 export const useScheduleStore = defineStore('schedule_v2', () => {
-  // [유틸] 오늘 날짜 구하기 (YYYY-MM-DD)
+  const ensureWorkspaceId = async ({ forceRefresh = false } = {}) => {
+    const currentWorkspaceId = localStorage.getItem('workspaceId')
+    if (!forceRefresh && currentWorkspaceId) {
+      return currentWorkspaceId
+    }
+
+    try {
+      const workspaceResponse = await workspaceApi.getMyWorkspace()
+      const resolvedWorkspaceId = workspaceResponse?.data?.data?.workspaceId || null
+      if (resolvedWorkspaceId) {
+        localStorage.setItem('workspaceId', resolvedWorkspaceId)
+        return resolvedWorkspaceId
+      }
+    } catch (_) {
+      // fall through to workspace check below
+    }
+
+    if (!forceRefresh && currentWorkspaceId) {
+      return currentWorkspaceId
+    }
+
+    localStorage.removeItem('workspaceId')
+    throw new Error('Workspace is missing. Create or join a workspace first.')
+  }
+
   const getToday = () => {
     const d = new Date()
     const year = d.getFullYear()
@@ -15,91 +37,110 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     return `${year}-${month}-${day}`
   }
 
-  // [유틸] 오늘 기준 N일 후 날짜 구하기 (데이터 생성용)
-  const getRelativeDate = (offset) => {
-    const d = new Date()
-    d.setDate(d.getDate() + offset)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  // 유틸: 시간 포맷팅 (13:00 -> 오후 1:00)
   const formatTime = (timeStr) => {
     if (!timeStr) return ''
     const [hour, min] = timeStr.split(':').map(Number)
-    const ampm = hour >= 12 ? '오후' : '오전'
+    const ampm = hour >= 12 ? 'PM' : 'AM'
     const formattedHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour)
     return `${ampm} ${formattedHour}:${String(min).padStart(2, '0')}`
   }
 
-  // Helper: Find Room Name by ID
-  const getRoomName = (roomId) => {
-    const room = roomsData.find(r => r.id === roomId)
-    return room ? room.name : '지정된 장소 없음'
-  }
+  const schedules = ref([])
+  const loading = ref(false)
+  const error = ref(null)
 
-  // Helper: Find Member Details by IDs
-  const getAllMembers = () => {
-    const members = []
-    organizationData.forEach(dept => {
-      dept.teams.forEach(team => {
-        members.push(...team.members)
-      })
-    })
-    return members
-  }
-
-  const allMembers = getAllMembers()
-
-  const getAttendeeDetails = (attendeeIds) => {
-    if (!attendeeIds || attendeeIds.length === 0) return []
-    return attendeeIds.map(id => {
-      const member = allMembers.find(m => m.id === id)
-      if (member) {
-        return `${member.name} (${member.position})`
-      }
-      return `Unknown (${id})`
-    })
-  }
-
-  // JSON 데이터의 dayOffset을 실제 날짜로 변환하여 초기화
-  const initialSchedules = scheduleData.map(item => ({
-    ...item,
-    date: getRelativeDate(item.dayOffset),
-    time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`,
-    location: item.roomId ? getRoomName(item.roomId) : (item.location || '지정된 장소 없음'),
-    attendees: item.attendeeIds ? getAttendeeDetails(item.attendeeIds) : (item.attendees || [])
-  }))
-
-  const schedules = ref(initialSchedules)
-
-  const addSchedule = (schedule) => {
-    const formattedTimeStr = `${formatTime(schedule.startTime)} - ${formatTime(schedule.endTime)}`
-
-    schedules.value.push({
-      type: 'OTHERS', // 기본값
-      ...schedule,
-      time: formattedTimeStr,
-      id: Date.now()
-    })
-  }
-
-  const updateSchedule = (updatedSchedule) => {
-    const index = schedules.value.findIndex(s => s.id === updatedSchedule.id)
-    if (index !== -1) {
-      const formattedTimeStr = `${formatTime(updatedSchedule.startTime)} - ${formatTime(updatedSchedule.endTime)}`
-      schedules.value[index] = {
-        ...updatedSchedule,
-        time: formattedTimeStr
-      }
+  const normalizeSchedule = (item) => {
+    return {
+      id: item.id,
+      title: item.title,
+      date: item.date,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      type: item.type,
+      description: item.description || '',
+      roomId: item.roomId,
+      isBusy: item.isBusy,
+      time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
     }
   }
 
-  const deleteSchedule = (id) => {
-    schedules.value = schedules.value.filter(s => s.id !== id)
+  const buildRequest = (formData) => {
+    const toDateTime = (date, timeValue) => {
+      if (!timeValue) return null
+      const parts = String(timeValue).split(':')
+      if (parts.length >= 3) {
+        return `${date}T${parts[0]}:${parts[1]}:${parts[2]}`
+      }
+      return `${date}T${parts[0]}:${parts[1]}:00`
+    }
+
+    const startDateTime = toDateTime(formData.date, formData.startTime)
+    const endDateTime = toDateTime(formData.date, formData.endTime)
+
+    return {
+      title: formData.title,
+      description: formData.description || '',
+      type: formData.type,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      isAllDay: false,
+      roomId: formData.roomId || null,
+      isBusy: formData.isBusy !== undefined ? formData.isBusy : true,
+      attendeeIds: formData.attendeeIds || []
+    }
   }
 
-  return { schedules, addSchedule, updateSchedule, deleteSchedule, getToday }
+  const fetchSchedules = async (startDate, endDate) => {
+    loading.value = true
+    error.value = null
+    try {
+      await ensureWorkspaceId()
+      const res = await scheduleApi.getSchedules(startDate, endDate)
+      const data = res.data?.data || res.data || []
+      schedules.value = Array.isArray(data)
+        ? data.map(normalizeSchedule)
+        : []
+    } catch (err) {
+      console.error('Failed to fetch schedules:', err)
+      error.value = err
+      schedules.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const createSchedule = async (formData) => {
+    await ensureWorkspaceId({ forceRefresh: true })
+    const request = buildRequest(formData)
+    await scheduleApi.createSchedule(request)
+  }
+
+  const updateSchedule = async (scheduleId, formData) => {
+    await ensureWorkspaceId({ forceRefresh: true })
+    const request = buildRequest(formData)
+    await scheduleApi.updateSchedule(scheduleId, request)
+  }
+
+  const deleteSchedule = async (scheduleId) => {
+    await ensureWorkspaceId({ forceRefresh: true })
+    await scheduleApi.deleteSchedule(scheduleId)
+  }
+
+  const addSchedule = (schedule) => {
+    schedules.value.push(normalizeSchedule(schedule))
+  }
+
+  return {
+    schedules,
+    loading,
+    error,
+    getToday,
+    formatTime,
+    fetchSchedules,
+    createSchedule,
+    updateSchedule,
+    deleteSchedule,
+    addSchedule,
+    addScheduleLocal: addSchedule
+  }
 })

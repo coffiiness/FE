@@ -267,15 +267,30 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('accessToken')
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const isAdmin = user.role === 'ADMIN'
+  const hasWorkspace = Boolean(localStorage.getItem('workspaceId'))
 
   if (to.meta.requiresAuth && !token) {
     next('/login')
-  } else if ((to.name === 'Login' || to.name === 'Signup') && token) {
-    const user = JSON.parse(localStorage.getItem('user') || '{}')
-    next(user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard')
-  } else {
-    next()
+    return
   }
+
+  if ((to.name === 'Login' || to.name === 'Signup') && token) {
+    if (isAdmin) {
+      next('/admin/dashboard')
+    } else {
+      next(hasWorkspace ? '/dashboard' : '/workspace/create')
+    }
+    return
+  }
+
+  if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate') {
+    next('/workspace/create')
+    return
+  }
+
+  next()
 })
 
 export default router

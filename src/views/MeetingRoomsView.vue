@@ -16,62 +16,7 @@ const handleRoomConfirm = (roomData) => {
   }
 }
 
-const defaultRooms = [
-  {
-    id: 'r1',
-    name: 'Orion-1',
-    capacity: 8,
-    floor: 7,
-    facilities: ['프로젝터', '화이트보드', 'WiFi'],
-    description: '채용 면접 전용 회의실',
-    color: '#14b8a6'
-  },
-  {
-    id: 'r2',
-    name: 'Nebula-3',
-    capacity: 6,
-    floor: 7,
-    facilities: ['모니터', '화상회의', '스피커'],
-    description: '디자인/기획 협업 공간',
-    color: '#10b981'
-  },
-  {
-    id: 'r3',
-    name: 'Astra-2',
-    capacity: 10,
-    floor: 3,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#6366f1'
-  },
-  {
-    id: 'r4',
-    name: 'Nova-5',
-    capacity: 12,
-    floor: 5,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#f59e0b'
-  },
-  {
-    id: 'r5',
-    name: 'Cosmo-1',
-    capacity: 4,
-    floor: 2,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#06b6d4'
-  },
-  {
-    id: 'r6',
-    name: 'Pulse-7',
-    capacity: 16,
-    floor: 9,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#ec4899'
-  }
-]
+const defaultRooms = []
 const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
 const parseFloor = (value) => {
   if (value === null || value === undefined) return 1
@@ -197,6 +142,32 @@ const openErrorModal = (title, message) => {
 const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(value)
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+const parseLocalDateTime = (value) => {
+  if (value instanceof Date) return new Date(value.getTime())
+  if (typeof value !== 'string') return new Date(value)
+
+  const matched = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (matched) {
+    const [, year, month, day, hour, minute, second = '00'] = matched
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      0
+    )
+  }
+  return new Date(value)
+}
 
 const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
   const roomId = Number(meetingRoomId)
@@ -318,6 +289,8 @@ const toErrorText = (error) => {
   if (typeof payload === 'string') return payload
   if (typeof payload?.message === 'string') return payload.message
   if (typeof payload?.error === 'string') return payload.error
+  if (typeof payload?.error?.message === 'string') return payload.error.message
+  if (typeof payload?.error?.detail === 'string') return payload.error.detail
   if (typeof payload?.data === 'string') return payload.data
   if (Array.isArray(payload?.errors)) {
     const first = payload.errors[0]
@@ -582,8 +555,9 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
       toDatetime: toLocalDateTime(to)
     })
     const data = response?.data?.data
+    const titleByReservationKey = await loadScheduleTitlesByReservationKey({ from, to })
     if (Array.isArray(data)) {
-      bookings.value = data.map(toViewBookingFromApi)
+      bookings.value = data.map((reservation) => toViewBookingFromApi(reservation, titleByReservationKey))
     }
   } catch (error) {
     const detail = toErrorText(error)
@@ -610,7 +584,7 @@ watch(
 
 const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
-  selectedDate.value = new Date(dateValue.value)
+  selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour
   bookingModalOpen.value = true
 }
@@ -629,8 +603,8 @@ const handleRoomClick = (room) => {
 
 const handleBookRoomClick = (room) => {
   selectedRoom.value = room
-  selectedDate.value = new Date(dateValue.value)
-  selectedHour.value = 9
+  selectedDate.value = parseDateOnly(dateValue.value)
+  selectedHour.value = null
   roomDetailOpen.value = false
 
   setTimeout(() => {
@@ -725,8 +699,9 @@ const handleCreateRoom = async (roomData) => {
     createdRoomName.value = roomData.name
     roomCreatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 생성 실패:', error)
-    openErrorModal('회의실 생성 실패', '회의실 생성에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 생성 실패:', detail, error)
+    openErrorModal('회의실 생성 실패', detail || '회의실 생성에 실패했습니다.')
   }
 }
 
@@ -756,8 +731,9 @@ const handleUpdateRoom = async (roomData) => {
     updatedRoomName.value = roomData.name
     roomUpdatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 수정 실패:', error)
-    openErrorModal('회의실 수정 실패', '회의실 수정에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 수정 실패:', detail, error)
+    openErrorModal('회의실 수정 실패', detail || '회의실 수정에 실패했습니다.')
   }
 }
 
@@ -809,6 +785,7 @@ const openCreateRoom = () => {
           :is="Component"
           :rooms="rooms"
           :bookings="bookings"
+        :selectedDate="dateValue"
           :hours="hours"
           :dateValue="dateValue"
           :handlers="{
@@ -846,6 +823,7 @@ const openCreateRoom = () => {
         :open="roomDetailOpen"
         :room="selectedRoom"
         :bookings="bookings"
+        :selectedDate="dateValue"
         @close="roomDetailOpen = false"
         @bookRoom="handleBookRoomClick"
         @bookingClick="handleBookingClick"
@@ -928,3 +906,7 @@ const openCreateRoom = () => {
     />
   </div>
 </template>
+
+
+
+
