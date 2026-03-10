@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
@@ -869,7 +869,15 @@ const confirmDisconnectGoogleCalendar = () => {
     />
 
     <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
-    <ScheduleCreateModal :isOpen="isFormModalOpen" :initialDate="selectedDate" :initialData="selectedEventToEdit" :roomOptions="meetingRooms" @close="isFormModalOpen = false" @save="handleSave" />
+    <ScheduleCreateModal
+      :isOpen="isFormModalOpen"
+      :initialDate="selectedDate"
+      :initialData="selectedEventToEdit"
+      :roomOptions="meetingRooms"
+      :existingSchedules="allSchedules"
+      @close="isFormModalOpen = false"
+      @save="handleSave"
+    />
     <ConfirmModal
       :show="modal.show"
       :title="modal.title"
