@@ -118,6 +118,11 @@ const handleSubmit = async () => {
     }
   }
 
+  if (!applyForm.value) {
+    errorMsg.value = '지원서 양식을 불러오지 못했습니다. 페이지를 새로고침 해주세요.'
+    return
+  }
+
   submitting.value = true
 
   try {
@@ -130,7 +135,7 @@ const handleSubmit = async () => {
       birthDate: formData.value.birthDate,
       phone: formData.value.phone.trim(),
       email: formData.value.email.trim(),
-      schema: customAnswers.value
+      formFields: customAnswers.value
     }
 
     await applicantClient.post('/applications', payload)
@@ -179,6 +184,20 @@ const getTextLength = (fieldId) => {
     <div v-if="loading" class="max-w-2xl mx-auto px-6 py-12 text-center text-gray-500">
       로딩 중...
     </div>
+
+    <main v-else-if="!applyForm && errorMsg" class="max-w-2xl mx-auto px-6 py-12">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+        <div class="text-red-500 text-4xl mb-4">!</div>
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">지원서 양식을 불러올 수 없습니다</h2>
+        <p class="text-gray-500 mb-6">{{ errorMsg }}</p>
+        <button
+          @click="$router.push(`/careers/${companySlug}`)"
+          class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold"
+        >
+          채용 공고 목록으로 돌아가기
+        </button>
+      </div>
+    </main>
 
     <main v-else class="max-w-2xl mx-auto px-6 py-8">
       <!-- Login prompt -->
@@ -370,7 +389,7 @@ const getTextLength = (fieldId) => {
             </button>
             <button
               type="submit"
-              :disabled="submitting || !isAuthenticated"
+              :disabled="submitting || !isAuthenticated || !applyForm"
               class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {{ submitting ? '제출 중...' : '지원하기' }}
