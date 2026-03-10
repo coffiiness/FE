@@ -885,7 +885,6 @@ const openCreateRoom = () => {
       message="회의실 예약이 성공적으로 완료되었습니다."
       confirmText="확인"
       :showCancel="false"
-      @close="successModalOpen = false"
       @confirm="successModalOpen = false"
     />
 
@@ -908,7 +907,6 @@ const openCreateRoom = () => {
       :message="`'${updatedRoomName}' 회의실 정보가 수정되었습니다.`"
       confirmText="확인"
       :showCancel="false"
-      @close="roomUpdatedModalOpen = false"
       @confirm="roomUpdatedModalOpen = false"
     />
 
@@ -919,7 +917,6 @@ const openCreateRoom = () => {
       :message="`'${createdRoomName}' 회의실이 성공적으로 등록되었습니다.`"
       confirmText="확인"
       :showCancel="false"
-      @close="roomCreatedModalOpen = false"
       @confirm="roomCreatedModalOpen = false"
     />
 
