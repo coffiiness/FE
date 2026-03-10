@@ -1,6 +1,11 @@
 import api from './index'
 
-const buildAvailabilityParams = ({ from, meetingRoomIds = [], interviewerIds = [] }) => {
+const buildAvailabilityParams = ({
+  from,
+  meetingRoomIds = [],
+  interviewerIds = [],
+  applicantIds = []
+}) => {
   const params = new URLSearchParams()
   params.append('from', from)
   meetingRoomIds
@@ -9,6 +14,9 @@ const buildAvailabilityParams = ({ from, meetingRoomIds = [], interviewerIds = [
   interviewerIds
     .filter((id) => Number.isFinite(Number(id)))
     .forEach((id) => params.append('interviewerIds', String(id)))
+  applicantIds
+    .filter((id) => Number.isFinite(Number(id)))
+    .forEach((id) => params.append('applicantIds', String(id)))
   return params
 }
 

@@ -147,6 +147,7 @@ const submit = () => {
   color: #0f172a;
   font-weight: 700;
   text-align: right;
+  white-space: pre-line;
 }
 
 /* 메모 */

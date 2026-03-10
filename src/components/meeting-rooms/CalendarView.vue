@@ -17,7 +17,6 @@ const labels = {
   dayBookings: '\uB2F9\uC77C \uC608\uC57D',
   daySuffix: '\uC608\uC57D',
   host: '\uC8FC\uCD5C\uC790',
-  detail: '\uC608\uC57D \uC0C1\uC138 \uBCF4\uAE30',
   noDesc: '\uC124\uBA85\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.',
   close: '\uB2EB\uAE30'
 }
@@ -97,16 +96,13 @@ const getRoomName = (roomId) => {
 }
 
 const selectedDay = ref(null)
-const expandedBookingIds = ref(new Set())
 
 const openDayModal = (day) => {
   selectedDay.value = day
-  expandedBookingIds.value = new Set()
 }
 
 const closeDayModal = () => {
   selectedDay.value = null
-  expandedBookingIds.value = new Set()
 }
 
 const handleDayBookingClick = (booking) => {
@@ -122,13 +118,6 @@ const selectedDayBookings = computed(() => {
   if (!selectedDay.value) return []
   return getBookingsForDay(selectedDay.value)
 })
-
-const toggleBooking = (bookingId) => {
-  const next = new Set(expandedBookingIds.value)
-  if (next.has(bookingId)) next.delete(bookingId)
-  else next.add(bookingId)
-  expandedBookingIds.value = next
-}
 </script>
 
 <template>
@@ -242,7 +231,7 @@ const toggleBooking = (bookingId) => {
             backgroundColor: `${getRoomColor(booking.roomId)}0f`,
             borderColor: `${getRoomColor(booking.roomId)}40`
           }"
-          @click="toggleBooking(booking.id)"
+          @click="handleDayBookingClick(booking)"
         >
           <div class="flex justify-between items-start mb-2">
             <span class="text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest"
@@ -256,18 +245,6 @@ const toggleBooking = (bookingId) => {
           </div>
           <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
           <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ booking.organizer }}</p>
-
-          <div v-if="expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
-            <div class="text-xs text-slate-600">
-              {{ getRoomName(booking.roomId) }} {{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}
-            </div>
-            <div class="text-xs text-slate-600 mt-1">
-              {{ booking.description || labels.noDesc }}
-            </div>
-            <button class="mt-2 text-xs text-brand-600 hover:text-brand-700" @click.stop="handleDayBookingClick(booking)">
-              {{ labels.detail }}
-            </button>
-          </div>
         </div>
       </div>
     </div>

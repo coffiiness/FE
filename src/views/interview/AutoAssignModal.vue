@@ -7,7 +7,7 @@ defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
-const useStartTime = ref(true)
+const useStartTime = ref(false)
 const useDuration = ref(true)
 
 const hourOptions = computed(() => {
@@ -23,7 +23,7 @@ const hourOptions = computed(() => {
   return list
 })
 
-const useAllRooms = ref(false)
+const useAllRooms = ref(true)
 
 const startHour = ref(9)
 

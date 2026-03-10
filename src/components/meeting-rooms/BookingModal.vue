@@ -17,7 +17,7 @@ const { departments } = storeToRefs(orgStore)
 const selectedDeptId = ref(null)
 const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
 const attendeeInput = ref('')
-const submitError = ref('')
+const formError = ref('')
 
 const toggleDept = (deptId) => {
   selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
@@ -57,6 +57,26 @@ const state = reactive({
   attendees: []
 })
 
+const meridiemOptions = ['AM', 'PM']
+const hour12Options = Array.from({ length: 12 }, (_, index) => index + 1)
+
+const to24Hour = (hour12, meridiem) => {
+  const normalized = Number(hour12) % 12
+  if (meridiem === 'AM') return normalized
+  return normalized + 12
+}
+
+const to12HourParts = (hour24) => {
+  const period = hour24 < 12 ? 'AM' : 'PM'
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  return { period, hour12 }
+}
+
+const startMeridiem = ref('AM')
+const startHour12 = ref(9)
+const endMeridiem = ref('AM')
+const endHour12 = ref(10)
+
 const getCurrentUserName = () => {
   try {
     const user = JSON.parse(localStorage.getItem('user') || 'null')
@@ -71,44 +91,70 @@ watch(
   (open) => {
     if (!open) return
     const baseDate = props.selectedDate || new Date()
-    const now = new Date()
-
-    const isToday =
-      baseDate.getFullYear() === now.getFullYear() &&
-      baseDate.getMonth() === now.getMonth() &&
-      baseDate.getDate() === now.getDate()
-
-    let defaultHour = props.selectedHour
-    if (defaultHour == null) {
-      defaultHour = isToday ? Math.min(Math.max(now.getHours() + 1, 8), 20) : 9
-    }
-
+    const defaultHour = Math.max(0, Math.min(22, props.selectedHour ?? 9))
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
-    state.endTime = `${String(Math.min(defaultHour + 1, 21)).padStart(2, '0')}:00`
+    state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
+    const startParts = to12HourParts(defaultHour)
+    const endParts = to12HourParts(defaultHour + 1)
+    startMeridiem.value = startParts.period
+    startHour12.value = startParts.hour12
+    endMeridiem.value = endParts.period
+    endHour12.value = endParts.hour12
     state.organizer = getCurrentUserName()
     state.attendees = [] // 초기화
     submitError.value = ''
     selectedDeptId.value = null
     attendeeInput.value = ''
+    formError.value = ''
   }
 )
 
-const parseDateOnly = (value) => {
-  const [year, month, day] = String(value || '').split('-').map(Number)
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    return new Date(value)
+watch(
+  () => state.startTime,
+  (nextStart) => {
+    const startHour = Number(nextStart.split(':')[0])
+    const endHour = Number(state.endTime.split(':')[0])
+    if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return
+    if (endHour <= startHour) {
+      const nextEndHour = Math.min(startHour + 1, 23)
+      state.endTime = `${String(nextEndHour).padStart(2, '0')}:00`
+    }
+    const startParts = to12HourParts(startHour)
+    startMeridiem.value = startParts.period
+    startHour12.value = startParts.hour12
+    const endParts = to12HourParts(Number(state.endTime.split(':')[0]))
+    endMeridiem.value = endParts.period
+    endHour12.value = endParts.hour12
   }
-  return new Date(year, month - 1, day, 0, 0, 0, 0)
-}
+)
+
+watch([startMeridiem, startHour12], ([period, hour]) => {
+  const hour24 = to24Hour(hour, period)
+  const next = `${String(hour24).padStart(2, '0')}:00`
+  if (state.startTime !== next) state.startTime = next
+})
+
+watch([endMeridiem, endHour12], ([period, hour]) => {
+  const hour24 = to24Hour(hour, period)
+  const next = `${String(hour24).padStart(2, '0')}:00`
+  if (state.endTime !== next) state.endTime = next
+})
 
 const handleSubmit = () => {
-  submitError.value = ''
-  if (!props.room || !state.title.trim() || !state.organizer.trim()) {
-    submitError.value = '회의 제목과 주최자 이름을 입력해 주세요.'
+  formError.value = ''
+  if (!props.room) {
+    formError.value = '회의실 정보를 확인해주세요.'
     return
   }
-
+  if (!String(state.title || '').trim()) {
+    formError.value = '회의 제목을 입력해주세요.'
+    return
+  }
+  if (!state.date) {
+    formError.value = '날짜를 선택해주세요.'
+    return
+  }
   const [startHour, startMinute] = state.startTime.split(':').map(Number)
   const [endHour, endMinute] = state.endTime.split(':').map(Number)
   const base = parseDateOnly(state.date)
@@ -116,6 +162,10 @@ const handleSubmit = () => {
   startDateTime.setHours(startHour, startMinute, 0, 0)
   const endDateTime = new Date(base)
   endDateTime.setHours(endHour, endMinute, 0, 0)
+  if (!(startDateTime < endDateTime)) {
+    formError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
+    return
+  }
 
   if (startDateTime >= endDateTime) {
     submitError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
@@ -134,6 +184,7 @@ const handleSubmit = () => {
   }
 
   const attendeesList = [...state.attendees]
+  const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
 
   emit('confirm', {
     roomId: props.room.id,
@@ -141,9 +192,20 @@ const handleSubmit = () => {
     description: state.description,
     startTime: startDateTime,
     endTime: endDateTime,
-    organizer: state.organizer.trim(),
+    organizer: organizerName,
     attendees: attendeesList,
     status: 'confirmed'
+  })
+
+  // [연동] ScheduleStore에 일정 추가
+  scheduleStore.addSchedule({
+    title: `[회의실] ${state.title}`,
+    date: state.date,
+    startTime: state.startTime,
+    endTime: state.endTime,
+    type: 'MEETING',
+    description: `장소: ${props.room.name}\n주최자: ${organizerName}\n참석자: ${attendeesList.join(', ')}\n내용: ${state.description || '-'}`,
+    roomId: props.room.id
   })
 
   state.title = ''
@@ -154,8 +216,8 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-center justify-center p-6 z-50">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[78vh] overflow-hidden flex flex-col">
+  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 z-50 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[68vh] mt-6 overflow-hidden flex flex-col">
       <div class="px-6 py-5 border-b flex items-start justify-between">
         <div>
           <h3 class="text-lg font-semibold text-slate-900">회의실 예약</h3>
@@ -197,11 +259,25 @@ const handleSubmit = () => {
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-slate-900">시작 시간</label>
-            <input v-model="state.startTime" type="time" min="08:00" max="20:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <div class="flex gap-2">
+              <select v-model="startMeridiem" class="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+                <option v-for="period in meridiemOptions" :key="period" :value="period">{{ period }}</option>
+              </select>
+              <select v-model="startHour12" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+                <option v-for="hour in hour12Options" :key="`start-${hour}`" :value="hour">{{ hour }}</option>
+              </select>
+            </div>
           </div>
           <div class="space-y-2">
             <label class="text-sm font-medium text-slate-900">종료 시간</label>
-            <input v-model="state.endTime" type="time" min="08:00" max="21:00" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <div class="flex gap-2">
+              <select v-model="endMeridiem" class="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+                <option v-for="period in meridiemOptions" :key="`end-${period}`" :value="period">{{ period }}</option>
+              </select>
+              <select v-model="endHour12" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+                <option v-for="hour in hour12Options" :key="`end-${hour}`" :value="hour">{{ hour }}</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -283,6 +359,9 @@ const handleSubmit = () => {
           </div>
         </div>
       </div>
+      <p v-if="formError" class="px-6 pt-3 text-sm font-medium text-rose-600">
+        {{ formError }}
+      </p>
       <div class="px-6 py-4 border-t flex justify-end gap-2 bg-white">
         <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors" @click="emit('close')">취소</button>
         <button class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200" @click="handleSubmit">예약 확정</button>
