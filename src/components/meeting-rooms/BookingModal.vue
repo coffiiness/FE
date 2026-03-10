@@ -18,6 +18,15 @@ const selectedDeptId = ref(null)
 const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
 const attendeeInput = ref('')
 const formError = ref('')
+const submitError = ref('')
+
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(value)
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
 
 const toggleDept = (deptId) => {
   selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
