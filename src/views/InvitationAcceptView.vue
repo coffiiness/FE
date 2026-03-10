@@ -12,8 +12,9 @@ const isLoading = ref(true)
 const isAccepting = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const isLoggedIn = ref(false)
 
-const memberTypeLabels = { HR: '인사담당자', IVW: '면접관' }
+const memberTypeLabels = { HR: '인사담당자', INTERVIEWER: '면접관' }
 
 const formatDate = (isoString) => {
   if (!isoString) return '-'
@@ -21,6 +22,8 @@ const formatDate = (isoString) => {
 }
 
 onMounted(async () => {
+  isLoggedIn.value = !!localStorage.getItem('accessToken')
+
   try {
     const res = await invitationApi.getInvitation(token)
     invitation.value = res.data.data
@@ -32,16 +35,39 @@ onMounted(async () => {
 })
 
 const handleAccept = async () => {
+  if (!isLoggedIn.value) {
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+
   isAccepting.value = true
   try {
-    await invitationApi.acceptInvitation(token)
-    successMessage.value = '초대를 수락했습니다. 로그인 후 워크스페이스를 이용하세요.'
-    setTimeout(() => router.push('/login'), 2500)
+    const res = await invitationApi.acceptInvitation(token)
+    const workspaceId = res.data?.data?.workspaceId
+    if (workspaceId) {
+      localStorage.setItem('workspaceId', workspaceId)
+    }
+    successMessage.value = '초대를 수락했습니다. 워크스페이스로 이동합니다.'
+    setTimeout(() => {
+      window.location.href = '/dashboard'
+    }, 1500)
   } catch (e) {
-    errorMessage.value = e.response?.data?.error?.message || '초대 수락에 실패했습니다.'
+    if (e.response?.status === 401) {
+      router.push({ path: '/login', query: { redirect: route.fullPath } })
+      return
+    }
+    const errorData = e.response?.data?.error
+    const msg = (typeof errorData?.data === 'string' ? errorData.data : null)
+      || errorData?.message
+      || '초대 수락에 실패했습니다.'
+    errorMessage.value = msg
   } finally {
     isAccepting.value = false
   }
+}
+
+const goToLogin = () => {
+  router.push({ path: '/login', query: { redirect: route.fullPath } })
 }
 </script>
 
@@ -58,7 +84,7 @@ const handleAccept = async () => {
           </svg>
         </div>
         <p class="text-slate-700 font-semibold">{{ successMessage }}</p>
-        <p class="text-sm text-slate-400 mt-2">잠시 후 로그인 페이지로 이동합니다.</p>
+        <p class="text-sm text-slate-400 mt-2">잠시 후 워크스페이스로 이동합니다.</p>
       </div>
 
       <div v-else-if="errorMessage" class="text-center py-8">
@@ -69,7 +95,7 @@ const handleAccept = async () => {
         </div>
         <p class="text-slate-700 font-semibold">초대 링크 오류</p>
         <p class="text-sm text-slate-500 mt-2">{{ errorMessage }}</p>
-        <button @click="router.push('/login')" class="mt-6 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors">
+        <button @click="goToLogin" class="mt-6 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-colors">
           로그인 페이지로 이동
         </button>
       </div>
@@ -100,16 +126,21 @@ const handleAccept = async () => {
           </div>
         </div>
 
-        <p class="text-xs text-slate-400 mb-6 text-center">
+        <div v-if="!isLoggedIn" class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-center">
+          <p class="text-sm text-amber-700 font-medium">초대를 수락하려면 먼저 로그인이 필요합니다.</p>
+          <p class="text-xs text-amber-500 mt-1">초대받은 이메일로 가입된 계정으로 로그인해주세요.</p>
+        </div>
+
+        <p v-else class="text-xs text-slate-400 mb-6 text-center">
           초대를 수락하려면 해당 이메일로 가입된 Coffiness 계정이 필요합니다.
         </p>
 
         <div class="flex gap-3">
-          <button @click="router.push('/login')" class="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold text-sm rounded-lg hover:bg-slate-50 transition-colors">
-            취소
+          <button @click="goToLogin" class="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold text-sm rounded-lg hover:bg-slate-50 transition-colors">
+            {{ isLoggedIn ? '취소' : '로그인하기' }}
           </button>
           <button @click="handleAccept" :disabled="isAccepting" class="flex-1 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white font-bold text-sm rounded-lg shadow-md shadow-teal-600/10 transition-colors">
-            {{ isAccepting ? '처리 중...' : '초대 수락하기' }}
+            {{ isAccepting ? '처리 중...' : (isLoggedIn ? '초대 수락하기' : '로그인 후 수락') }}
           </button>
         </div>
       </div>

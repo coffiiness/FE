@@ -1,8 +1,9 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
+const route = useRoute()
 const router = useRouter()
 const { signup, login } = useAuth()
 
@@ -29,10 +30,15 @@ const handleSubmit = async () => {
     await signup(email.value, password.value, nickname.value)
     await login(email.value, password.value)
 
-    router.push({
-      name: 'SignupSuccess',
-      query: { name: nickname.value }
-    })
+    const redirectPath = route.query.redirect
+    if (redirectPath) {
+      router.push(redirectPath)
+    } else {
+      router.push({
+        name: 'SignupSuccess',
+        query: { name: nickname.value }
+      })
+    }
   } catch (e) {
     error.value = e.response?.data?.error?.message || '회원가입에 실패했습니다. 다시 시도해주세요.'
   } finally {
@@ -169,7 +175,7 @@ const handleSubmit = async () => {
         <div class="mt-8 text-center">
             <p class="text-sm text-slate-500">
                 이미 계정이 있으신가요? 
-                <button @click="router.push('/login')" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
+                <button @click="router.push({ path: '/login', query: route.query.redirect ? { redirect: route.query.redirect } : {} })" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
                     로그인하기
                 </button>
             </p>

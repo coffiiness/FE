@@ -19,7 +19,7 @@ const userName = computed(() => user.value?.name || '사용자')
 const userInitial = computed(() => userName.value.charAt(0))
 const userRoleLabel = computed(() => {
   if (memberType.value === 'HR') return '인사담당자'
-  if (memberType.value === 'IVW') return '면접관'
+  if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
 })
 
