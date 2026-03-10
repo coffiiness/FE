@@ -110,19 +110,19 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   }
 
   const createSchedule = async (formData) => {
-    await ensureWorkspaceId({ forceRefresh: true })
+    await ensureWorkspaceId()
     const request = buildRequest(formData)
     await scheduleApi.createSchedule(request)
   }
 
   const updateSchedule = async (scheduleId, formData) => {
-    await ensureWorkspaceId({ forceRefresh: true })
+    await ensureWorkspaceId()
     const request = buildRequest(formData)
     await scheduleApi.updateSchedule(scheduleId, request)
   }
 
   const deleteSchedule = async (scheduleId) => {
-    await ensureWorkspaceId({ forceRefresh: true })
+    await ensureWorkspaceId()
     await scheduleApi.deleteSchedule(scheduleId)
   }
 

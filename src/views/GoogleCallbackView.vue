@@ -40,7 +40,7 @@ onMounted(async () => {
     isSuccessModalOpen.value = true
   } catch (error) {
     console.error('구글 캘린더 연동 실패:', error)
-    errorMessage.value = '구글 캘린더 연동에 실패했습니다.'
+    errorMessage.value = error?.response?.data?.error?.message || '구글 캘린더 연동에 실패했습니다.'
     isErrorModalOpen.value = true
   }
 })
