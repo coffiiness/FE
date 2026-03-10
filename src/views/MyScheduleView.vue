@@ -783,7 +783,7 @@ const confirmDisconnectGoogleCalendar = () => {
 
       <div class="space-y-8">
         <div class="bg-white border border-slate-300 p-8 rounded-[32px] shadow-sm">
-          <h3 class="text-lg font-display font-bold text-slate-800 mb-6 flex items-center justify-between">다가오는 면접</h3>
+          <h3 class="text-lg font-display font-bold text-slate-800 mb-6 flex items-center justify-between">다가오는 일정</h3>
           <div class="space-y-4">
             <div v-for="event in upcomingEvents" :key="event.id"
                  @click="openDetailModal(event)"
@@ -795,23 +795,6 @@ const confirmDisconnectGoogleCalendar = () => {
               <h4 class="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{{ event.title }}</h4>
               <p class="text-[11px] text-slate-500 mt-1.5 font-medium flex items-center gap-1.5"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{{ event.time }}</p>
             </div>
-          </div>
-          <!-- 면접관 응답 확인 버튼 영역 -->
-          <div class="mt-6 pt-5 border-t border-slate-200">
-            <button
-                @click="$router.push('/recruitment/interview/response')"
-                class="w-full flex items-center justify-center gap-2 py-3 rounded-xl
-           bg-brand-50 text-brand-600 font-bold text-sm
-           hover:bg-brand-100 transition-all"
-            >
-              면접관 응답 확인
-              <svg class="w-4 h-4 transition-transform group-hover:translate-x-1"
-                   fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </div>
         </div>
 
