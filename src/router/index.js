@@ -285,7 +285,7 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate') {
+  if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate' && to.name !== 'InvitationAccept') {
     next('/workspace/create')
     return
   }
