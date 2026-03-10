@@ -16,7 +16,7 @@ const refreshWorkspaceId = async () => {
 
   if (!workspaceRefreshPromise) {
     workspaceRefreshPromise = axios
-      .get(`${api.defaults.baseURL}/workspaces/me`, {
+      .get(`${api.defaults.baseURL}/users/me/workspace`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -66,7 +66,7 @@ api.interceptors.response.use(
       requestUrl.includes('/users/login') ||
       requestUrl.includes('/users/signup')
 
-    const isWorkspaceDiscoveryRoute = requestUrl.includes('/workspaces/me')
+    const isWorkspaceDiscoveryRoute = requestUrl.includes('/users/me/workspace')
 
     if (
       status === 400 &&
