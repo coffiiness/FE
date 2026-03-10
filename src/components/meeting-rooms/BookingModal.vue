@@ -206,17 +206,6 @@ const handleSubmit = () => {
     status: 'confirmed'
   })
 
-  // [연동] ScheduleStore에 일정 추가
-  scheduleStore.addSchedule({
-    title: `[회의실] ${state.title}`,
-    date: state.date,
-    startTime: state.startTime,
-    endTime: state.endTime,
-    type: 'MEETING',
-    description: `장소: ${props.room.name}\n주최자: ${organizerName}\n참석자: ${attendeesList.join(', ')}\n내용: ${state.description || '-'}`,
-    roomId: props.room.id
-  })
-
   state.title = ''
   state.description = ''
   state.organizer = ''
