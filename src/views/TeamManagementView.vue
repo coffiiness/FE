@@ -30,8 +30,8 @@ const newGroupName = ref('')
 const newGroupColor = ref('#14b8a6')
 
 // MemberType 매핑
-const memberTypeLabels = { HR: '인사담당자', IVW: '면접관' }
-const memberTypes = ['HR', 'IVW']
+const memberTypeLabels = { HR: '인사담당자', INTERVIEWER: '면접관' }
+const memberTypes = ['HR', 'INTERVIEWER']
 
 // 데이터
 const members = ref([])

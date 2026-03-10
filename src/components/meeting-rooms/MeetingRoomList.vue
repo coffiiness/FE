@@ -89,7 +89,7 @@ const formatFloor = (floor) => {
         </div>
 
         <button
-          class="w-full bg-slate-900 text-white text-sm py-2 rounded-lg mt-auto"
+          class="w-full bg-white text-slate-900 border border-slate-300 hover:bg-slate-50 text-sm py-2 rounded-lg mt-auto transition-colors"
           @click.stop="emit('roomClick', room)"
         >
           회의실 상세 보기

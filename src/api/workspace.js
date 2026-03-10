@@ -5,6 +5,6 @@ export const workspaceApi = {
     return api.post('/workspaces', data)
   },
   getMyWorkspace() {
-    return api.get('/workspaces/me')
+    return api.get('/users/me/workspace')
   }
 }

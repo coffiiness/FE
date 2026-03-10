@@ -2,7 +2,8 @@
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
-  bookings: { type: Array, required: true }
+  bookings: { type: Array, required: true },
+  selectedDate: { type: String, default: '' }
 })
 
 const emit = defineEmits(['close', 'bookRoom', 'bookingClick'])
@@ -85,8 +86,10 @@ const roomBookings = () => {
           </div>
       </div>
       <div class="p-6 border-t flex justify-end gap-2">
-        <button class="px-4 py-2 border rounded-lg" @click="emit('close')">닫기</button>
+        <button class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 text-white font-medium transition-colors" @click="emit('close')">닫기</button>
       </div>
     </div>
   </div>
 </template>
+
+

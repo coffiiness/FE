@@ -6,6 +6,7 @@ import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
+import { scheduleApi } from '@/api/schedule'
 import { recruitmentApi } from '@/api/recruitment'
 
 const handleRoomConfirm = (roomData) => {
@@ -16,62 +17,7 @@ const handleRoomConfirm = (roomData) => {
   }
 }
 
-const defaultRooms = [
-  {
-    id: 'r1',
-    name: 'Orion-1',
-    capacity: 8,
-    floor: 7,
-    facilities: ['프로젝터', '화이트보드', 'WiFi'],
-    description: '채용 면접 전용 회의실',
-    color: '#14b8a6'
-  },
-  {
-    id: 'r2',
-    name: 'Nebula-3',
-    capacity: 6,
-    floor: 7,
-    facilities: ['모니터', '화상회의', '스피커'],
-    description: '디자인/기획 협업 공간',
-    color: '#10b981'
-  },
-  {
-    id: 'r3',
-    name: 'Astra-2',
-    capacity: 10,
-    floor: 3,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#6366f1'
-  },
-  {
-    id: 'r4',
-    name: 'Nova-5',
-    capacity: 12,
-    floor: 5,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#f59e0b'
-  },
-  {
-    id: 'r5',
-    name: 'Cosmo-1',
-    capacity: 4,
-    floor: 2,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#06b6d4'
-  },
-  {
-    id: 'r6',
-    name: 'Pulse-7',
-    capacity: 16,
-    floor: 9,
-    facilities: ['프로젝터', '마이크', 'WiFi'],
-    description: '대형 회의 및 발표 공간',
-    color: '#ec4899'
-  }
-]
+const defaultRooms = []
 const roomColors = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#84cc16']
 const parseFloor = (value) => {
   if (value === null || value === undefined) return 1
@@ -119,11 +65,18 @@ const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
 const reservationTitleMap = ref({})
+const reservationAttendeeMap = ref({})
 const interviewReservationTitleMap = ref({})
+const interviewReservationAttendeeMap = ref({})
+const interviewReservationInterviewerMap = ref({})
+const interviewReservationApplicantMap = ref({})
 const interviewSlotTitleMap = ref({})
 
 const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
+const RESERVATION_ATTENDEE_MAP_KEY = 'meetingRoomReservationAttendees'
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const loadReservationTitleMap = () => {
   try {
@@ -143,6 +96,24 @@ const saveReservationTitleMap = () => {
   }
 }
 
+const loadReservationAttendeeMap = () => {
+  try {
+    const raw = localStorage.getItem(RESERVATION_ATTENDEE_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    reservationAttendeeMap.value = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    reservationAttendeeMap.value = {}
+  }
+}
+
+const saveReservationAttendeeMap = () => {
+  try {
+    localStorage.setItem(RESERVATION_ATTENDEE_MAP_KEY, JSON.stringify(reservationAttendeeMap.value))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 const loadInterviewSlotTitleMap = () => {
   try {
     const raw = localStorage.getItem(INTERVIEW_SLOT_TITLE_MAP_KEY)
@@ -153,10 +124,36 @@ const loadInterviewSlotTitleMap = () => {
   }
 }
 
+const loadInterviewSlotParticipantMaps = () => {
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationInterviewerMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationInterviewerMap.value = {}
+  }
+
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationApplicantMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationApplicantMap.value = {}
+  }
+}
+
 const setReservationTitle = (reservationId, title) => {
   if (!reservationId || !title) return
   reservationTitleMap.value[String(reservationId)] = title
   saveReservationTitleMap()
+}
+
+const setReservationAttendees = (reservationId, attendees) => {
+  if (!reservationId) return
+  reservationAttendeeMap.value[String(reservationId)] = sanitizeAttendeeNames(attendees || [])
+  saveReservationAttendeeMap()
 }
 
 const openErrorModal = (title, message) => {
@@ -168,6 +165,32 @@ const openErrorModal = (title, message) => {
 const pad2 = (n) => `${n}`.padStart(2, '0')
 const toLocalDateTime = (date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date(value)
+  }
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+const parseLocalDateTime = (value) => {
+  if (value instanceof Date) return new Date(value.getTime())
+  if (typeof value !== 'string') return new Date(value)
+
+  const matched = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (matched) {
+    const [, year, month, day, hour, minute, second = '00'] = matched
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      0
+    )
+  }
+  return new Date(value)
+}
 
 const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
   const roomId = Number(meetingRoomId)
@@ -182,6 +205,78 @@ const toTimeOnlyKey = (startDatetime, endDatetime) => {
   const end = new Date(endDatetime).getTime()
   if (Number.isNaN(start) || Number.isNaN(end)) return null
   return `${start}|${end}`
+}
+
+const parseNameTokens = (value) =>
+  String(value || '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+
+const flattenNames = (raw) => {
+  if (!raw) return []
+  if (typeof raw === 'string') return parseNameTokens(raw)
+  if (Array.isArray(raw)) return raw.flatMap((item) => flattenNames(item))
+  if (typeof raw === 'object') {
+    const direct = [
+      raw.name,
+      raw.userName,
+      raw.memberName,
+      raw.interviewerName,
+      raw.applicantName,
+      raw.displayName
+    ]
+    const nested = [raw.user?.name, raw.member?.name, raw.applicant?.name]
+    return [...direct, ...nested].flatMap((item) => flattenNames(item))
+  }
+  return []
+}
+
+const uniqueNames = (names) => {
+  const set = new Set()
+  names.forEach((name) => {
+    const normalized = String(name || '').trim()
+    if (normalized) set.add(normalized)
+  })
+  return [...set]
+}
+
+const isUnknownAttendeeName = (name) => {
+  const normalized = String(name || '').trim()
+  return normalized.includes('알 수 없는') || normalized.startsWith('면접관#') || normalized.startsWith('지원자#')
+}
+
+const sanitizeAttendeeNames = (names) => uniqueNames(names).filter((name) => !isUnknownAttendeeName(name))
+
+const parseAttendeesFromText = (text) => {
+  if (typeof text !== 'string' || !text.trim()) return []
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const prefixes = ['참석자:', '면접관:', '지원자:']
+  const collected = []
+  lines.forEach((line) => {
+    const prefix = prefixes.find((p) => line.startsWith(p))
+    if (!prefix) return
+    collected.push(...parseNameTokens(line.replace(prefix, '')))
+  })
+  return uniqueNames(collected)
+}
+
+const parseNamesByPrefixes = (text, prefixes = []) => {
+  if (typeof text !== 'string' || !text.trim()) return []
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const collected = []
+  lines.forEach((line) => {
+    const prefix = prefixes.find((p) => line.startsWith(p))
+    if (!prefix) return
+    collected.push(...parseNameTokens(line.replace(prefix, '')))
+  })
+  return uniqueNames(collected)
 }
 
 const getCurrentUser = () => {
@@ -217,6 +312,8 @@ const toErrorText = (error) => {
   if (typeof payload === 'string') return payload
   if (typeof payload?.message === 'string') return payload.message
   if (typeof payload?.error === 'string') return payload.error
+  if (typeof payload?.error?.message === 'string') return payload.error.message
+  if (typeof payload?.error?.detail === 'string') return payload.error.detail
   if (typeof payload?.data === 'string') return payload.data
   if (Array.isArray(payload?.errors)) {
     const first = payload.errors[0]
@@ -257,6 +354,45 @@ const toYearMonth = (dateString) => {
   return `${y}-${String(m).padStart(2, '0')}`
 }
 
+const formatDate = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const loadScheduleTitlesByReservationKey = async ({ from, to }) => {
+  const startDate = formatDate(from)
+  const inclusiveEnd = new Date(to.getTime())
+  inclusiveEnd.setDate(inclusiveEnd.getDate() - 1)
+  const endDate = formatDate(inclusiveEnd)
+
+  try {
+    const response = await scheduleApi.getSchedules(startDate, endDate)
+    const items = Array.isArray(response?.data?.data) ? response.data.data : []
+    const titleMap = {}
+
+    items.forEach((item) => {
+      const roomId = Number(item?.roomId)
+      const title = String(item?.title || '').trim()
+      if (!Number.isFinite(roomId) || !title || !item?.date || !item?.startTime || !item?.endTime) {
+        return
+      }
+
+      const start = parseLocalDateTime(`${item.date}T${item.startTime}:00`)
+      const end = parseLocalDateTime(`${item.date}T${item.endTime}:00`)
+      const key = toDateTimeKey(roomId, start, end)
+      if (!key) return
+      titleMap[key] = title
+    })
+
+    return titleMap
+  } catch (error) {
+    console.error('Failed to load schedule title mapping:', error)
+    return {}
+  }
+}
+
 const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
   try {
     const yearMonth = toYearMonth(dateString)
@@ -268,6 +404,9 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
     )
 
     const nextMap = {}
+    const nextAttendeeMap = {}
+    const nextInterviewerMap = {}
+    const nextApplicantMap = {}
     const timeOnlyBucket = {}
     scheduleResults.forEach((result, idx) => {
       if (result.status !== 'fulfilled') return
@@ -285,8 +424,38 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         const stageTitle = String(item?.title || '').trim()
         const recruitmentTitle = String(recruitment?.title || '').trim()
         const mergedTitle = [recruitmentTitle, stageTitle].filter(Boolean).join(' - ') || '면접 일정'
+        const interviewerNames = sanitizeAttendeeNames(
+          flattenNames([
+            item?.interviewerName,
+            item?.interviewerNames,
+            item?.interviewerMemberName,
+            item?.interviewerMemberNames,
+            item?.interviewers
+          ])
+        )
+        const applicantNames = sanitizeAttendeeNames(
+          flattenNames([item?.applicantName, item?.applicantNames, item?.applicants])
+        )
+        const attendeeNamesFromApi = flattenNames([
+          item?.interviewerName,
+          item?.interviewerNames,
+          item?.interviewerMemberName,
+          item?.interviewerMemberNames,
+          item?.interviewers,
+          item?.applicantName,
+          item?.applicantNames,
+          item?.applicants
+        ])
+        const attendeeNamesFromMemo = parseAttendeesFromText(item?.description)
+        const attendeeNames = attendeeNamesFromMemo.length
+          ? attendeeNamesFromMemo
+          : attendeeNamesFromApi
+        const normalizedAttendees = sanitizeAttendeeNames(attendeeNames)
         if (Number.isFinite(scheduleId)) {
           nextMap[`schedule:${scheduleId}`] = mergedTitle
+          nextAttendeeMap[`schedule:${scheduleId}`] = normalizedAttendees
+          nextInterviewerMap[`schedule:${scheduleId}`] = interviewerNames
+          nextApplicantMap[`schedule:${scheduleId}`] = applicantNames
         }
 
         const roomAndTimeKey = toDateTimeKey(
@@ -296,6 +465,9 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         )
         if (roomAndTimeKey) {
           nextMap[roomAndTimeKey] = mergedTitle
+          nextAttendeeMap[roomAndTimeKey] = normalizedAttendees
+          nextInterviewerMap[roomAndTimeKey] = interviewerNames
+          nextApplicantMap[roomAndTimeKey] = applicantNames
           return
         }
 
@@ -303,6 +475,15 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
         if (!timeOnlyKey) return
         if (!timeOnlyBucket[timeOnlyKey]) timeOnlyBucket[timeOnlyKey] = new Set()
         timeOnlyBucket[timeOnlyKey].add(mergedTitle)
+        if (!nextAttendeeMap[timeOnlyKey]) {
+          nextAttendeeMap[timeOnlyKey] = normalizedAttendees
+        }
+        if (!nextInterviewerMap[timeOnlyKey]) {
+          nextInterviewerMap[timeOnlyKey] = interviewerNames
+        }
+        if (!nextApplicantMap[timeOnlyKey]) {
+          nextApplicantMap[timeOnlyKey] = applicantNames
+        }
       })
     })
 
@@ -312,39 +493,114 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
       }
     })
 
-    interviewReservationTitleMap.value = nextMap
+    interviewReservationTitleMap.value = {
+      ...interviewReservationTitleMap.value,
+      ...nextMap
+    }
+    interviewReservationAttendeeMap.value = {
+      ...interviewReservationAttendeeMap.value,
+      ...nextAttendeeMap
+    }
+    interviewReservationInterviewerMap.value = {
+      ...interviewReservationInterviewerMap.value,
+      ...nextInterviewerMap
+    }
+    interviewReservationApplicantMap.value = {
+      ...interviewReservationApplicantMap.value,
+      ...nextApplicantMap
+    }
   } catch (error) {
     interviewReservationTitleMap.value = {}
+    interviewReservationAttendeeMap.value = {}
     console.error('면접 예약 제목 매핑 조회 실패:', error)
   }
 }
 
-const toViewBookingFromApi = (reservation) => {
+const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
   const reservationId = reservation?.id
   const scheduleId = Number(reservation?.interviewScheduleId)
   const titleFromApi =
     reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
   const titleFromLocal = reservationTitleMap.value[String(reservationId)]
+  const attendeesFromLocal = reservationAttendeeMap.value[String(reservationId)] || []
   const roomAndTimeKey = toDateTimeKey(reservation?.meetingRoomId, reservation?.startDatetime, reservation?.endDatetime)
   const timeOnlyKey = toTimeOnlyKey(reservation?.startDatetime, reservation?.endDatetime)
   const titleFromScheduleId = Number.isFinite(scheduleId)
     ? interviewReservationTitleMap.value[`schedule:${scheduleId}`]
     : null
   const titleFromLocalInterview = roomAndTimeKey ? interviewSlotTitleMap.value[roomAndTimeKey] : null
+  const titleFromSchedule = roomAndTimeKey ? titleByReservationKey[roomAndTimeKey] : null
   const titleFromInterview =
     titleFromScheduleId ||
     (roomAndTimeKey ? interviewReservationTitleMap.value[roomAndTimeKey] : null) ||
     (timeOnlyKey ? interviewReservationTitleMap.value[timeOnlyKey] : null)
+  const attendeesFromPayload = flattenNames([
+    reservation?.attendees,
+    reservation?.attendeeNames,
+    reservation?.participantNames,
+    reservation?.interviewerName,
+    reservation?.interviewerNames,
+    reservation?.applicantName,
+    reservation?.applicantNames
+  ])
+  const interviewersFromPayload = flattenNames([reservation?.interviewerName, reservation?.interviewerNames, reservation?.interviewers])
+  const applicantsFromPayload = flattenNames([reservation?.applicantName, reservation?.applicantNames, reservation?.applicants])
+  const attendeesFromInterview =
+    (Number.isFinite(scheduleId) ? interviewReservationAttendeeMap.value[`schedule:${scheduleId}`] : null) ||
+    (roomAndTimeKey ? interviewReservationAttendeeMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationAttendeeMap.value[timeOnlyKey] : null) ||
+    []
+  const interviewersFromInterview =
+    (Number.isFinite(scheduleId) ? interviewReservationInterviewerMap.value[`schedule:${scheduleId}`] : null) ||
+    (roomAndTimeKey ? interviewReservationInterviewerMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationInterviewerMap.value[timeOnlyKey] : null) ||
+    []
+  const applicantsFromInterview =
+    (Number.isFinite(scheduleId) ? interviewReservationApplicantMap.value[`schedule:${scheduleId}`] : null) ||
+    (roomAndTimeKey ? interviewReservationApplicantMap.value[roomAndTimeKey] : null) ||
+    (timeOnlyKey ? interviewReservationApplicantMap.value[timeOnlyKey] : null) ||
+    []
+  const interviewersFromDescription = parseNamesByPrefixes(
+    reservation?.description || reservation?.memo || '',
+    ['면접관:']
+  )
+  const applicantsFromDescription = parseNamesByPrefixes(
+    reservation?.description || reservation?.memo || '',
+    ['지원자:']
+  )
+  const interviewers = sanitizeAttendeeNames(interviewersFromPayload).length
+    ? sanitizeAttendeeNames(interviewersFromPayload)
+    : sanitizeAttendeeNames(interviewersFromInterview).length
+      ? sanitizeAttendeeNames(interviewersFromInterview)
+      : sanitizeAttendeeNames(interviewersFromDescription)
+  const applicants = sanitizeAttendeeNames(applicantsFromPayload).length
+    ? sanitizeAttendeeNames(applicantsFromPayload)
+    : sanitizeAttendeeNames(applicantsFromInterview).length
+      ? sanitizeAttendeeNames(applicantsFromInterview)
+      : sanitizeAttendeeNames(applicantsFromDescription)
+  const attendeesFromInterviewResolved = sanitizeAttendeeNames(attendeesFromInterview)
+  const attendeesFromDescription = parseAttendeesFromText(
+    reservation?.description || reservation?.memo || ''
+  )
+  const attendees = sanitizeAttendeeNames(attendeesFromPayload).length
+    ? sanitizeAttendeeNames(attendeesFromPayload)
+    : sanitizeAttendeeNames(attendeesFromLocal).length
+      ? sanitizeAttendeeNames(attendeesFromLocal)
+    : attendeesFromInterviewResolved.length
+      ? attendeesFromInterviewResolved
+      : sanitizeAttendeeNames(attendeesFromDescription)
 
   return {
     id: `b-${reservationId}`,
     serverId: reservationId,
     roomId: `r-${reservation.meetingRoomId}`,
     roomServerId: reservation.meetingRoomId,
-    title: titleFromLocalInterview || titleFromInterview || titleFromApi || titleFromLocal || '회의실 예약',
+    title: titleFromLocalInterview || titleFromInterview || titleFromSchedule || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
     organizer: resolveOrganizerName(reservation),
-    attendees: [],
+    interviewers,
+    applicants,
+    attendees,
     status: reservation.status === 'RESERVED' || reservation.status === 'ACTIVE' ? 'confirmed' : 'pending',
     startTime: new Date(reservation.startDatetime),
     endTime: new Date(reservation.endDatetime)
@@ -372,8 +628,9 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
       toDatetime: toLocalDateTime(to)
     })
     const data = response?.data?.data
+    const titleByReservationKey = await loadScheduleTitlesByReservationKey({ from, to })
     if (Array.isArray(data)) {
-      bookings.value = data.map(toViewBookingFromApi)
+      bookings.value = data.map((reservation) => toViewBookingFromApi(reservation, titleByReservationKey))
     }
   } catch (error) {
     const detail = toErrorText(error)
@@ -383,7 +640,9 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
 
 onMounted(async () => {
   loadReservationTitleMap()
+  loadReservationAttendeeMap()
   loadInterviewSlotTitleMap()
+  loadInterviewSlotParticipantMaps()
   await loadInterviewReservationTitles()
   await loadRoomsFromApi()
   await loadBookingsFromApi()
@@ -399,7 +658,7 @@ watch(
 
 const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
-  selectedDate.value = new Date(dateValue.value)
+  selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour
   bookingModalOpen.value = true
 }
@@ -418,8 +677,8 @@ const handleRoomClick = (room) => {
 
 const handleBookRoomClick = (room) => {
   selectedRoom.value = room
-  selectedDate.value = new Date(dateValue.value)
-  selectedHour.value = 9
+  selectedDate.value = parseDateOnly(dateValue.value)
+  selectedHour.value = null
   roomDetailOpen.value = false
 
   setTimeout(() => {
@@ -437,6 +696,7 @@ const handleBookingConfirm = async (booking) => {
     const saved = response?.data?.data
     if (!saved?.id) return
     setReservationTitle(saved.id, booking.title)
+    setReservationAttendees(saved.id, booking.attendees || [])
 
     bookings.value.push({
       id: `b-${saved.id}`,
@@ -446,6 +706,8 @@ const handleBookingConfirm = async (booking) => {
       title: booking.title || '회의실 예약',
       description: booking.description || '',
       organizer: booking.organizer || getCurrentUser()?.name || '',
+      interviewers: [],
+      applicants: [],
       attendees: booking.attendees || [],
       status: 'confirmed',
       startTime: new Date(saved.startDatetime),
@@ -478,6 +740,8 @@ const confirmDeleteBooking = async () => {
     if (idx >= 0) bookings.value.splice(idx, 1)
     delete reservationTitleMap.value[String(target.serverId)]
     saveReservationTitleMap()
+    delete reservationAttendeeMap.value[String(target.serverId)]
+    saveReservationAttendeeMap()
     deleteBookingModalOpen.value = false
     deleteTargetBookingId.value = null
     detailModalOpen.value = false
@@ -509,8 +773,9 @@ const handleCreateRoom = async (roomData) => {
     createdRoomName.value = roomData.name
     roomCreatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 생성 실패:', error)
-    openErrorModal('회의실 생성 실패', '회의실 생성에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 생성 실패:', detail, error)
+    openErrorModal('회의실 생성 실패', detail || '회의실 생성에 실패했습니다.')
   }
 }
 
@@ -540,8 +805,9 @@ const handleUpdateRoom = async (roomData) => {
     updatedRoomName.value = roomData.name
     roomUpdatedModalOpen.value = true
   } catch (error) {
-    console.error('회의실 수정 실패:', error)
-    openErrorModal('회의실 수정 실패', '회의실 수정에 실패했습니다.')
+    const detail = toErrorText(error)
+    console.error('회의실 수정 실패:', detail, error)
+    openErrorModal('회의실 수정 실패', detail || '회의실 수정에 실패했습니다.')
   }
 }
 
@@ -593,6 +859,7 @@ const openCreateRoom = () => {
           :is="Component"
           :rooms="rooms"
           :bookings="bookings"
+        :selectedDate="dateValue"
           :hours="hours"
           :dateValue="dateValue"
           :handlers="{
@@ -630,6 +897,7 @@ const openCreateRoom = () => {
         :open="roomDetailOpen"
         :room="selectedRoom"
         :bookings="bookings"
+        :selectedDate="dateValue"
         @close="roomDetailOpen = false"
         @bookRoom="handleBookRoomClick"
         @bookingClick="handleBookingClick"
@@ -650,7 +918,6 @@ const openCreateRoom = () => {
       message="회의실 예약이 성공적으로 완료되었습니다."
       confirmText="확인"
       :showCancel="false"
-      @close="successModalOpen = false"
       @confirm="successModalOpen = false"
     />
 
@@ -673,7 +940,6 @@ const openCreateRoom = () => {
       :message="`'${updatedRoomName}' 회의실 정보가 수정되었습니다.`"
       confirmText="확인"
       :showCancel="false"
-      @close="roomUpdatedModalOpen = false"
       @confirm="roomUpdatedModalOpen = false"
     />
 
@@ -684,7 +950,6 @@ const openCreateRoom = () => {
       :message="`'${createdRoomName}' 회의실이 성공적으로 등록되었습니다.`"
       confirmText="확인"
       :showCancel="false"
-      @close="roomCreatedModalOpen = false"
       @confirm="roomCreatedModalOpen = false"
     />
 
@@ -712,3 +977,7 @@ const openCreateRoom = () => {
     />
   </div>
 </template>
+
+
+
+

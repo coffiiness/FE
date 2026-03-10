@@ -1,8 +1,9 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
+const route = useRoute()
 const router = useRouter()
 const { login } = useAuth()
 
@@ -17,8 +18,13 @@ const handleLogin = async () => {
 
   try {
     const data = await login(email.value, password.value)
-    if (data.user.role === 'ADMIN') {
+    const redirectPath = route.query.redirect
+    if (redirectPath) {
+      router.push(redirectPath)
+    } else if (data.user.role === 'ADMIN') {
       router.push('/admin/dashboard')
+    } else if (!data.workspaceId) {
+      router.push('/workspace/create')
     } else {
       router.push('/dashboard')
     }
@@ -135,7 +141,7 @@ const handleLogin = async () => {
         <div class="mt-8 text-center">
             <p class="text-sm text-slate-500">
                 계정이 없으신가요? 
-                <button @click="router.push('/signup')" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
+                <button @click="router.push({ path: '/signup', query: route.query.redirect ? { redirect: route.query.redirect } : {} })" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
                     무료로 회원가입하기
                 </button>
             </p>

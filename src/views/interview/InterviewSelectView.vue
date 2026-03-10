@@ -364,12 +364,6 @@ onMounted(() => {
         <h2 class="step-title">면접관을 선택해주세요</h2>
         <p class="step-desc">공고 생성 시 지정한 면접관만 표시됩니다.</p>
 
-        <div class="mt-4 mb-2 flex items-center gap-3">
-          <span class="text-xs font-bold text-slate-800 bg-slate-100 border border-slate-300 rounded-md px-2 py-1">
-            선택된 인원 {{ selectedInterviewers.length }}명
-          </span>
-        </div>
-
         <!-- 팀 필터 -->
         <div class="mt-4 mb-2">
             <span class="text-xs font-bold text-slate-500 mb-2 block">팀 선택</span>

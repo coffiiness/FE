@@ -17,5 +17,14 @@ export const careerApi = {
      */
     getRecruitments(workspaceId, search) {
         return api.get(`/careers/${workspaceId}`, { params: { search: search || undefined } })
+    },
+
+    /**
+     * 지원서 양식 정보 조회 (Public)
+     * GET /api/v1/careers/{workspaceId}/recruitments/{recruitmentId}/apply-form
+     * @returns CareerApplyFormResponse { recruitmentId, title, templateId, firstStageId, customFields }
+     */
+    getApplyForm(workspaceId, recruitmentId) {
+        return api.get(`/careers/${workspaceId}/recruitments/${recruitmentId}/apply-form`)
     }
 }

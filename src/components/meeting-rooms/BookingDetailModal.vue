@@ -14,6 +14,8 @@ const labels = {
   datetime: '일시',
   room: '회의실',
   organizer: '주최자',
+  interviewers: '면접관',
+  applicants: '지원자',
   attendees: '참석자',
   description: '설명',
   delete: '삭제',
@@ -115,7 +117,39 @@ const formatDate = (date) => {
           </div>
         </div>
 
-        <div class="flex items-start gap-4" v-if="booking?.attendees?.length">
+        <div class="flex items-start gap-4" v-if="booking?.interviewers?.length">
+          <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-slate-500">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-slate-700">{{ labels.interviewers }}</p>
+            <div class="flex flex-wrap gap-2 mt-1.5">
+              <span v-for="(att, idx) in booking.interviewers" :key="`interviewer-${idx}`" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                {{ att }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-4" v-if="booking?.applicants?.length">
+          <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-slate-500">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-bold text-slate-700">{{ labels.applicants }}</p>
+            <div class="flex flex-wrap gap-2 mt-1.5">
+              <span v-for="(att, idx) in booking.applicants" :key="`applicant-${idx}`" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                {{ att }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-4" v-if="!booking?.interviewers?.length && !booking?.applicants?.length && booking?.attendees?.length">
           <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-slate-500">
             <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />

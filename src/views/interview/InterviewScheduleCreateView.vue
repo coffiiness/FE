@@ -22,6 +22,8 @@ const onModalCancel  = () => { modal.value.show = false }
 const route = useRoute()
 const router = useRouter()
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const recruitmentId = Number(route.query.recruitmentId || 0)
 const recruitmentStageId = Number(route.query.recruitmentStageId || 0) || null
@@ -118,6 +120,8 @@ const canUseRoomByHeadcount = (capacityText, totalPeople) => {
 
 const meetingRoomBusySlots = ref([])
 const interviewerBusySlots = ref([])
+const applicantBusySlots = ref([])
+const participantBusySlots = ref([])
 
 const toErrorText = (error) => {
   const payload = error?.response?.data
@@ -163,14 +167,111 @@ const saveInterviewSlotTitle = (meetingRoomId, startDatetime, endDatetime) => {
   }
 }
 
+const saveInterviewSlotParticipants = (meetingRoomId, startDatetime, endDatetime) => {
+  const key = toDateTimeKey(meetingRoomId, startDatetime, endDatetime)
+  if (!key) return
+
+  const interviewerNames = interviewers.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+  const applicantNames = applicants.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+
+  try {
+    const rawInterviewers = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsedInterviewers = rawInterviewers ? JSON.parse(rawInterviewers) : {}
+    const nextInterviewers =
+      parsedInterviewers && typeof parsedInterviewers === 'object' ? parsedInterviewers : {}
+    nextInterviewers[key] = interviewerNames
+    localStorage.setItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY, JSON.stringify(nextInterviewers))
+  } catch {
+    // ignore storage errors
+  }
+
+  try {
+    const rawApplicants = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsedApplicants = rawApplicants ? JSON.parse(rawApplicants) : {}
+    const nextApplicants =
+      parsedApplicants && typeof parsedApplicants === 'object' ? parsedApplicants : {}
+    nextApplicants[key] = applicantNames
+    localStorage.setItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY, JSON.stringify(nextApplicants))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 const hasBusyOverlap = (date, time, slots, keyName, targetId = null) => {
   const cellStart = new Date(toApiDateTime(date, time))
   const cellEnd = new Date(cellStart)
   cellEnd.setHours(cellEnd.getHours() + 1)
   return slots.some((slot) => {
     if (targetId !== null && Number(slot[keyName]) !== Number(targetId)) return false
-    return rangesOverlap(cellStart, cellEnd, new Date(slot.start), new Date(slot.end))
+    const slotStartValue = slot?.start ?? slot?.startDatetime
+    const slotEndValue = slot?.end ?? slot?.endDatetime
+    const slotStart = new Date(slotStartValue)
+    const slotEnd = new Date(slotEndValue)
+    if (Number.isNaN(slotStart.getTime()) || Number.isNaN(slotEnd.getTime())) return false
+    return rangesOverlap(cellStart, cellEnd, slotStart, slotEnd)
   })
+}
+
+const normalizeRoomBusySlots = (slots) => {
+  if (!Array.isArray(slots)) return []
+  return slots
+    .map((slot) => ({
+      meetingRoomId: Number(slot?.meetingRoomId),
+      start: slot?.start ?? slot?.startDatetime,
+      end: slot?.end ?? slot?.endDatetime
+    }))
+    .filter(
+      (slot) =>
+        Number.isFinite(slot.meetingRoomId) &&
+        typeof slot.start === 'string' &&
+        typeof slot.end === 'string'
+    )
+}
+
+const normalizeAttendeeNames = (raw) => {
+  if (Array.isArray(raw)) {
+    return raw.map((name) => String(name || '').trim()).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    return raw
+      .split(',')
+      .map((name) => name.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+const loadParticipantBusyFromLocalReservations = (reservationRows) => {
+  const selectedParticipantNames = new Set(
+    [
+      ...interviewers.value.map((item) => String(item?.name || '').trim()),
+      ...applicants.value.map((item) => String(item?.name || '').trim())
+    ].filter(Boolean)
+  )
+  if (!selectedParticipantNames.size || !Array.isArray(reservationRows)) {
+    participantBusySlots.value = []
+    return
+  }
+
+  let attendeeMap = {}
+  try {
+    const raw = localStorage.getItem('meetingRoomReservationAttendees')
+    const parsed = raw ? JSON.parse(raw) : {}
+    attendeeMap = parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    attendeeMap = {}
+  }
+
+  participantBusySlots.value = reservationRows
+    .filter((reservation) => {
+      const attendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
+      return attendees.some((name) => selectedParticipantNames.has(name))
+    })
+    .map((reservation) => ({
+      start: reservation?.startDatetime,
+      end: reservation?.endDatetime
+    }))
+    .filter((slot) => typeof slot.start === 'string' && typeof slot.end === 'string')
 }
 
 const loadMeetingRooms = async () => {
@@ -191,24 +292,58 @@ const loadAvailability = async () => {
   if (!weekDays.value.length) return
   const weekStart = new Date(toApiDateTime(weekDays.value[0].date))
   const now = new Date()
-  const fromBase = weekStart > now ? weekStart : now
-  const from = `${fromBase.getFullYear()}-${pad2(fromBase.getMonth() + 1)}-${pad2(fromBase.getDate())}T${pad2(fromBase.getHours())}:${pad2(fromBase.getMinutes())}:${pad2(fromBase.getSeconds())}`
+  const nowWithBuffer = new Date(now.getTime() + 60 * 1000)
+  const fromBase = weekStart > nowWithBuffer ? weekStart : nowWithBuffer
+  const normalizedFrom = new Date(fromBase)
+  normalizedFrom.setSeconds(0, 0)
+  const from = `${normalizedFrom.getFullYear()}-${pad2(normalizedFrom.getMonth() + 1)}-${pad2(normalizedFrom.getDate())}T${pad2(normalizedFrom.getHours())}:${pad2(normalizedFrom.getMinutes())}:00`
   const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
-  try {
-    const response = await interviewApi.getAvailability({
+  const interviewResult = await interviewApi
+    .getAvailability({
       from,
       meetingRoomIds,
-      interviewerIds
+      interviewerIds,
+      applicantIds
     })
-    const data = response?.data?.data
-    meetingRoomBusySlots.value = Array.isArray(data?.meetingRoomBusySlots) ? data.meetingRoomBusySlots : []
-    interviewerBusySlots.value = Array.isArray(data?.interviewerBusySlots) ? data.interviewerBusySlots : []
-  } catch (error) {
-    console.error('면접 가용시간 조회 실패:', toErrorText(error))
-    meetingRoomBusySlots.value = []
-    interviewerBusySlots.value = []
+    .catch((error) => {
+      console.error('면접 가용시간 조회 실패:', toErrorText(error))
+      return null
+    })
+
+  const reservationResult = await meetingRoomApi
+    .listReservations({
+      fromDatetime: toApiDateTime(weekDays.value[0].date),
+      toDatetime: toApiDateTime(weekDays.value[6].date, '23:59')
+    })
+    .catch((error) => {
+      console.error('회의실 예약 조회 실패:', toErrorText(error))
+      return null
+    })
+
+  const interviewData = interviewResult?.data?.data
+  const roomBusyFromInterview = normalizeRoomBusySlots(interviewData?.meetingRoomBusySlots)
+  const reservationRows = Array.isArray(reservationResult?.data?.data) ? reservationResult.data.data : []
+  const roomBusyFromReservations = normalizeRoomBusySlots(reservationRows)
+  loadParticipantBusyFromLocalReservations(reservationRows)
+
+  const mergedRoomBusy = [...roomBusyFromInterview, ...roomBusyFromReservations]
+  const uniqueRoomBusy = new Map()
+  for (const slot of mergedRoomBusy) {
+    const key = `${slot.meetingRoomId}|${slot.start}|${slot.end}`
+    if (!uniqueRoomBusy.has(key)) {
+      uniqueRoomBusy.set(key, slot)
+    }
   }
+  meetingRoomBusySlots.value = Array.from(uniqueRoomBusy.values())
+
+  interviewerBusySlots.value = Array.isArray(interviewData?.interviewerBusySlots)
+    ? interviewData.interviewerBusySlots
+    : []
+  applicantBusySlots.value = Array.isArray(interviewData?.applicantBusySlots)
+    ? interviewData.applicantBusySlots
+    : []
 }
 
 const isWeekend = (dateStr) => {
@@ -231,7 +366,9 @@ const isBlocked = (date, time) => {
   const byStatic = blockedArr.some((b) => b.date === date && b.time === time)
   const byRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', selectedRoom.value?.id)
   const byInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
-  return byStatic || byRoomBusy || byInterviewerBusy
+  const byApplicantBusy = hasBusyOverlap(date, time, applicantBusySlots.value, 'applicantId')
+  const byParticipantBusy = hasBusyOverlap(date, time, participantBusySlots.value, 'unused', null)
+  return byStatic || byRoomBusy || byInterviewerBusy || byApplicantBusy || byParticipantBusy
 }
 
 const toHourTime = (hour) => `${pad2(hour)}:00`
@@ -242,8 +379,9 @@ const isSlotBlockedForRoom = (date, hour, room) => {
   const blockedByStatic = (room?.blocked || []).some((b) => b.date === date && b.time === time)
   const blockedByRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', room?.id)
   const blockedByInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
-
-  return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy
+  const blockedByApplicantBusy = hasBusyOverlap(date, time, applicantBusySlots.value, 'applicantId')
+  const blockedByParticipantBusy = hasBusyOverlap(date, time, participantBusySlots.value, 'unused', null)
+  return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy || blockedByApplicantBusy || blockedByParticipantBusy
 }
 
 const canAssignContinuousHours = (date, startHour, durationHours, room) => {
@@ -375,8 +513,9 @@ const submitDateText = computed(() => {
 
 const submitTimeText = computed(() => {
   if (!selectedRangePayloads.value.length) return '-'
-  const totalHours = selectedKeys.value.length
-  return `${selectedRangePayloads.value.length}개 일정 구간 (${totalHours}시간)`
+  return selectedRangePayloads.value
+    .map((slot) => `${formatKoDate(slot.date)} ${slot.start} - ${slot.end}`)
+    .join('\n')
 })
 
 const confirmSchedule = async (memo) => {
@@ -410,6 +549,17 @@ const confirmSchedule = async (memo) => {
 
   submitting.value = true
   try {
+    const participantNames = [
+      ...interviewers.value.map((member) => String(member?.name || '').trim()),
+      ...applicants.value.map((member) => String(member?.name || '').trim())
+    ].filter(Boolean)
+    const mergedMemo = [
+      participantNames.length ? `참석자: ${participantNames.join(', ')}` : '',
+      String(memo || '').trim()
+    ]
+      .filter(Boolean)
+      .join('\n')
+
     for (const slot of selectedRangePayloads.value) {
       await interviewApi.create({
         recruitmentId,
@@ -420,9 +570,14 @@ const confirmSchedule = async (memo) => {
         meetingRoomId: Number(selectedRoom.value.id),
         scheduledAt: `${slot.date}T${slot.start}:00`,
         durationMinutes: slot.durationMinutes,
-        memo: memo || ''
+        memo: mergedMemo
       })
       saveInterviewSlotTitle(
+        Number(selectedRoom.value.id),
+        `${slot.date}T${slot.start}:00`,
+        `${slot.date}T${slot.end}:00`
+      )
+      saveInterviewSlotParticipants(
         Number(selectedRoom.value.id),
         `${slot.date}T${slot.start}:00`,
         `${slot.date}T${slot.end}:00`
