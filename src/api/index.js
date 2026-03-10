@@ -9,8 +9,10 @@ const api = axios.create({
 })
 
 let workspaceRefreshPromise = null
+let workspaceRefreshDisabled = false
 
 const refreshWorkspaceId = async () => {
+  if (workspaceRefreshDisabled) return null
   const token = localStorage.getItem('accessToken')
   if (!token) return null
 
@@ -23,7 +25,10 @@ const refreshWorkspaceId = async () => {
         }
       })
       .then((res) => res?.data?.data?.workspaceId || null)
-      .catch(() => null)
+      .catch(() => {
+        workspaceRefreshDisabled = true
+        return null
+      })
       .finally(() => {
         workspaceRefreshPromise = null
       })
@@ -67,11 +72,13 @@ api.interceptors.response.use(
       requestUrl.includes('/users/signup')
 
     const isWorkspaceDiscoveryRoute = requestUrl.includes('/users/me/workspace')
+    const isInterviewAvailabilityRoute = requestUrl.includes('/interviews/availability')
 
     if (
       status === 400 &&
       !isAuthRoute &&
       !isWorkspaceDiscoveryRoute &&
+      !isInterviewAvailabilityRoute &&
       !originalRequest._workspaceRetried &&
       localStorage.getItem('accessToken')
     ) {
@@ -84,7 +91,7 @@ api.interceptors.response.use(
       }
     }
 
-    if (status === 400 && !isAuthRoute && !isWorkspaceDiscoveryRoute) {
+    if (status === 400 && !isAuthRoute && !isWorkspaceDiscoveryRoute && !isInterviewAvailabilityRoute) {
       const message = String(error.response?.data?.error?.message || '')
       const workspaceContextError = /workspace|tenant|member/i.test(message)
 

@@ -260,8 +260,11 @@ const loadAvailability = async () => {
   if (!weekDays.value.length) return
   const weekStart = new Date(toApiDateTime(weekDays.value[0].date))
   const now = new Date()
-  const fromBase = weekStart > now ? weekStart : now
-  const from = `${fromBase.getFullYear()}-${pad2(fromBase.getMonth() + 1)}-${pad2(fromBase.getDate())}T${pad2(fromBase.getHours())}:${pad2(fromBase.getMinutes())}:${pad2(fromBase.getSeconds())}`
+  const nowWithBuffer = new Date(now.getTime() + 60 * 1000)
+  const fromBase = weekStart > nowWithBuffer ? weekStart : nowWithBuffer
+  const normalizedFrom = new Date(fromBase)
+  normalizedFrom.setSeconds(0, 0)
+  const from = `${normalizedFrom.getFullYear()}-${pad2(normalizedFrom.getMonth() + 1)}-${pad2(normalizedFrom.getDate())}T${pad2(normalizedFrom.getHours())}:${pad2(normalizedFrom.getMinutes())}:00`
   const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
