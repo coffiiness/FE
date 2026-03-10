@@ -1,5 +1,5 @@
-<script setup>
-import { ref, computed } from 'vue'
+﻿<script setup>
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
@@ -44,11 +44,20 @@ const stageTypes = [
   { label: '최종 합격', value: 'PASS' },
 ]
 
-const templates = ref([
-  { id: 1, name: '기본 개발직군 지원서' },
-  { id: 2, name: '디자인 포트폴리오 포함 지원서' },
-  { id: 3, name: '경력직 공통 지원서' },
-])
+const templates = computed(() => {
+  return store.templates.map((template) => ({
+    id: template.id,
+    name: template.name || template.title || ''
+  }))
+})
+
+onMounted(async () => {
+  try {
+    await store.fetchApplicationTemplates()
+  } catch (error) {
+    console.error('템플릿 목록을 불러오지 못했습니다:', error)
+  }
+})
 
 // --- 조직도 트리 상태 ---
 const expandedDepts = ref(new Set())
@@ -693,3 +702,4 @@ const handleSubmit = async () => {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 </style>
+
