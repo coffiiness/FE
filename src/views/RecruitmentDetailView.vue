@@ -1,12 +1,15 @@
 <script setup>
-import { reactive, ref, computed, onMounted, watch } from 'vue'
+import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
+import { applicationBoardApi } from '@/api/applicationBoard'
+import { automationRulesApi } from '@/api/automationRules'
+import { automationTemplatesApi } from '@/api/automationTemplates'
+import { memberApi } from '@/api/member'
 // Stores
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
-import applicantData from '@/data/applicant.json' // Import dummy data
 
 const route = useRoute()
 const router = useRouter()
@@ -21,10 +24,42 @@ const { organizations } = storeToRefs(organizationStore)
 // --- 상태 관리 ---
 const activeTab = ref('CALENDAR') // 'CALENDAR' | 'APPLICANTS'
 const applicantSearchQuery = ref('')
-const applicants = ref(applicantData) // Initialize applicants data
+const applicants = ref([])
+const applicantBoardColumns = ref([])
+const applicantBoardLoading = ref(false)
+const applicantBoardLoaded = ref(false)
+const applicantBoardError = ref('')
+const movingApplicationId = ref(null)
+const bulkMoving = ref(false)
+const selectedApplicationIds = ref([])
+const bulkTargetProcessId = ref('')
+const bulkMoveResultModal = ref({
+  open: false,
+  title: '',
+  message: ''
+})
+const memberType = ref('')
+const automationRules = ref([])
+const automationTemplates = ref([])
+const automationTemplatesLoading = ref(false)
+const automationLoading = ref(false)
+const automationError = ref('')
+const automationSaving = ref(false)
+const editingRuleId = ref(null)
+const openProcessMenuId = ref(null)
+const ruleModalProcessId = ref(null)
+const automationForm = ref({
+  recruitmentProcessId: '',
+  triggerType: 'ON_ENTER',
+  actionType: 'EMAIL',
+  templateCode: ''
+})
 const isInterviewerEditModalOpen = ref(false)
 const draggingCardId = ref(null)
 const draggingOverColumnId = ref(null)
+const applicantBoardScrollRef = ref(null)
+const autoScrollDirection = ref(0)
+const autoScrollFrameId = ref(null)
 
 // --- Modal State ---
 const isInterviewDetailModalOpen = ref(false)
@@ -145,8 +180,33 @@ watch([recruitment, allEmployees], ([newVal, employees]) => {
 const toYearMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 const toYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const toHm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+const formatApplicantDate = (value) => {
+  if (!value) return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}.${month}.${day}`
+}
 
 const schedules = computed(() => apiSchedules.value)
+const automationTriggerOptions = [
+  { label: '진입 시', value: 'ON_ENTER' }
+]
+const automationActionOptions = [
+  { label: '이메일', value: 'EMAIL' }
+]
+const stageTypeMeta = {
+  DOCUMENT: { label: '서류', badge: 'bg-sky-100 text-sky-700 border-sky-200', column: 'border-sky-200 bg-sky-50/40' },
+  INTERVIEW: { label: '면접', badge: 'bg-violet-100 text-violet-700 border-violet-200', column: 'border-violet-200 bg-violet-50/30' },
+  TEST: { label: '과제', badge: 'bg-amber-100 text-amber-700 border-amber-200', column: 'border-amber-200 bg-amber-50/30' },
+  OFFER: { label: '처우', badge: 'bg-emerald-100 text-emerald-700 border-emerald-200', column: 'border-emerald-200 bg-emerald-50/30' },
+  PASS: { label: '합격', badge: 'bg-green-100 text-green-700 border-green-200', column: 'border-green-200 bg-green-50/40' },
+  FAIL: { label: '불합격', badge: 'bg-rose-100 text-rose-700 border-rose-200', column: 'border-rose-200 bg-rose-50/40' }
+}
 
 // ...
 
@@ -232,6 +292,45 @@ const getEventStyle = (booking) => {
 }
 
 // --- Applicants & Other Logic ---
+const processes = computed(() =>
+  [...applicantBoardColumns.value]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((column) => ({
+      id: column.recruitmentProcessId,
+      stageName: column.name,
+      order: column.order ?? 0,
+      stageType: column.stageType ?? ''
+    }))
+)
+
+const canMoveApplicants = computed(() => memberType.value === 'HR')
+const failProcess = computed(() =>
+  processes.value.find((process) => process.stageType === 'FAIL') || null
+)
+const processOptions = computed(() => processes.value.map((process) => ({
+  value: process.id,
+  label: process.stageName
+})))
+const selectedRuleProcess = computed(() =>
+  processes.value.find((process) => process.id === ruleModalProcessId.value) || null
+)
+const selectedProcessRules = computed(() =>
+  automationRules.value.filter((rule) => rule.recruitmentProcessId === ruleModalProcessId.value)
+)
+const selectedRuleStageType = computed(() => selectedRuleProcess.value?.stageType || '')
+const filteredAutomationTemplates = computed(() => {
+  const stageType = selectedRuleStageType.value
+  if (!stageType) return automationTemplates.value
+
+  return [...automationTemplates.value].sort((a, b) => {
+    const aRecommended = Array.isArray(a.recommendedStageTypes) && a.recommendedStageTypes.includes(stageType)
+    const bRecommended = Array.isArray(b.recommendedStageTypes) && b.recommendedStageTypes.includes(stageType)
+
+    if (aRecommended === bRecommended) return 0
+    return aRecommended ? -1 : 1
+  })
+})
+
 const filteredApplicants = computed(() => {
   const query = applicantSearchQuery.value.trim().toLowerCase()
   if (!query) return applicants.value
@@ -241,6 +340,437 @@ const filteredApplicants = computed(() => {
 })
 
 const getApplicantsByProcess = (pid) => filteredApplicants.value.filter(a => a.processId === pid)
+const selectedApplicants = computed(() =>
+  applicants.value.filter((applicant) => selectedApplicationIds.value.includes(applicant.applicationId))
+)
+const selectedApplicantCount = computed(() => selectedApplicationIds.value.length)
+const selectedSourceProcessId = computed(() => selectedApplicants.value[0]?.processId ?? null)
+const selectedSourceProcess = computed(() =>
+  processes.value.find((process) => process.id === selectedSourceProcessId.value) || null
+)
+const bulkProcessOptions = computed(() =>
+  processOptions.value.filter((option) => option.value !== selectedSourceProcessId.value)
+)
+
+const normalizeBoardApplicant = (application, processId) => {
+  const tags = []
+  const appliedDate = formatApplicantDate(application?.createdAt)
+
+  if (application?.phone) tags.push(application.phone)
+  if (appliedDate) tags.push(appliedDate)
+
+  return {
+    id: application?.applicationId ?? application?.id,
+    applicationId: application?.applicationId ?? application?.id,
+    applicantId: application?.applicantId ?? null,
+    processId,
+    name: application?.name ?? '-',
+    email: application?.email ?? '-',
+    phone: application?.phone ?? '',
+    createdAt: application?.createdAt ?? null,
+    hasInterview: false,
+    tags
+  }
+}
+
+const syncApplicantsFromColumns = (columns) => {
+  applicants.value = columns.flatMap((column) =>
+    (Array.isArray(column.applications) ? column.applications : []).map((application) =>
+      normalizeBoardApplicant(application, column.recruitmentProcessId)
+    )
+  )
+
+  const availableIds = new Set(applicants.value.map((applicant) => applicant.applicationId))
+  selectedApplicationIds.value = selectedApplicationIds.value.filter((id) => availableIds.has(id))
+}
+
+const loadApplicantBoard = async () => {
+  applicantBoardLoading.value = true
+  applicantBoardError.value = ''
+
+  try {
+    const response = await applicationBoardApi.getBoard(jobId)
+    const payload = applicationBoardApi.extractResponseData(response)
+    const columns = Array.isArray(payload?.columns) ? payload.columns : []
+    applicantBoardColumns.value = columns
+    syncApplicantsFromColumns(columns)
+    applicantBoardLoaded.value = true
+  } catch (error) {
+    applicantBoardColumns.value = []
+    applicants.value = []
+    applicantBoardError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '지원자 보드를 불러오지 못했습니다.'
+  } finally {
+    applicantBoardLoading.value = false
+  }
+}
+
+const moveApplicantLocally = (applicationId, targetProcessId) => {
+  const applicant = applicants.value.find((item) => item.applicationId === applicationId)
+  if (applicant) {
+    applicant.processId = targetProcessId
+  }
+}
+
+const moveBoardColumnApplicantLocally = (applicationId, targetProcessId) => {
+  const sourceColumn = applicantBoardColumns.value.find((column) =>
+    Array.isArray(column.applications) &&
+    column.applications.some((application) => (application?.applicationId ?? application?.id) === applicationId)
+  )
+  const targetColumn = applicantBoardColumns.value.find((column) => column.recruitmentProcessId === targetProcessId)
+
+  if (!sourceColumn || !targetColumn) return null
+
+  const sourceApplications = Array.isArray(sourceColumn.applications) ? [...sourceColumn.applications] : []
+  const targetApplications = Array.isArray(targetColumn.applications) ? [...targetColumn.applications] : []
+  const sourceIndex = sourceApplications.findIndex((application) => (application?.applicationId ?? application?.id) === applicationId)
+
+  if (sourceIndex < 0) return null
+
+  const [movedApplication] = sourceApplications.splice(sourceIndex, 1)
+  targetApplications.unshift(movedApplication)
+
+  sourceColumn.applications = sourceApplications
+  targetColumn.applications = targetApplications
+
+  return {
+    sourceProcessId: sourceColumn.recruitmentProcessId,
+    targetProcessId,
+    movedApplication
+  }
+}
+
+const restoreBoardColumnApplicantMove = (snapshot) => {
+  if (!snapshot?.movedApplication) return
+
+  const sourceColumn = applicantBoardColumns.value.find((column) => column.recruitmentProcessId === snapshot.sourceProcessId)
+  const targetColumn = applicantBoardColumns.value.find((column) => column.recruitmentProcessId === snapshot.targetProcessId)
+
+  if (!sourceColumn || !targetColumn) return
+
+  const sourceApplications = Array.isArray(sourceColumn.applications) ? [...sourceColumn.applications] : []
+  const targetApplications = Array.isArray(targetColumn.applications) ? [...targetColumn.applications] : []
+  const targetIndex = targetApplications.findIndex((application) => (application?.applicationId ?? application?.id) === (snapshot.movedApplication?.applicationId ?? snapshot.movedApplication?.id))
+
+  if (targetIndex >= 0) {
+    targetApplications.splice(targetIndex, 1)
+  }
+
+  sourceApplications.unshift(snapshot.movedApplication)
+  sourceColumn.applications = sourceApplications
+  targetColumn.applications = targetApplications
+}
+
+const toggleApplicantSelection = (applicationId) => {
+  if (!canMoveApplicants.value) return
+
+  const applicant = applicants.value.find((item) => item.applicationId === applicationId)
+  if (!applicant) return
+
+  if (selectedApplicationIds.value.includes(applicationId)) {
+    selectedApplicationIds.value = selectedApplicationIds.value.filter((id) => id !== applicationId)
+    return
+  }
+
+  if (selectedSourceProcessId.value && applicant.processId !== selectedSourceProcessId.value) {
+    return
+  }
+
+  selectedApplicationIds.value = [...selectedApplicationIds.value, applicationId]
+}
+
+const clearApplicantSelection = () => {
+  selectedApplicationIds.value = []
+  bulkTargetProcessId.value = ''
+}
+
+const moveApplicantToProcess = async (applicationId, targetProcessId, options = {}) => {
+  const app = applicants.value.find((item) => item.applicationId === applicationId)
+  if (!app || app.processId === targetProcessId) return
+
+  const { reloadBoard = false } = options
+  const previousProcessId = app.processId
+  const boardMoveSnapshot = moveBoardColumnApplicantLocally(applicationId, targetProcessId)
+  moveApplicantLocally(applicationId, targetProcessId)
+  movingApplicationId.value = applicationId
+
+  try {
+    await applicationBoardApi.moveApplicationProcess(applicationId, targetProcessId)
+    if (reloadBoard) {
+      await loadApplicantBoard()
+    }
+  } catch (error) {
+    restoreBoardColumnApplicantMove(boardMoveSnapshot)
+    moveApplicantLocally(applicationId, previousProcessId)
+    throw error
+  } finally {
+    movingApplicationId.value = null
+  }
+}
+
+const rejectApplicantToFailProcess = async (applicationId) => {
+  if (!failProcess.value?.id) {
+    window.alert('불합격 프로세스가 없어 처리할 수 없습니다.')
+    return
+  }
+
+  await moveApplicantToProcess(applicationId, failProcess.value.id)
+}
+
+const handleRejectApplicant = async (applicationId) => {
+  try {
+    await rejectApplicantToFailProcess(applicationId)
+  } catch (error) {
+    window.alert(
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '불합격 처리에 실패했습니다.'
+    )
+  }
+}
+
+const summarizeBulkMoveResult = (results) => {
+  const succeeded = results.filter((result) => result.status === 'fulfilled')
+  const failed = results.filter((result) => result.status === 'rejected')
+
+  if (failed.length === 0) {
+    return {
+      title: '이동 완료',
+      message: `선택한 지원자 ${succeeded.length}명을 이동했습니다.`
+    }
+  }
+
+  const failedNames = failed
+    .map((result) => result.reason?.applicantName)
+    .filter(Boolean)
+    .slice(0, 3)
+  const failedLabel = failedNames.length > 0
+    ? `${failedNames.join(', ')}${failed.length > failedNames.length ? ` 외 ${failed.length - failedNames.length}명` : ''}`
+    : `${failed.length}명`
+  const firstErrorMessage = failed[0]?.reason?.message
+
+  return {
+    title: '일부 이동 실패',
+    message: `이동 완료 ${succeeded.length}건, 실패 ${failed.length}건 (${failedLabel})${firstErrorMessage ? `\n사유: ${firstErrorMessage}` : ''}`
+  }
+}
+
+const openBulkMoveResultModal = (results) => {
+  const summary = summarizeBulkMoveResult(results)
+  bulkMoveResultModal.value = {
+    open: true,
+    title: summary.title,
+    message: summary.message
+  }
+}
+
+const closeBulkMoveResultModal = () => {
+  bulkMoveResultModal.value = {
+    open: false,
+    title: '',
+    message: ''
+  }
+}
+
+const bulkMoveSelectedApplicants = async (targetProcessId) => {
+  if (!canMoveApplicants.value || bulkMoving.value) return
+
+  const normalizedTargetProcessId = Number(targetProcessId)
+  if (!normalizedTargetProcessId || selectedApplicants.value.length === 0) return
+
+  bulkMoving.value = true
+  let results = []
+
+  try {
+    results = await Promise.allSettled(
+      selectedApplicants.value.map(async (applicant) => {
+        try {
+          await moveApplicantToProcess(applicant.applicationId, normalizedTargetProcessId, { reloadBoard: false })
+          return applicant.applicationId
+        } catch (error) {
+          throw {
+            applicantId: applicant.applicationId,
+            applicantName: applicant.name,
+            message:
+              error?.response?.data?.error?.message ||
+              error?.response?.data?.message ||
+              '지원자 이동에 실패했습니다.'
+          }
+        }
+      })
+    )
+
+    openBulkMoveResultModal(results)
+  } finally {
+    bulkMoving.value = false
+    clearApplicantSelection()
+  }
+}
+
+const bulkRejectApplicants = async () => {
+  if (!failProcess.value?.id) {
+    window.alert('불합격 프로세스를 찾지 못했습니다. 보드를 새로고침한 뒤 다시 시도해주세요.')
+    return
+  }
+
+  await bulkMoveSelectedApplicants(failProcess.value.id)
+}
+
+const getStageTypeMeta = (stageType) => stageTypeMeta[stageType] || {
+  label: stageType || '기타',
+  badge: 'bg-slate-100 text-slate-700 border-slate-200',
+  column: 'border-slate-200 bg-slate-100'
+}
+
+const openRuleModal = (processId, rule = null) => {
+  ruleModalProcessId.value = processId
+  openProcessMenuId.value = null
+  automationError.value = ''
+
+  if (rule) {
+    startEditAutomationRule(rule)
+    return
+  }
+
+  editingRuleId.value = null
+  automationForm.value = {
+    recruitmentProcessId: processId,
+    triggerType: 'ON_ENTER',
+    actionType: 'EMAIL',
+    templateCode: ''
+  }
+}
+
+const closeRuleModal = () => {
+  ruleModalProcessId.value = null
+  openProcessMenuId.value = null
+  automationError.value = ''
+  resetAutomationForm()
+}
+
+const resetAutomationForm = () => {
+  automationForm.value = {
+    recruitmentProcessId: processOptions.value[0]?.value ?? '',
+    triggerType: 'ON_ENTER',
+    actionType: 'EMAIL',
+    templateCode: ''
+  }
+  editingRuleId.value = null
+}
+
+const startEditAutomationRule = (rule) => {
+  ruleModalProcessId.value = rule.recruitmentProcessId ?? ruleModalProcessId.value
+  editingRuleId.value = rule.ruleId
+  automationForm.value = {
+    recruitmentProcessId: rule.recruitmentProcessId ?? '',
+    triggerType: rule.triggerType ?? 'ON_ENTER',
+    actionType: rule.actionType ?? 'EMAIL',
+    templateCode: rule.payload?.templateCode ?? ''
+  }
+}
+
+const loadAutomationRules = async () => {
+  if (!canMoveApplicants.value) return
+
+  automationLoading.value = true
+  automationError.value = ''
+
+  try {
+    const response = await automationRulesApi.getRecruitmentRules(jobId)
+    const payload = automationRulesApi.extractResponseData(response)
+    automationRules.value = Array.isArray(payload) ? payload : []
+    if (!editingRuleId.value) {
+      resetAutomationForm()
+    }
+  } catch (error) {
+    automationRules.value = []
+    automationError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '자동화 규칙을 불러오지 못했습니다.'
+  } finally {
+    automationLoading.value = false
+  }
+}
+
+const loadAutomationTemplates = async () => {
+  if (!canMoveApplicants.value) return
+
+  automationTemplatesLoading.value = true
+
+  try {
+    const response = await automationTemplatesApi.getTemplates()
+    const payload = automationTemplatesApi.extractResponseData(response)
+    automationTemplates.value = Array.isArray(payload) ? payload : []
+  } catch {
+    automationTemplates.value = []
+  } finally {
+    automationTemplatesLoading.value = false
+  }
+}
+
+const submitAutomationRule = async () => {
+  if (!canMoveApplicants.value) return
+  if (!automationForm.value.recruitmentProcessId || !automationForm.value.templateCode) {
+    automationError.value = '프로세스와 템플릿 코드를 입력해주세요.'
+    return
+  }
+
+  automationSaving.value = true
+  automationError.value = ''
+
+  const payload = {
+    recruitmentProcessId: Number(automationForm.value.recruitmentProcessId),
+    triggerType: automationForm.value.triggerType,
+    actionType: automationForm.value.actionType,
+    payload: {
+      templateCode: automationForm.value.templateCode
+    }
+  }
+
+  try {
+    if (editingRuleId.value) {
+      await automationRulesApi.updateRule(editingRuleId.value, payload)
+    } else {
+      await automationRulesApi.createRecruitmentRule(jobId, payload)
+    }
+
+    await loadAutomationRules()
+    closeRuleModal()
+  } catch (error) {
+    automationError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '자동화 규칙 저장에 실패했습니다.'
+  } finally {
+    automationSaving.value = false
+  }
+}
+
+const deleteAutomationRule = async (ruleId) => {
+  if (!canMoveApplicants.value) return
+  if (!window.confirm('이 자동화 규칙을 삭제할까요?')) return
+
+  automationSaving.value = true
+  automationError.value = ''
+
+  try {
+    await automationRulesApi.deleteRule(ruleId)
+    if (editingRuleId.value === ruleId) {
+      resetAutomationForm()
+    }
+    await loadAutomationRules()
+  } catch (error) {
+    automationError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '자동화 규칙 삭제에 실패했습니다.'
+  } finally {
+    automationSaving.value = false
+  }
+}
 
 const copyRecruitmentLink = () => {
   const dummyLink = `https://careers.nexus.ai/jobs/${recruitment.value.id}`
@@ -269,12 +799,114 @@ const toggleInterviewerAssignment = (intr) => {
   }
 }
 
-const onDragStart = (evt, aid) => { draggingCardId.value = aid; evt.dataTransfer.effectAllowed = 'move' }
-const onDrop = (evt, pid) => {
-  const app = applicants.value.find(a => a.id === draggingCardId.value)
-  if (app) app.processId = pid
-  draggingCardId.value = null; draggingOverColumnId.value = null
+const onDragStart = (evt, aid) => {
+  if (!canMoveApplicants.value || movingApplicationId.value) {
+    evt.preventDefault()
+    return
+  }
+
+  draggingCardId.value = aid
+  evt.dataTransfer.effectAllowed = 'move'
 }
+
+const stopBoardAutoScroll = () => {
+  autoScrollDirection.value = 0
+
+  if (autoScrollFrameId.value !== null) {
+    cancelAnimationFrame(autoScrollFrameId.value)
+    autoScrollFrameId.value = null
+  }
+}
+
+const runBoardAutoScroll = () => {
+  if (autoScrollDirection.value === 0) {
+    autoScrollFrameId.value = null
+    return
+  }
+
+  const container = applicantBoardScrollRef.value
+  if (!container) {
+    stopBoardAutoScroll()
+    return
+  }
+
+  container.scrollLeft += autoScrollDirection.value * 18
+  autoScrollFrameId.value = requestAnimationFrame(runBoardAutoScroll)
+}
+
+const updateBoardAutoScroll = (clientX) => {
+  const container = applicantBoardScrollRef.value
+  if (!container || !draggingCardId.value) {
+    stopBoardAutoScroll()
+    return
+  }
+
+  const rect = container.getBoundingClientRect()
+  const edgeThreshold = 72
+  let nextDirection = 0
+
+  if (clientX <= rect.left + edgeThreshold) nextDirection = -1
+  else if (clientX >= rect.right - edgeThreshold) nextDirection = 1
+
+  if (nextDirection === autoScrollDirection.value) return
+
+  autoScrollDirection.value = nextDirection
+
+  if (nextDirection === 0) {
+    stopBoardAutoScroll()
+    return
+  }
+
+  if (autoScrollFrameId.value === null) {
+    autoScrollFrameId.value = requestAnimationFrame(runBoardAutoScroll)
+  }
+}
+
+const handleBoardDragOver = (evt) => {
+  updateBoardAutoScroll(evt.clientX)
+}
+
+const handleColumnDragOver = (evt, processId) => {
+  draggingOverColumnId.value = processId
+  updateBoardAutoScroll(evt.clientX)
+}
+
+const onDragEnd = () => {
+  draggingCardId.value = null
+  draggingOverColumnId.value = null
+  stopBoardAutoScroll()
+}
+
+const onDrop = async (evt, pid) => {
+  const draggedApplicationId = draggingCardId.value
+  draggingCardId.value = null
+  draggingOverColumnId.value = null
+  stopBoardAutoScroll()
+
+  if (!draggedApplicationId) return
+
+  const app = applicants.value.find((item) => item.applicationId === draggedApplicationId)
+  if (!app || app.processId === pid) return
+
+  if (!canMoveApplicants.value) {
+    window.alert('지원자 이동 권한이 없습니다.')
+    return
+  }
+
+  try {
+    await moveApplicantToProcess(draggedApplicationId, pid)
+  } catch (error) {
+    window.alert(
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      '지원자 이동에 실패했습니다.'
+    )
+  }
+}
+
+onBeforeUnmount(() => {
+  stopBoardAutoScroll()
+})
 
 const goInterview = () => {
   router.push({
@@ -452,7 +1084,56 @@ onMounted(async () => {
       console.error('채용 공고 목록 조회 실패:', error)
     })
   }
+  memberApi
+    .getMyMember()
+    .then((res) => {
+      memberType.value = res?.data?.data?.memberType || ''
+    })
+    .catch(() => {
+      memberType.value = ''
+    })
+
   await loadInterviewSchedules()
+})
+
+watch(activeTab, async (tab) => {
+  if (tab !== 'APPLICANTS' || applicantBoardLoading.value) return
+  await loadApplicantBoard()
+})
+
+watch(
+  [activeTab, canMoveApplicants, processOptions],
+  async ([tab, canMove]) => {
+    if (tab !== 'APPLICANTS' || !canMove) return
+    if (!automationRules.value.length && !automationLoading.value) {
+      await loadAutomationRules()
+    }
+    if (!automationForm.value.recruitmentProcessId && processOptions.value.length > 0) {
+      automationForm.value.recruitmentProcessId = processOptions.value[0].value
+    }
+  },
+  { immediate: true }
+)
+
+watch(selectedSourceProcessId, (processId) => {
+  if (!processId) {
+    bulkTargetProcessId.value = ''
+    return
+  }
+
+  if (Number(bulkTargetProcessId.value) === processId) {
+    bulkTargetProcessId.value = ''
+  }
+})
+
+watch(ruleModalProcessId, async (processId) => {
+  if (!processId || !canMoveApplicants.value) return
+  if (!automationRules.value.length && !automationLoading.value) {
+    await loadAutomationRules()
+  }
+  if (!automationTemplates.value.length && !automationTemplatesLoading.value) {
+    await loadAutomationTemplates()
+  }
 })
 
 const getDayColor = (index) => {
@@ -805,32 +1486,280 @@ const getDayColor = (index) => {
       </div>
 
       <!-- Applicants List View (Existing) -->
-      <div v-else class="flex-1 overflow-x-auto p-6 bg-slate-50">
-        <div class="flex h-full gap-6 min-w-max">
+      <div
+        v-else
+        ref="applicantBoardScrollRef"
+        class="flex-1 p-6 bg-slate-50 overflow-x-auto overflow-y-auto"
+        @dragover.prevent="handleBoardDragOver"
+      >
+        <div v-if="applicantBoardLoading" class="flex h-full items-center justify-center rounded-3xl border border-slate-200 bg-white px-10">
+          <p class="text-sm font-bold text-slate-500">지원자 보드를 불러오는 중입니다.</p>
+        </div>
+
+        <div v-else-if="applicantBoardError" class="flex h-full items-center justify-center rounded-3xl border border-rose-200 bg-rose-50 px-10">
+          <p class="text-sm font-bold text-rose-600">{{ applicantBoardError }}</p>
+        </div>
+
+        <div v-else-if="processes.length === 0" class="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-10">
+          <p class="text-sm font-bold text-slate-500">표시할 전형 프로세스가 없습니다.</p>
+        </div>
+
+        <div v-else class="flex gap-6 min-w-max w-max">
           <div 
             v-for="process in processes" :key="process.id"
-            class="flex flex-col w-80 bg-slate-100 rounded-2xl border border-slate-200"
-            @dragover.prevent="draggingOverColumnId = process.id"
+            class="flex flex-col w-80 rounded-2xl border"
+            @dragover.prevent="handleColumnDragOver($event, process.id)"
             @drop="onDrop($event, process.id)"
-            :class="{'ring-2 ring-brand-300 bg-brand-50': draggingOverColumnId === process.id}"
+            :class="[getStageTypeMeta(process.stageType).column, {'ring-2 ring-brand-300': draggingOverColumnId === process.id}]"
           >
             <div class="flex-none p-4 flex items-center justify-between border-b border-slate-200 bg-white rounded-t-2xl">
-              <h3 class="font-bold text-slate-700">{{ process.stageName }}</h3>
-              <span class="bg-slate-100 px-2 py-0.5 rounded text-xs font-bold text-slate-500">{{ getApplicantsByProcess(process.id).length }}</span>
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <h3 class="font-bold text-slate-700">{{ process.stageName }}</h3>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border" :class="getStageTypeMeta(process.stageType).badge">
+                    {{ getStageTypeMeta(process.stageType).label }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-400 font-medium">order {{ process.order }}</p>
+              </div>
+              <div class="flex items-center gap-2 relative">
+                <span class="bg-slate-100 px-2 py-0.5 rounded text-xs font-bold text-slate-500">{{ getApplicantsByProcess(process.id).length }}</span>
+                <button
+                  v-if="canMoveApplicants"
+                  type="button"
+                  class="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center"
+                  @click.stop="openProcessMenuId = openProcessMenuId === process.id ? null : process.id"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3Zm0 5.5A1.5 1.5 0 1110 8a1.5 1.5 0 010 3.5Zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3Z" />
+                  </svg>
+                </button>
+                <div
+                  v-if="openProcessMenuId === process.id"
+                  class="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-1"
+                >
+                  <button
+                    type="button"
+                    class="w-full text-left px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-lg"
+                    @click="openRuleModal(process.id)"
+                  >
+                    자동화 규칙 관리
+                  </button>
+                </div>
+              </div>
             </div>
             <div class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               <div v-for="app in getApplicantsByProcess(process.id)" :key="app.id"
-                   draggable="true" @dragstart="onDragStart($event, app.id)"
+                   :draggable="canMoveApplicants && movingApplicationId !== app.applicationId" @dragstart="onDragStart($event, app.applicationId)" @dragend="onDragEnd"
                    class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:border-brand-400 hover:shadow-md transition-all"
-                   :class="{'opacity-50 border-dashed': draggingCardId === app.id}">
+                   :class="{
+                     'opacity-50 border-dashed': draggingCardId === app.applicationId,
+                     'cursor-not-allowed opacity-70': !canMoveApplicants,
+                     'pointer-events-none opacity-60': movingApplicationId === app.applicationId
+                   }">
+                <div v-if="canMoveApplicants" class="mb-2 flex items-center justify-between">
+                  <label class="inline-flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                    <input
+                      type="checkbox"
+                      class="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                      :checked="selectedApplicationIds.includes(app.applicationId)"
+                      :disabled="bulkMoving || movingApplicationId === app.applicationId || (!!selectedSourceProcessId && selectedSourceProcessId !== app.processId && !selectedApplicationIds.includes(app.applicationId))"
+                      @click.stop
+                      @change="toggleApplicantSelection(app.applicationId)"
+                    >
+                    선택
+                  </label>
+                </div>
                 <div class="flex justify-between items-start mb-2">
                   <span class="font-bold text-slate-900">{{ app.name }}</span>
                   <div v-if="app.hasInterview" class="text-brand-600 bg-brand-50 p-1 rounded-full"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg></div>
                 </div>
                 <p class="text-xs text-slate-500 mb-2">{{ app.email }}</p>
-                <div class="flex gap-1">
+                <div class="flex gap-1 flex-wrap">
                   <span v-for="tag in app.tags" :key="tag" class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 border border-slate-200">{{ tag }}</span>
                 </div>
+                <div v-if="canMoveApplicants" class="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    class="rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors"
+                    :class="app.processId === failProcess?.id || movingApplicationId === app.applicationId
+                      ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                      : 'border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100'"
+                    :disabled="app.processId === failProcess?.id || movingApplicationId === app.applicationId"
+                    @click.stop="handleRejectApplicant(app.applicationId)"
+                  >
+                    불합격 처리
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="!canMoveApplicants" class="flex items-start">
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+              HR 멤버만 지원자를 다른 프로세스로 이동할 수 있습니다.
+            </div>
+          </div>
+          <div v-else-if="false" class="flex items-start">
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+              FAIL 단계가 없어 불합격 처리를 사용할 수 없습니다.
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="canMoveApplicants && selectedApplicantCount > 0"
+          class="pointer-events-none fixed bottom-6 left-1/2 z-30 w-[min(860px,calc(100vw-2rem))] -translate-x-1/2"
+        >
+          <div class="pointer-events-auto rounded-[28px] border border-slate-200 bg-white/95 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="flex items-center gap-3">
+                <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-sm font-bold text-slate-900">{{ selectedApplicantCount }}명 선택됨</p>
+                  <p class="text-xs font-medium text-slate-500">
+                    {{ selectedSourceProcess ? `${selectedSourceProcess.stageName} 단계에서 선택 중` : '선택한 지원자를 원하는 단계로 한 번에 이동합니다.' }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <select
+                  v-model="bulkTargetProcessId"
+                  class="min-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
+                >
+                  <option value="">이동할 단계 선택</option>
+                  <option v-for="option in bulkProcessOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+                <button
+                  type="button"
+                  class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  :disabled="!bulkTargetProcessId || bulkMoving"
+                  @click="bulkMoveSelectedApplicants(bulkTargetProcessId)"
+                >
+                  단계 이동
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-bold text-rose-700 disabled:opacity-50"
+                  :disabled="bulkMoving"
+                  @click="bulkRejectApplicants"
+                >
+                  불합격 처리
+                </button>
+                <button
+                  type="button"
+                  class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600"
+                  :disabled="bulkMoving"
+                  @click="clearApplicantSelection"
+                >
+                  선택 해제
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="bulkMoveResultModal.open"
+          class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm"
+          @click.self="closeBulkMoveResultModal"
+        >
+          <div class="w-full max-w-md rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+            <div class="border-b border-slate-200 px-6 py-5">
+              <p class="text-xs font-bold tracking-[0.2em] text-slate-400">RESULT</p>
+              <h3 class="mt-1 text-xl font-bold text-slate-900">{{ bulkMoveResultModal.title }}</h3>
+            </div>
+            <div class="px-6 py-6">
+              <p class="whitespace-pre-line text-sm leading-6 text-slate-600">{{ bulkMoveResultModal.message }}</p>
+              <button
+                type="button"
+                class="mt-5 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+                @click="closeBulkMoveResultModal"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="false && canMoveApplicants" class="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Automation Rules</h3>
+              <p class="text-xs text-slate-500 mt-1">프로세스 진입 시 실행될 이메일 규칙을 관리합니다.</p>
+            </div>
+            <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1">HR</span>
+          </div>
+
+          <div v-if="automationError" class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+            {{ automationError }}
+          </div>
+
+          <div class="grid gap-5 xl:grid-cols-[320px_1fr]">
+            <form class="space-y-3" @submit.prevent="submitAutomationRule">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">프로세스</label>
+                <select v-model="automationForm.recruitmentProcessId" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  <option value="">선택하세요</option>
+                  <option v-for="option in processOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">트리거</label>
+                <select v-model="automationForm.triggerType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  <option v-for="option in automationTriggerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">액션</label>
+                <select v-model="automationForm.actionType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  <option v-for="option in automationActionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Template Code</label>
+                <input v-model="automationForm.templateCode" type="text" placeholder="DOCUMENT_PASS" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              </div>
+              <div class="flex gap-2">
+                <button type="submit" :disabled="automationSaving" class="flex-1 rounded-xl bg-slate-900 text-white px-3 py-2 text-sm font-bold disabled:opacity-60">
+                  {{ editingRuleId ? '규칙 수정' : '규칙 추가' }}
+                </button>
+                <button v-if="editingRuleId" type="button" @click="resetAutomationForm" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600">
+                  취소
+                </button>
+              </div>
+            </form>
+
+            <div>
+              <div v-if="automationLoading" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
+                자동화 규칙을 불러오는 중입니다.
+              </div>
+
+              <div v-else-if="automationRules.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
+                등록된 자동화 규칙이 없습니다.
+              </div>
+
+              <div v-else class="space-y-3">
+                <article v-for="rule in automationRules" :key="rule.ruleId" class="rounded-2xl border border-slate-200 p-4">
+                  <div class="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                      <p class="text-sm font-bold text-slate-900">{{ processes.find((process) => process.id === rule.recruitmentProcessId)?.stageName || `Process #${rule.recruitmentProcessId}` }}</p>
+                      <p class="text-[11px] text-slate-500 font-medium">{{ rule.triggerType }} -> {{ rule.actionType }}</p>
+                    </div>
+                    <div class="flex gap-2">
+                      <button @click="startEditAutomationRule(rule)" class="text-xs font-bold text-brand-600">수정</button>
+                      <button @click="deleteAutomationRule(rule.ruleId)" class="text-xs font-bold text-rose-600">삭제</button>
+                    </div>
+                  </div>
+                  <p class="text-xs text-slate-600">
+                    templateCode: <span class="font-bold text-slate-800">{{ rule.payload?.templateCode || '-' }}</span>
+                  </p>
+                </article>
               </div>
             </div>
           </div>
@@ -840,6 +1769,97 @@ const getDayColor = (index) => {
     </main>
 
     <!-- 모달: 면접관 수정 -->
+    <div v-if="ruleModalProcessId" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="closeRuleModal">
+      <div class="bg-white rounded-3xl shadow-2xl w-[760px] max-w-[96vw] max-h-[85vh] overflow-hidden flex flex-col">
+        <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-bold text-slate-500 mb-1">AUTOMATION</p>
+            <h3 class="text-xl font-bold text-slate-900">{{ selectedRuleProcess?.stageName || '프로세스' }}</h3>
+            <p class="text-sm text-slate-500 mt-1">이 단계에 들어올 때 실행할 규칙을 관리합니다.</p>
+          </div>
+          <button @click="closeRuleModal" class="w-9 h-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 grid gap-6 lg:grid-cols-[320px_1fr]">
+          <form class="space-y-3" @submit.prevent="submitAutomationRule">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">프로세스</label>
+              <select v-model="automationForm.recruitmentProcessId" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option value="">선택하세요</option>
+                <option v-for="option in processOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">트리거</label>
+              <select v-model="automationForm.triggerType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option v-for="option in automationTriggerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">액션</label>
+              <select v-model="automationForm.actionType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option v-for="option in automationActionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Template Code</label>
+              <select v-model="automationForm.templateCode" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option value="">선택하세요</option>
+                <option
+                  v-for="template in filteredAutomationTemplates"
+                  :key="template.code"
+                  :value="template.code"
+                >
+                  {{ template.label }} ({{ template.code }})
+                </option>
+              </select>
+              <p v-if="selectedRuleStageType" class="mt-1 text-[11px] text-slate-400">
+                추천 stageType: {{ selectedRuleStageType }}
+              </p>
+            </div>
+            <div v-if="automationError" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+              {{ automationError }}
+            </div>
+            <div class="flex gap-2">
+              <button type="submit" :disabled="automationSaving" class="flex-1 rounded-xl bg-slate-900 text-white px-3 py-2.5 text-sm font-bold disabled:opacity-60">
+                {{ editingRuleId ? '규칙 수정' : '규칙 추가' }}
+              </button>
+              <button type="button" @click="closeRuleModal" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-600">
+                닫기
+              </button>
+            </div>
+          </form>
+
+          <div>
+            <div v-if="automationLoading || automationTemplatesLoading" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
+              자동화 규칙을 불러오는 중입니다.
+            </div>
+            <div v-else-if="selectedProcessRules.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
+              이 단계에 연결된 규칙이 없습니다.
+            </div>
+            <div v-else class="space-y-3">
+              <article v-for="rule in selectedProcessRules" :key="rule.ruleId" class="rounded-2xl border border-slate-200 p-4">
+                <div class="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p class="text-sm font-bold text-slate-900">{{ rule.triggerType }} -> {{ rule.actionType }}</p>
+                    <p class="text-xs text-slate-500 mt-1">templateCode: {{ rule.payload?.templateCode || '-' }}</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <button type="button" @click="openRuleModal(rule.recruitmentProcessId, rule)" class="text-xs font-bold text-brand-600">수정</button>
+                    <button type="button" @click="deleteAutomationRule(rule.ruleId)" class="text-xs font-bold text-rose-600">삭제</button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="isInterviewerEditModalOpen" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="isInterviewerEditModalOpen = false">
       <div class="bg-white rounded-2xl shadow-2xl w-[450px] max-w-[95%] overflow-hidden flex flex-col max-h-[80vh] animate-fade-in-up">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
