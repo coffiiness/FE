@@ -6,6 +6,7 @@ import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
+import { scheduleApi } from '@/api/schedule'
 import { recruitmentApi } from '@/api/recruitment'
 
 const handleRoomConfirm = (roomData) => {
@@ -331,6 +332,45 @@ const toYearMonth = (dateString) => {
   return `${y}-${String(m).padStart(2, '0')}`
 }
 
+const formatDate = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const loadScheduleTitlesByReservationKey = async ({ from, to }) => {
+  const startDate = formatDate(from)
+  const inclusiveEnd = new Date(to.getTime())
+  inclusiveEnd.setDate(inclusiveEnd.getDate() - 1)
+  const endDate = formatDate(inclusiveEnd)
+
+  try {
+    const response = await scheduleApi.getSchedules(startDate, endDate)
+    const items = Array.isArray(response?.data?.data) ? response.data.data : []
+    const titleMap = {}
+
+    items.forEach((item) => {
+      const roomId = Number(item?.roomId)
+      const title = String(item?.title || '').trim()
+      if (!Number.isFinite(roomId) || !title || !item?.date || !item?.startTime || !item?.endTime) {
+        return
+      }
+
+      const start = parseLocalDateTime(`${item.date}T${item.startTime}:00`)
+      const end = parseLocalDateTime(`${item.date}T${item.endTime}:00`)
+      const key = toDateTimeKey(roomId, start, end)
+      if (!key) return
+      titleMap[key] = title
+    })
+
+    return titleMap
+  } catch (error) {
+    console.error('Failed to load schedule title mapping:', error)
+    return {}
+  }
+}
+
 const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
   try {
     const yearMonth = toYearMonth(dateString)
@@ -444,7 +484,7 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
   }
 }
 
-const toViewBookingFromApi = (reservation) => {
+const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
   const reservationId = reservation?.id
   const scheduleId = Number(reservation?.interviewScheduleId)
   const titleFromApi =
@@ -457,6 +497,7 @@ const toViewBookingFromApi = (reservation) => {
     ? interviewReservationTitleMap.value[`schedule:${scheduleId}`]
     : null
   const titleFromLocalInterview = roomAndTimeKey ? interviewSlotTitleMap.value[roomAndTimeKey] : null
+  const titleFromSchedule = roomAndTimeKey ? titleByReservationKey[roomAndTimeKey] : null
   const titleFromInterview =
     titleFromScheduleId ||
     (roomAndTimeKey ? interviewReservationTitleMap.value[roomAndTimeKey] : null) ||
@@ -522,7 +563,7 @@ const toViewBookingFromApi = (reservation) => {
     serverId: reservationId,
     roomId: `r-${reservation.meetingRoomId}`,
     roomServerId: reservation.meetingRoomId,
-    title: titleFromLocalInterview || titleFromInterview || titleFromApi || titleFromLocal || '회의실 예약',
+    title: titleFromLocalInterview || titleFromInterview || titleFromSchedule || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
     organizer: resolveOrganizerName(reservation),
     interviewers,
