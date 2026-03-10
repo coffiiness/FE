@@ -22,6 +22,8 @@ const onModalCancel  = () => { modal.value.show = false }
 const route = useRoute()
 const router = useRouter()
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const recruitmentId = Number(route.query.recruitmentId || 0)
 const recruitmentStageId = Number(route.query.recruitmentStageId || 0) || null
@@ -160,6 +162,36 @@ const saveInterviewSlotTitle = (meetingRoomId, startDatetime, endDatetime) => {
     const next = parsed && typeof parsed === 'object' ? parsed : {}
     next[key] = title
     localStorage.setItem(INTERVIEW_SLOT_TITLE_MAP_KEY, JSON.stringify(next))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+const saveInterviewSlotParticipants = (meetingRoomId, startDatetime, endDatetime) => {
+  const key = toDateTimeKey(meetingRoomId, startDatetime, endDatetime)
+  if (!key) return
+
+  const interviewerNames = interviewers.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+  const applicantNames = applicants.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+
+  try {
+    const rawInterviewers = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsedInterviewers = rawInterviewers ? JSON.parse(rawInterviewers) : {}
+    const nextInterviewers =
+      parsedInterviewers && typeof parsedInterviewers === 'object' ? parsedInterviewers : {}
+    nextInterviewers[key] = interviewerNames
+    localStorage.setItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY, JSON.stringify(nextInterviewers))
+  } catch {
+    // ignore storage errors
+  }
+
+  try {
+    const rawApplicants = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsedApplicants = rawApplicants ? JSON.parse(rawApplicants) : {}
+    const nextApplicants =
+      parsedApplicants && typeof parsedApplicants === 'object' ? parsedApplicants : {}
+    nextApplicants[key] = applicantNames
+    localStorage.setItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY, JSON.stringify(nextApplicants))
   } catch {
     // ignore storage errors
   }
@@ -541,6 +573,11 @@ const confirmSchedule = async (memo) => {
         memo: mergedMemo
       })
       saveInterviewSlotTitle(
+        Number(selectedRoom.value.id),
+        `${slot.date}T${slot.start}:00`,
+        `${slot.date}T${slot.end}:00`
+      )
+      saveInterviewSlotParticipants(
         Number(selectedRoom.value.id),
         `${slot.date}T${slot.start}:00`,
         `${slot.date}T${slot.end}:00`

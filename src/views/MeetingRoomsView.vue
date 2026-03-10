@@ -75,6 +75,8 @@ const interviewSlotTitleMap = ref({})
 const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
 const RESERVATION_ATTENDEE_MAP_KEY = 'meetingRoomReservationAttendees'
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const loadReservationTitleMap = () => {
   try {
@@ -119,6 +121,26 @@ const loadInterviewSlotTitleMap = () => {
     interviewSlotTitleMap.value = parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     interviewSlotTitleMap.value = {}
+  }
+}
+
+const loadInterviewSlotParticipantMaps = () => {
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationInterviewerMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationInterviewerMap.value = {}
+  }
+
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationApplicantMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationApplicantMap.value = {}
   }
 }
 
@@ -471,15 +493,25 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
       }
     })
 
-    interviewReservationTitleMap.value = nextMap
-    interviewReservationAttendeeMap.value = nextAttendeeMap
-    interviewReservationInterviewerMap.value = nextInterviewerMap
-    interviewReservationApplicantMap.value = nextApplicantMap
+    interviewReservationTitleMap.value = {
+      ...interviewReservationTitleMap.value,
+      ...nextMap
+    }
+    interviewReservationAttendeeMap.value = {
+      ...interviewReservationAttendeeMap.value,
+      ...nextAttendeeMap
+    }
+    interviewReservationInterviewerMap.value = {
+      ...interviewReservationInterviewerMap.value,
+      ...nextInterviewerMap
+    }
+    interviewReservationApplicantMap.value = {
+      ...interviewReservationApplicantMap.value,
+      ...nextApplicantMap
+    }
   } catch (error) {
     interviewReservationTitleMap.value = {}
     interviewReservationAttendeeMap.value = {}
-    interviewReservationInterviewerMap.value = {}
-    interviewReservationApplicantMap.value = {}
     console.error('면접 예약 제목 매핑 조회 실패:', error)
   }
 }
@@ -610,6 +642,7 @@ onMounted(async () => {
   loadReservationTitleMap()
   loadReservationAttendeeMap()
   loadInterviewSlotTitleMap()
+  loadInterviewSlotParticipantMaps()
   await loadInterviewReservationTitles()
   await loadRoomsFromApi()
   await loadBookingsFromApi()
