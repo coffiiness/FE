@@ -261,6 +261,14 @@ const isUnknownAttendeeName = (name) => {
 
 const sanitizeAttendeeNames = (names) => uniqueNames(names).filter((name) => !isUnknownAttendeeName(name))
 
+const removeOrganizerFromAttendees = (attendees, organizerName) => {
+  const normalizedOrganizer = String(organizerName || '').trim()
+  if (!normalizedOrganizer) {
+    return sanitizeAttendeeNames(attendees)
+  }
+  return sanitizeAttendeeNames(attendees).filter((name) => name !== normalizedOrganizer)
+}
+
 const parseAttendeesFromText = (text) => {
   if (typeof text !== 'string' || !text.trim()) return []
   const lines = text
@@ -540,6 +548,7 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
 
 const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
   const reservationId = reservation?.id
+  const organizer = resolveOrganizerName(reservation)
   const scheduleId = Number(reservation?.interviewScheduleId)
   const titleFromApi =
     reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
@@ -605,12 +614,12 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
     reservation?.description || reservation?.memo || ''
   )
   const attendees = sanitizeAttendeeNames(attendeesFromPayload).length
-    ? sanitizeAttendeeNames(attendeesFromPayload)
+    ? removeOrganizerFromAttendees(attendeesFromPayload, organizer)
     : sanitizeAttendeeNames(attendeesFromLocal).length
-      ? sanitizeAttendeeNames(attendeesFromLocal)
+      ? removeOrganizerFromAttendees(attendeesFromLocal, organizer)
     : attendeesFromInterviewResolved.length
       ? attendeesFromInterviewResolved
-      : sanitizeAttendeeNames(attendeesFromDescription)
+      : removeOrganizerFromAttendees(attendeesFromDescription, organizer)
 
   return {
     id: `b-${reservationId}`,
@@ -619,7 +628,7 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
     roomServerId: reservation.meetingRoomId,
     title: titleFromLocalInterview || titleFromInterview || titleFromSchedule || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
-    organizer: resolveOrganizerName(reservation),
+    organizer,
     interviewers,
     applicants,
     attendees,
@@ -715,6 +724,10 @@ const handleBookRoomClick = (room) => {
 const handleBookingConfirm = async (booking) => {
   if (!selectedRoom.value?.serverId) return
   try {
+    const normalizedAttendees = removeOrganizerFromAttendees(
+      booking.attendees || [],
+      booking.organizer || getCurrentUser()?.name || ''
+    )
     const response = await meetingRoomApi.reserve(selectedRoom.value.serverId, {
       title: booking.title || '회의실 예약',
       description: booking.description || '',
@@ -725,7 +738,7 @@ const handleBookingConfirm = async (booking) => {
     const saved = response?.data?.data
     if (!saved?.id) return
     setReservationTitle(saved.id, booking.title)
-    setReservationAttendees(saved.id, booking.attendees || [])
+    setReservationAttendees(saved.id, normalizedAttendees)
 
     bookings.value.push({
       id: `b-${saved.id}`,
@@ -737,7 +750,7 @@ const handleBookingConfirm = async (booking) => {
       organizer: booking.organizer || getCurrentUser()?.name || '',
       interviewers: [],
       applicants: [],
-      attendees: booking.attendees || [],
+      attendees: normalizedAttendees,
       status: 'confirmed',
       startTime: new Date(saved.startDatetime),
       endTime: new Date(saved.endDatetime)
