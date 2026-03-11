@@ -5,6 +5,7 @@ import { buildNotificationFallbackRoute, useNotificationStore, formatNotificatio
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { storeToRefs } from 'pinia'
 import { useScheduleStore } from '@/stores/schedule'
 
@@ -18,6 +19,8 @@ const rootRef = ref(null)
 const actionError = ref('')
 const showScheduleModal = ref(false)
 const scheduleDetail = ref(null)
+const showCancelledScheduleModal = ref(false)
+const cancelledScheduleNotification = ref(null)
 const {
   showAnnouncementModal,
   isAnnouncementLoading,
@@ -28,6 +31,8 @@ const {
 } = useAnnouncementNotificationModal()
 
 const visibleCount = computed(() => dropdownNotifications.value.length)
+const cancelledScheduleModalTitle = computed(() => '일정이 취소되었습니다.')
+const cancelledScheduleModalMessage = computed(() => '')
 
 const getNotificationIconClass = (item) => {
   if (item.filterType === 'ANNOUNCEMENT') {
@@ -55,10 +60,20 @@ const closeScheduleModal = () => {
   emit('close')
 }
 
+const closeCancelledScheduleModal = () => {
+  showCancelledScheduleModal.value = false
+  cancelledScheduleNotification.value = null
+  emit('close')
+}
+
 function isScheduleNotification(item) {
   const targetType = String(item?.targetType || '').toUpperCase()
   const actionUrl = String(item?.actionUrl || '')
   return Boolean(item?.targetId) && (targetType === 'SCHEDULE' || /\/schedule(?:\?|$|\/)/i.test(actionUrl))
+}
+
+function isCancelledScheduleNotification(item) {
+  return String(item?.type || '').toUpperCase() === 'SCHEDULE_CANCELLED'
 }
 
 const handleNotificationClick = async (item) => {
@@ -67,6 +82,12 @@ const handleNotificationClick = async (item) => {
 
     if (item.targetType === 'ANNOUNCEMENT') {
       await openAnnouncementModal(item)
+      return
+    }
+
+    if (isCancelledScheduleNotification(item)) {
+      cancelledScheduleNotification.value = item
+      showCancelledScheduleModal.value = true
       return
     }
 
@@ -113,7 +134,7 @@ const goToAllNotifications = async (tab = 'all') => {
 
 const onDocumentClick = (event) => {
   if (!rootRef.value) return
-  if (showScheduleModal.value || showAnnouncementModal.value) return
+  if (showScheduleModal.value || showAnnouncementModal.value || showCancelledScheduleModal.value) return
   if (!rootRef.value.contains(event.target)) {
     emit('close')
   }
@@ -245,6 +266,17 @@ onBeforeUnmount(() => {
     :event="scheduleDetail || {}"
     :showActions="false"
     @close="closeScheduleModal"
+  />
+
+  <ConfirmModal
+    :show="showCancelledScheduleModal"
+    :title="cancelledScheduleModalTitle"
+    :message="cancelledScheduleModalMessage"
+    type="warning"
+    confirmText="확인"
+    :showCancel="false"
+    @confirm="closeCancelledScheduleModal"
+    @cancel="closeCancelledScheduleModal"
   />
 </template>
 
