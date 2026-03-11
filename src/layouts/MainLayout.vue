@@ -12,7 +12,7 @@ const router = useRouter()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
 
-const { user } = useAuth()
+const { user, logout } = useAuth()
 const memberType = ref('')
 
 const userName = computed(() => user.value?.name || '사용자')
@@ -277,6 +277,14 @@ watch(
             </svg>
             {{ currentMonth }}
           </div>
+
+          <button
+              type="button"
+              @click="logout"
+              class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            로그아웃
+          </button>
 
           <div class="relative flex items-center">
             <button
