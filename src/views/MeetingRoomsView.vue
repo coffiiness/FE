@@ -192,6 +192,19 @@ const parseLocalDateTime = (value) => {
   return new Date(value)
 }
 
+const isPastReservationSlot = (dateValue, hour = null) => {
+  if (!dateValue) return false
+  const base = parseDateOnly(dateValue)
+  if (Number.isFinite(hour)) {
+    base.setHours(hour, 0, 0, 0)
+    return base < new Date()
+  }
+
+  const endOfDay = new Date(base)
+  endOfDay.setHours(23, 59, 59, 999)
+  return endOfDay < new Date()
+}
+
 const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
   const roomId = Number(meetingRoomId)
   const start = new Date(startDatetime).getTime()
@@ -666,6 +679,10 @@ watch(
 )
 
 const handleTimeSlotClick = (roomId, hour) => {
+  if (isPastReservationSlot(dateValue.value, hour)) {
+    openErrorModal('예약 불가', '이미 지난 시간은 예약할 수 없습니다.')
+    return
+  }
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
   selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour

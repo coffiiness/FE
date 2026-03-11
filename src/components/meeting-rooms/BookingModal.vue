@@ -29,6 +29,34 @@ const parseDateOnly = (value) => {
   return new Date(year, month - 1, day, 0, 0, 0, 0)
 }
 
+const isPastDateTime = (dateValue, timeValue) => {
+  if (!dateValue || !timeValue) return false
+  const [hour, minute] = String(timeValue).split(':').map(Number)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false
+  const target = parseDateOnly(dateValue)
+  target.setHours(hour, minute, 0, 0)
+  return target < new Date()
+}
+
+const getInitialBookingHour = (baseDate, selectedHour) => {
+  if (selectedHour !== null && selectedHour !== undefined) {
+    return Math.max(0, Math.min(22, selectedHour))
+  }
+
+  const now = new Date()
+  const sameDay =
+    baseDate.getFullYear() === now.getFullYear() &&
+    baseDate.getMonth() === now.getMonth() &&
+    baseDate.getDate() === now.getDate()
+
+  if (!sameDay) {
+    return 9
+  }
+
+  const nextHour = now.getMinutes() > 0 || now.getSeconds() > 0 ? now.getHours() + 1 : now.getHours()
+  return Math.max(9, Math.min(20, nextHour))
+}
+
 const groupedMembers = computed(() => {
   const query = memberSearchQuery.value.trim().toLowerCase()
   const normalizedMembers = members.value
@@ -178,7 +206,7 @@ watch(
   (open) => {
     if (!open) return
     const baseDate = props.selectedDate || new Date()
-    const defaultHour = Math.max(0, Math.min(22, props.selectedHour ?? 9))
+    const defaultHour = getInitialBookingHour(baseDate, props.selectedHour)
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
     state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
@@ -190,7 +218,10 @@ watch(
     endHour12.value = endParts.hour12
     state.organizer = getCurrentUserName()
     selectedParticipants.value = []
-    submitError.value = ''
+    submitError.value =
+      props.selectedHour !== null && isPastDateTime(state.date, state.startTime)
+        ? '이미 지난 시간은 예약할 수 없습니다. 현재 이후 시간으로 다시 선택해 주세요.'
+        : ''
     memberSearchQuery.value = ''
     selectedGroupId.value = null
     attendeeInput.value = ''
@@ -231,6 +262,7 @@ watch([endMeridiem, endHour12], ([period, hour]) => {
 
 const handleSubmit = () => {
   formError.value = ''
+  submitError.value = ''
   if (!props.room) {
     formError.value = '회의실 정보를 확인해주세요.'
     return
@@ -256,18 +288,18 @@ const handleSubmit = () => {
   }
 
   if (startDateTime >= endDateTime) {
-    submitError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
+    formError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
     return
   }
 
   if (startHour < 8 || startHour > 20 || endHour < 8 || endHour > 21) {
-    submitError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
+    formError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
     return
   }
 
   const now = new Date()
   if (startDateTime < now) {
-    submitError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
+    formError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
     return
   }
 
