@@ -7,6 +7,14 @@ const extractResponseData = (response) => {
 }
 
 export const applicationBoardApi = {
+  getApplications(params = {}) {
+    return api.get('/applications', { params })
+  },
+
+  getApplicationDetail(applicationId) {
+    return api.get(`/applications/${applicationId}`)
+  },
+
   getBoard(recruitmentId) {
     return api.get('/applications/board', {
       params: { recruitmentId }

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { applicantApi, extractResponseData } from '@/api/applicant'
+import { recruitmentApi } from '@/api/recruitment'
+import { applicationBoardApi } from '@/api/applicationBoard'
 
 const router = useRouter()
 
@@ -60,14 +61,6 @@ const formatDateTime = (value) => {
   return `${base} ${hour}:${minute}`
 }
 
-const toApplicantArray = (payload) => {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.content)) return payload.content
-  if (Array.isArray(payload?.items)) return payload.items
-  if (Array.isArray(payload?.applicants)) return payload.applicants
-  return []
-}
-
 const toDisplayApplicant = (item, index) => {
   const detailId = item?.applicationId ?? item?.applicantId ?? item?.id ?? `applicant-${index}`
   const id = item?.id ?? detailId
@@ -103,10 +96,71 @@ const loadApplicants = async () => {
   loadError.value = ''
 
   try {
-    const response = await applicantApi.getApplicantsWithFallback()
-    const payload = extractResponseData(response)
-    const list = toApplicantArray(payload)
-    applicants.value = list.map(toDisplayApplicant)
+    const recruitmentsResponse = await recruitmentApi.getRecruitments()
+    const recruitmentPayload = recruitmentsResponse?.data?.data
+    const recruitmentList = Array.isArray(recruitmentPayload) ? recruitmentPayload : []
+
+    if (!recruitmentList.length) {
+      applicants.value = []
+      return
+    }
+
+    const boardResults = await Promise.all(
+      recruitmentList.map(async (recruitment) => {
+        try {
+          const response = await applicationBoardApi.getBoard(recruitment.id)
+          const payload = applicationBoardApi.extractResponseData(response)
+          const columns = Array.isArray(payload?.columns) ? payload.columns : []
+          return { recruitment, columns }
+        } catch (error) {
+          console.error(`지원자 보드 조회 실패: recruitmentId=${recruitment.id}`, error)
+          return { recruitment, columns: [] }
+        }
+      })
+    )
+
+    const flattened = []
+    boardResults.forEach(({ recruitment, columns }) => {
+      columns.forEach((column) => {
+        const applications = Array.isArray(column?.applications) ? column.applications : []
+        applications.forEach((application) => {
+          flattened.push({
+            id: application?.applicationId ?? application?.id,
+            applicationId: application?.applicationId ?? application?.id,
+            applicantId: application?.applicantId,
+            name: application?.name ?? application?.applicantName ?? '-',
+            email: application?.email ?? application?.applicantEmail ?? '-',
+            recruitmentTitle: recruitment?.title ?? '-',
+            status: column?.name ?? application?.status ?? application?.applicationStatus ?? '',
+            createdAt: application?.createdAt ?? application?.appliedAt ?? null,
+            nextScheduleAt: application?.nextScheduleAt ?? application?.nextInterviewAt ?? null
+          })
+        })
+      })
+    })
+
+    if (flattened.length === 0) {
+      const fallbackResponse = await applicationBoardApi.getApplications({ all: true })
+      const payload = applicationBoardApi.extractResponseData(fallbackResponse)
+      const list = Array.isArray(payload) ? payload : Array.isArray(payload?.content) ? payload.content : []
+      const recruitmentTitleMap = new Map(
+        recruitmentList.map((recruitment) => [Number(recruitment.id), recruitment.title || '-'])
+      )
+
+      applicants.value = list.map((item, index) =>
+        toDisplayApplicant(
+          {
+            ...item,
+            id: item?.applicationId ?? item?.id,
+            recruitmentTitle: recruitmentTitleMap.get(Number(item?.recruitmentId)) || '-'
+          },
+          index
+        )
+      )
+      return
+    }
+
+    applicants.value = flattened.map(toDisplayApplicant)
   } catch (error) {
     applicants.value = []
     loadError.value = getListErrorMessage(error)

@@ -79,11 +79,26 @@ const selectedInterviewers = ref([])
 
 const assignedInterviewers = computed(() => {
   const job = jobs.value.find((item) => Number(item.id) === Number(jobId))
+  const detailInterviewers = Array.isArray(recruitmentDetail.value?.interviewers)
+    ? recruitmentDetail.value.interviewers
+    : []
   const assignees = Array.isArray(job?.assignees) ? job.assignees : []
+
+  const normalizedFromDetail = detailInterviewers
+    .map((interviewer) => ({
+      id: Number(interviewer?.memberId ?? interviewer?.id),
+      name: String(interviewer?.name || '').trim(),
+      label: '담당 면접관'
+    }))
+    .filter((interviewer) => Number.isFinite(interviewer.id) && interviewer.name)
+
+  if (normalizedFromDetail.length > 0) {
+    return normalizedFromDetail
+  }
 
   return assignees
     .map((assignee) => ({
-      id: Number(assignee?.id ?? assignee?.userId),
+      id: Number(assignee?.id ?? assignee?.userId ?? assignee?.memberId),
       name: String(assignee?.name || '').trim(),
       label: '담당 면접관'
     }))
