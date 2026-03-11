@@ -86,7 +86,7 @@ const assignedInterviewers = computed(() => {
 
   const normalizedFromDetail = detailInterviewers
     .map((interviewer) => ({
-      id: Number(interviewer?.memberId ?? interviewer?.id),
+      id: Number(interviewer?.userId ?? interviewer?.id ?? interviewer?.memberId),
       name: String(interviewer?.name || '').trim(),
       label: '담당 면접관'
     }))
