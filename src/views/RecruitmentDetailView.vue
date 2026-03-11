@@ -107,18 +107,27 @@ const recruitment = computed(() => {
   if (!job) return {}
 
   // D-Day 계산
-  let ddayText = '-'
   let statusText = job.status || 'DRAFT'
-  if (job.endDate) {
-    const end = new Date(job.endDate)
-    const now = new Date()
-    const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-    if (diffDays <= 0) { ddayText = '마감'; statusText = 'CLOSED' }
-    else if (diffDays <= 3) { ddayText = `D-${diffDays}`; statusText = 'URGENT' }
-    else { ddayText = `D-${diffDays}` }
+  let ddayText = '-'
+
+  const now = new Date()
+  if (statusText === 'CLOSED') {
+    ddayText = '\uB9C8\uAC10'
+  } else if (statusText === 'DRAFT') {
+    if (job.startDate) {
+      const start = new Date(job.startDate)
+      const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
+      ddayText = diffToStart > 0 ? `${diffToStart}\uC77C \uD6C4 \uC2DC\uC791` : '\uAC8C\uC2DC \uC804'
+    } else {
+      ddayText = '\uAC8C\uC2DC \uC804'
+    }
+  } else if (statusText === 'OPEN' && job.endDate) {
+    const endDate = new Date(job.endDate)
+    const diffDays = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24))
+    ddayText = diffDays <= 0 ? '\uB9C8\uAC10' : `D-${diffDays}`
   }
 
-  // 경력 텍스트
+  // Career text
   let positionText = '경력 무관'
   if (job.careerType === 'NEW') positionText = '신입'
   else if (job.careerType === 'EXPERIENCED') {

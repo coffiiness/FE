@@ -1,17 +1,36 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { recruitmentApi } from '@/api/recruitment'
 
+const route = useRoute()
 const router = useRouter()
 const store = useRecruitmentStore()
 const orgStore = useOrganizationStore()
+const { jobs } = storeToRefs(store)
 const { organizations, allMembers } = storeToRefs(orgStore)
+const isEditMode = computed(() => Boolean(route.params.id))
+const jobId = computed(() => Number(route.params.id || 0))
 const loading = ref(false)
+const dataLoading = ref(false)
 const showSuccessModal = ref(false)
+const noticeModal = ref({
+  show: false,
+  title: '알림',
+  message: '',
+  type: 'info',
+  confirmText: '확인',
+  onConfirm: null
+})
+
+const pageTitle = computed(() => isEditMode.value ? '공고 수정하기' : '새 채용 공고 만들기')
+const submitButtonText = computed(() => isEditMode.value ? '변경사항 저장' : '공고 게시하기')
+const successModalTitle = computed(() => isEditMode.value ? '공고 수정 완료' : '공고 등록 완료')
+const successModalMessage = computed(() => isEditMode.value ? '공고가 수정되었습니다.' : '공고가 성공적으로 등록되었습니다.')
 
 // --- 1. 기본 정보 데이터 ---
 const form = ref({
@@ -30,18 +49,22 @@ const form = ref({
   experienceYears: { min: 0, max: 0 }
 })
 
-// --- 2. 채용 프로세스 데이터 ---
-const processes = ref([
+const getDefaultProcesses = () => ([
   { stageName: '서류 전형', stageType: 'DOCUMENT' },
   { stageName: '실무 면접', stageType: 'INTERVIEW' },
   { stageName: '최종 합격', stageType: 'PASS' }
 ])
 
+// --- 2. 채용 프로세스 데이터 ---
+const processes = ref(getDefaultProcesses())
+
 const stageTypes = [
   { label: '서류 심사', value: 'DOCUMENT' },
   { label: '면접', value: 'INTERVIEW' },
   { label: '과제/테스트', value: 'TEST' },
+  { label: '처우 협의', value: 'OFFER' },
   { label: '최종 합격', value: 'PASS' },
+  { label: '불합격', value: 'FAIL' },
 ]
 
 const templates = ref([
@@ -141,6 +164,20 @@ const removeInterviewer = (id) => {
   if (index !== -1) form.value.interviewerIds.splice(index, 1)
 }
 
+const openNoticeModal = ({ title = '알림', message = '', type = 'info', confirmText = '확인', onConfirm = null } = {}) => {
+  noticeModal.value = { show: true, title, message, type, confirmText, onConfirm }
+}
+
+const closeNoticeModal = () => {
+  noticeModal.value = { ...noticeModal.value, show: false, onConfirm: null }
+}
+
+const handleNoticeConfirm = () => {
+  const onConfirm = noticeModal.value.onConfirm
+  closeNoticeModal()
+  if (typeof onConfirm === 'function') onConfirm()
+}
+
 const addStage = () => {
   const insertIndex = Math.max(0, processes.value.length - 1)
   const newStage = { stageName: '새 단계', stageType: 'INTERVIEW' }
@@ -149,7 +186,11 @@ const addStage = () => {
 
 const removeStage = (index) => {
   if (processes.value.length <= 2) {
-    alert('최소 2개 이상의 단계가 필요합니다.')
+    openNoticeModal({
+      title: '단계 설정',
+      message: '최소 2개 이상의 단계가 필요합니다.',
+      type: 'warning'
+    })
     return
   }
   processes.value.splice(index, 1)
@@ -187,43 +228,527 @@ const onDragEnd = () => {
   dragOverIndex.value = null
 }
 
+
+const toDateTimeLocal = (value) => {
+  if (!value) return ''
+
+  if (typeof value === 'string') {
+    const normalized = value.replace(' ', 'T')
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized)) return normalized.slice(0, 16)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return `${normalized}T09:00`
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
+const normalizeText = (value = '') => {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[＞〉]/g, '>')
+}
+
+const toPositiveNumber = (value) => {
+  const num = Number(value)
+  return Number.isFinite(num) && num > 0 ? num : null
+}
+
+const isFilledString = (value) => typeof value === 'string' && value.trim() !== ''
+
+const firstFilledString = (...values) => {
+  for (const value of values) {
+    if (isFilledString(value)) return value.trim()
+  }
+  return ''
+}
+
+const uniquePositiveNumbers = (values = []) => {
+  return [...new Set(values.map(toPositiveNumber).filter(Boolean))]
+}
+
+const isKnownTeamId = (teamId) => {
+  const id = toPositiveNumber(teamId)
+  if (!id) return false
+  return allTeams.value.some((team) => Number(team.id) === id)
+}
+
+const getTeamNameCandidates = (name) => {
+  const normalized = normalizeText(name)
+  if (!normalized) return []
+
+  const tokens = normalized.split(/>|\/|\|/).map(token => token.trim()).filter(Boolean)
+  const tail = tokens.length > 0 ? tokens[tokens.length - 1] : ''
+
+  const candidates = [normalized]
+  if (tail) candidates.push(tail)
+  if (tail.endsWith('팀')) candidates.push(tail.replace(/팀$/, ''))
+
+  return [...new Set(candidates.filter(Boolean))]
+}
+
+const findTeamIdByName = (name) => {
+  const candidates = getTeamNameCandidates(name)
+  if (candidates.length === 0) return null
+
+  for (const dept of organizations.value) {
+    for (const team of dept.teams || []) {
+      const teamName = normalizeText(team.name)
+      const fullName = normalizeText(`${dept.name}>${team.name}`)
+
+      if (candidates.includes(teamName) || candidates.includes(fullName)) {
+        return Number(team.id)
+      }
+    }
+  }
+
+  for (const dept of organizations.value) {
+    for (const team of dept.teams || []) {
+      const teamName = normalizeText(team.name)
+      const fullName = normalizeText(`${dept.name}>${team.name}`)
+
+      if (candidates.some((candidate) => (
+        teamName.includes(candidate) ||
+        candidate.includes(teamName) ||
+        fullName.includes(candidate) ||
+        candidate.includes(fullName)
+      ))) {
+        return Number(team.id)
+      }
+    }
+  }
+
+  return null
+}
+
+const toTeamIdFromUnknown = (value) => {
+  if (value === null || value === undefined) return null
+
+  if (typeof value === 'object') {
+    const objectId = toPositiveNumber(value.id ?? value.groupId ?? value.teamId)
+    if (objectId && isKnownTeamId(objectId)) return objectId
+
+    const objectName = firstFilledString(value.name, value.groupName, value.teamName)
+    const mapped = findTeamIdByName(objectName)
+    return mapped || null
+  }
+
+  const directId = toPositiveNumber(value)
+  if (directId && isKnownTeamId(directId)) return directId
+
+  const mapped = findTeamIdByName(String(value))
+  return mapped || null
+}
+
+const collectTeamIds = (source) => {
+  if (!Array.isArray(source)) return []
+
+  const ids = []
+  for (const item of source) {
+    const teamId = toTeamIdFromUnknown(item)
+    if (teamId) ids.push(teamId)
+  }
+  return uniquePositiveNumbers(ids)
+}
+
+const collectInterviewerIds = (source, memberNameMap) => {
+  if (!Array.isArray(source)) return []
+
+  const ids = []
+  for (const item of source) {
+    const directId = toPositiveNumber(
+      typeof item === 'object' && item !== null
+        ? (item.id ?? item.memberId ?? item.userId ?? item.interviewerId)
+        : item
+    )
+
+    if (directId) {
+      ids.push(directId)
+      continue
+    }
+
+    const name = typeof item === 'object' && item !== null
+      ? firstFilledString(item.name, item.memberName, item.interviewerName)
+      : firstFilledString(item)
+
+    if (!name) continue
+
+    const mappedId = toPositiveNumber(memberNameMap.get(name) ?? memberNameMap.get(normalizeText(name)))
+    if (mappedId) ids.push(mappedId)
+  }
+
+  return uniquePositiveNumbers(ids)
+}
+
+const normalizeStageType = (typeValue, stageName = '') => {
+  const type = String(typeValue || '').toUpperCase().trim()
+
+  if (type === 'DOCUMENT' || type === 'DOC' || type === 'DOCUMENT_SCREEN') return 'DOCUMENT'
+  if (type === 'INTERVIEW' || type === 'MEETING') return 'INTERVIEW'
+  if (type === 'TEST' || type === 'TASK' || type === 'ASSIGNMENT') return 'TEST'
+  if (type === 'OFFER') return 'OFFER'
+  if (type === 'PASS' || type === 'FINAL_PASS' || type === 'HIRED' || type === 'HIRE') return 'PASS'
+  if (type === 'FAIL' || type === 'REJECT') return 'FAIL'
+
+  const normalizedName = normalizeText(stageName)
+  if (normalizedName.includes('서류')) return 'DOCUMENT'
+  if (normalizedName.includes('면접')) return 'INTERVIEW'
+  if (normalizedName.includes('과제') || normalizedName.includes('테스트')) return 'TEST'
+  if (normalizedName.includes('처우')) return 'OFFER'
+  if (normalizedName.includes('불합격') || normalizedName.includes('탈락')) return 'FAIL'
+  if (normalizedName.includes('합격') || normalizedName.includes('최종')) return 'PASS'
+
+  return 'INTERVIEW'
+}
+
+const normalizeStages = (job) => {
+  const stageSources = [
+    job.stages,
+    job.processes,
+    job.recruitmentProcesses,
+    job.recruitmentStages,
+    job.funnel
+  ]
+
+  for (const source of stageSources) {
+    if (!Array.isArray(source) || source.length === 0) continue
+
+    const mapped = source
+      .map((stage, index) => {
+        const stageName = firstFilledString(
+          stage?.stageName,
+          stage?.name,
+          stage?.stepName,
+          stage?.step,
+          stage?.processName,
+          stage?.title,
+          typeof stage === 'string' ? stage : ''
+        )
+
+        if (!stageName) return null
+
+        const rawStep = Number(stage?.stageStep ?? stage?.stepOrder ?? stage?.order ?? stage?.sequence ?? (index + 1))
+        const stageStep = Number.isFinite(rawStep) && rawStep > 0 ? rawStep : (index + 1)
+
+        return {
+          stageName,
+          stageType: normalizeStageType(stage?.stageType ?? stage?.type ?? stage?.processType, stageName),
+          stageStep
+        }
+      })
+      .filter(Boolean)
+
+    if (mapped.length > 0) {
+      return mapped.sort((a, b) => a.stageStep - b.stageStep)
+    }
+  }
+
+  return getDefaultProcesses().map((stage, index) => ({
+    ...stage,
+    stageStep: index + 1
+  }))
+}
+
+const looksLikeRecruitmentDetail = (candidate) => {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false
+
+  return (
+    candidate.id !== undefined ||
+    isFilledString(candidate.title) ||
+    isFilledString(candidate.contents) ||
+    isFilledString(candidate.content) ||
+    isFilledString(candidate.leadGroupName) ||
+    candidate.leadGroupId !== undefined ||
+    Array.isArray(candidate.stages) ||
+    Array.isArray(candidate.processes) ||
+    Array.isArray(candidate.funnel)
+  )
+}
+
+const extractRecruitmentFromResponse = (response) => {
+  const payload = response?.data ?? response
+  const candidates = [
+    payload?.data?.data,
+    payload?.data,
+    payload?.result?.data,
+    payload?.result,
+    payload?.recruitment,
+    payload?.item,
+    payload
+  ]
+
+  return candidates.find(looksLikeRecruitmentDetail) || null
+}
+
+const expandTreeByTeamIds = (teamIds = []) => {
+  const selected = new Set(teamIds.map(Number).filter(id => Number.isFinite(id) && id > 0))
+  if (selected.size === 0) return
+
+  for (const dept of organizations.value) {
+    if ((dept.teams || []).some(team => selected.has(Number(team.id)))) {
+      expandedDepts.value.add(dept.id)
+      leadExpandedDepts.value.add(dept.id)
+      refExpandedDepts.value.add(dept.id)
+    }
+  }
+}
+
+const addTemplateOptionIfMissing = (templateId, templateName = '') => {
+  const id = toPositiveNumber(templateId)
+  if (!id) return
+
+  const exists = templates.value.some(template => Number(template.id) === id)
+  if (exists) return
+
+  templates.value = [
+    ...templates.value,
+    {
+      id,
+      name: firstFilledString(templateName) || `템플릿 #${id}`
+    }
+  ]
+}
+
+const setFormFromJob = (job) => {
+  const leadTeamIdFromApiRaw = toPositiveNumber(
+    job.leadGroupId ??
+    job.leadTeamId ??
+    job.teamId ??
+    job.groupId ??
+    job.leadGroup?.id ??
+    job.leadTeam?.id ??
+    job.team?.id
+  )
+
+  const leadTeamName = firstFilledString(
+    job.leadGroupName,
+    job.leadTeamName,
+    job.team,
+    job.teamName,
+    job.leadGroup?.name,
+    job.leadTeam?.name
+  )
+
+  const leadTeamIdFromName = findTeamIdByName(leadTeamName)
+  const leadTeamIdFromApi = isKnownTeamId(leadTeamIdFromApiRaw) ? leadTeamIdFromApiRaw : null
+  const leadTeamId = leadTeamIdFromApi || leadTeamIdFromName || ''
+
+  const referenceTeamIds = uniquePositiveNumbers([
+    ...collectTeamIds(job.referenceGroupIds),
+    ...collectTeamIds(job.referenceTeamIds),
+    ...collectTeamIds(job.referenceGroups),
+    ...collectTeamIds(job.referenceTeams),
+    ...collectTeamIds(job.referenceGroupNames),
+    ...collectTeamIds(job.referenceTeamNames),
+    ...collectTeamIds(job.referenceGroupName ? [job.referenceGroupName] : []),
+    ...collectTeamIds(job.referenceTeamName ? [job.referenceTeamName] : [])
+  ]).filter((id) => id !== leadTeamId && isKnownTeamId(id))
+
+  const memberNameMap = new Map()
+  for (const member of allMembers.value) {
+    const memberId = toPositiveNumber(member.id)
+    if (!memberId) continue
+
+    memberNameMap.set(member.name, memberId)
+    memberNameMap.set(normalizeText(member.name), memberId)
+  }
+
+  const interviewerIds = uniquePositiveNumbers([
+    ...collectInterviewerIds(job.interviewerIds, memberNameMap),
+    ...collectInterviewerIds(job.assigneeIds, memberNameMap),
+    ...collectInterviewerIds(job.assignees, memberNameMap),
+    ...collectInterviewerIds(job.interviewers, memberNameMap)
+  ])
+
+  const templateId = toPositiveNumber(
+    job.applicationTemplateId ??
+    job.templateId ??
+    job.applicationFormId ??
+    job.applyFormId ??
+    job.applicationTemplate?.id ??
+    job.template?.id
+  )
+
+  const templateName = firstFilledString(
+    job.applicationTemplateName,
+    job.templateName,
+    job.applicationTemplate?.name,
+    job.template?.name
+  )
+
+  addTemplateOptionIfMissing(templateId, templateName)
+
+  const targetCount = Number(job.targetCount)
+  const minExperienceYears = Number(job.minExperienceYears ?? job.experienceYears?.min ?? 0)
+  const maxExperienceYears = Number(job.maxExperienceYears ?? job.experienceYears?.max ?? 0)
+
+  form.value = {
+    ...form.value,
+    title: firstFilledString(job.title),
+    targetCount: Number.isFinite(targetCount) && targetCount > 0 ? targetCount : 1,
+    startDate: toDateTimeLocal(job.startDate || job.recruitmentStartDate || job.createdAt),
+    endDate: toDateTimeLocal(job.endDate || job.recruitmentEndDate),
+    applicationTemplateId: templateId || '',
+    contents: firstFilledString(job.contents, job.content, job.description, job.detail, job.details),
+    teamId: uniquePositiveNumbers([leadTeamId, ...referenceTeamIds]),
+    interviewerIds,
+    leadTeamId,
+    referenceTeamIds,
+    careerType: firstFilledString(job.careerType, job.career) || 'NEW',
+    experienceYears: {
+      min: Number.isFinite(minExperienceYears) ? minExperienceYears : 0,
+      max: Number.isFinite(maxExperienceYears) ? maxExperienceYears : 0
+    }
+  }
+
+  processes.value = normalizeStages(job)
+  expandTreeByTeamIds([leadTeamId, ...referenceTeamIds])
+}
+
+const fetchJobDetail = async () => {
+  if (!isEditMode.value || !jobId.value) return
+
+  dataLoading.value = true
+  try {
+    let job = null
+
+    try {
+      const detailRes = await recruitmentApi.getRecruitmentDetail(jobId.value)
+      job = extractRecruitmentFromResponse(detailRes)
+    } catch (detailErr) {
+      if (detailErr?.response?.status === 403) {
+        openNoticeModal({
+          title: '권한 없음',
+          message: '채용 공고를 조회할 권한이 없습니다.',
+          type: 'warning',
+          onConfirm: () => router.push('/recruitment/home')
+        })
+        return
+      }
+      if (detailErr?.response?.status === 404) {
+        openNoticeModal({
+          title: '조회 실패',
+          message: '채용 공고를 찾을 수 없습니다.',
+          type: 'warning',
+          onConfirm: () => router.push('/recruitment/home')
+        })
+        return
+      }
+    }
+
+    if (!job) {
+      job = jobs.value.find(j => Number(j.id) === jobId.value)
+    }
+
+    if (!job) {
+      await store.fetchRecruitments()
+      job = jobs.value.find(j => Number(j.id) === jobId.value)
+    }
+
+    if (!job) {
+      openNoticeModal({
+        title: '조회 실패',
+        message: '채용 공고를 찾을 수 없습니다.',
+        type: 'warning',
+        onConfirm: () => router.push('/recruitment/home')
+      })
+      return
+    }
+
+    setFormFromJob(job)
+  } catch (err) {
+    openNoticeModal({
+      title: '오류',
+      message: '채용 공고 정보를 불러오는 중 오류가 발생했습니다.',
+      type: 'danger'
+    })
+    console.error('채용 공고 조회 실패:', err)
+  } finally {
+    dataLoading.value = false
+  }
+}
 const handleSubmit = async () => {
   // 필수 필드 검증
   if (!form.value.title || !form.value.startDate || !form.value.endDate || !form.value.leadTeamId) {
-    alert('필수 정보를 모두 입력해주세요.')
+    openNoticeModal({
+      title: '입력 확인',
+      message: '필수 정보를 모두 입력해주세요.',
+      type: 'warning'
+    })
+    return
+  }
+
+  const startDate = new Date(form.value.startDate)
+  const endDate = new Date(form.value.endDate)
+  const now = new Date()
+
+  if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate <= startDate) {
+    openNoticeModal({
+      title: '입력 확인',
+      message: '마감일시는 시작일시 이후여야 합니다.',
+      type: 'warning'
+    })
+    return
+  }
+
+  if (!Number.isNaN(endDate.getTime()) && endDate <= now) {
+    openNoticeModal({
+      title: '입력 확인',
+      message: '마감일시는 현재 시각 이후여야 합니다.',
+      type: 'warning'
+    })
     return
   }
 
   if (!form.value.applicationTemplateId) {
-    alert('지원서 템플릿을 선택해주세요.')
+    openNoticeModal({
+      title: '입력 확인',
+      message: '지원서 템플릿을 선택해주세요.',
+      type: 'warning'
+    })
     return
   }
 
   if (!form.value.contents) {
-    alert('공고 내용을 입력해주세요.')
+    openNoticeModal({
+      title: '입력 확인',
+      message: '공고 내용을 입력해주세요.',
+      type: 'warning'
+    })
     return
   }
 
   // 면접관 최소 1명 검증 (BE @Size(min=1) 규칙)
   if (!form.value.interviewerIds || form.value.interviewerIds.length === 0) {
-    alert('면접관은 최소 1명 이상 선택해야 합니다.')
+    openNoticeModal({
+      title: '입력 확인',
+      message: '면접관은 최소 1명 이상 선택해야 합니다.',
+      type: 'warning'
+    })
     return
   }
 
   loading.value = true
 
   try {
-    // RecruitmentCreateRequest 형식에 맞는 payload 구성
     const payload = {
       title: form.value.title,
-      targetCount: form.value.targetCount || 1,
+      targetCount: Number(form.value.targetCount || 1),
       applicationTemplateId: Number(form.value.applicationTemplateId),
       contents: form.value.contents,
       startDate: form.value.startDate,
       endDate: form.value.endDate,
       careerType: form.value.careerType,
-      minExperienceYears: form.value.careerType === 'EXPERIENCED' ? (form.value.experienceYears.min || 0) : null,
-      maxExperienceYears: form.value.careerType === 'EXPERIENCED' ? (form.value.experienceYears.max || 0) : null,
+      minExperienceYears: form.value.careerType === 'EXPERIENCED' ? Number(form.value.experienceYears.min || 0) : null,
+      maxExperienceYears: form.value.careerType === 'EXPERIENCED' ? Number(form.value.experienceYears.max || 0) : null,
       leadGroupId: Number(form.value.leadTeamId),
       referenceGroupIds: form.value.referenceTeamIds.map(Number),
       interviewerIds: form.value.interviewerIds.map(Number),
@@ -234,28 +759,96 @@ const handleSubmit = async () => {
       }))
     }
 
-    console.log('생성 요청 데이터:', payload)
+    if (isEditMode.value) {
+      await store.updateRecruitment(jobId.value, payload)
+    } else {
+      await store.createRecruitment(payload)
+    }
 
-    await store.createRecruitment(payload)
     showSuccessModal.value = true
-
   } catch (err) {
     const status = err.response?.status
     const msg = err.response?.data?.message
 
     if (status === 400) {
-      alert(msg || '입력값을 확인해주세요.')
+      openNoticeModal({
+        title: '입력 확인',
+        message: msg || '입력값을 확인해주세요.',
+        type: 'warning'
+      })
     } else if (status === 403) {
-      alert('채용 공고를 생성할 권한이 없습니다.')
-      router.push('/recruitment/home')
+      openNoticeModal({
+        title: '권한 없음',
+        message: isEditMode.value ? '채용 공고를 수정할 권한이 없습니다.' : '채용 공고를 생성할 권한이 없습니다.',
+        type: 'warning',
+        onConfirm: () => router.push('/recruitment/home')
+      })
+    } else if (status === 404 && isEditMode.value) {
+      openNoticeModal({
+        title: '조회 실패',
+        message: '채용 공고를 찾을 수 없습니다.',
+        type: 'warning',
+        onConfirm: () => router.push('/recruitment/home')
+      })
     } else {
-      alert('일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+      openNoticeModal({
+        title: '오류',
+        message: '일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        type: 'danger'
+      })
     }
-    console.error('채용 공고 생성 실패:', err)
+    console.error(isEditMode.value ? '채용 공고 수정 실패:' : '채용 공고 생성 실패:', err)
   } finally {
     loading.value = false
   }
 }
+
+const resetToCreateDefaults = () => {
+  form.value = {
+    title: '',
+    targetCount: 1,
+    startDate: '',
+    endDate: '',
+    applicationTemplateId: '',
+    contents: '',
+    teamId: [],
+    interviewerIds: [],
+    leadTeamId: '',
+    referenceTeamIds: [],
+    careerType: 'NEW',
+    experienceYears: { min: 0, max: 0 }
+  }
+
+  processes.value = getDefaultProcesses()
+
+  interviewerSearchQuery.value = ''
+  expandedDepts.value.clear()
+  expandedTeams.value.clear()
+  leadExpandedDepts.value.clear()
+  refExpandedDepts.value.clear()
+}
+
+const applyRouteMode = async () => {
+  showSuccessModal.value = false
+  closeNoticeModal()
+
+  if (isEditMode.value) {
+    resetToCreateDefaults()
+    await fetchJobDetail()
+    return
+  }
+
+  dataLoading.value = false
+  resetToCreateDefaults()
+}
+
+onMounted(async () => {
+  await applyRouteMode()
+})
+
+watch(() => route.params.id, async () => {
+  await applyRouteMode()
+})
 </script>
 
 <template>
@@ -263,22 +856,26 @@ const handleSubmit = async () => {
 
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
       <div>
-        <h2 class="text-2xl font-display font-bold text-slate-900">새 채용 공고 만들기</h2>
+        <h2 class="text-2xl font-display font-bold text-slate-900">{{ pageTitle }}</h2>
       </div>
       <div class="flex gap-3">
         <button @click="router.back()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">
           취소
         </button>
         <button @click="handleSubmit"
-                :disabled="loading"
+                :disabled="loading || dataLoading"
                 class="px-4 py-2 bg-brand-600 text-white font-medium hover:bg-brand-700 rounded-lg transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
           <svg v-if="loading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          공고 게시하기
+          {{ submitButtonText }}
         </button>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+    <div v-if="isEditMode && dataLoading" class="h-96 flex items-center justify-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500"></div>
+    </div>
+
+    <div v-else class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-8">
 
       <div class="lg:col-span-2 xl:col-span-3 space-y-6">
 
@@ -670,13 +1267,36 @@ const handleSubmit = async () => {
       </div>
 
     </div>
+    <div v-if="!(isEditMode && dataLoading)" class="pt-2 border-t border-slate-200 flex justify-end gap-3">
+      <button @click="router.back()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">
+        취소
+      </button>
+      <button @click="handleSubmit"
+              :disabled="loading || dataLoading"
+              class="px-4 py-2 bg-brand-600 text-white font-medium hover:bg-brand-700 rounded-lg transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg v-if="loading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        {{ submitButtonText }}
+      </button>
+    </div>
+
   </div>
 
   <ConfirmModal
+    :show="noticeModal.show"
+    :title="noticeModal.title"
+    :message="noticeModal.message"
+    :confirm-text="noticeModal.confirmText"
+    :type="noticeModal.type"
+    :show-cancel="false"
+    @confirm="handleNoticeConfirm"
+    @cancel="closeNoticeModal"
+  />
+
+  <ConfirmModal
     :show="showSuccessModal"
-    title="공고 등록 완료"
-    message="공고가 성공적으로 등록되었습니다."
-    confirm-text="확인"
+    :title="successModalTitle"
+    :message="successModalMessage"
+    :confirm-text="isEditMode ? '목록으로 이동' : '확인'"
     :show-cancel="false"
     type="info"
     @confirm="router.push('/recruitment')"
