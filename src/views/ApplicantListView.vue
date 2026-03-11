@@ -9,9 +9,6 @@ const searchQuery = ref('')
 const selectedJob = ref('')
 const selectedStatus = ref('')
 
-const currentPage = ref(1)
-const itemsPerPage = 5
-
 const applicants = ref([])
 const loading = ref(false)
 const loadError = ref('')
@@ -144,28 +141,9 @@ const filteredApplicants = computed(() => {
   })
 })
 
-const totalPages = computed(() => {
-  return Math.max(1, Math.ceil(filteredApplicants.value.length / itemsPerPage))
-})
-
-const paginatedApplicants = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredApplicants.value.slice(start, start + itemsPerPage)
-})
-
 const totalCount = computed(() => filteredApplicants.value.length)
-const startIndex = computed(() => (totalCount.value === 0 ? 0 : (currentPage.value - 1) * itemsPerPage + 1))
-const endIndex = computed(() => (totalCount.value === 0 ? 0 : Math.min(currentPage.value * itemsPerPage, totalCount.value)))
-
-watch([searchQuery, selectedJob, selectedStatus], () => {
-  currentPage.value = 1
-})
-
-watch(filteredApplicants, () => {
-  if (currentPage.value > totalPages.value) {
-    currentPage.value = totalPages.value
-  }
-})
+const startIndex = computed(() => (totalCount.value === 0 ? 0 : 1))
+const endIndex = computed(() => totalCount.value)
 
 const getStatusStyle = (status) => {
   const styles = {
@@ -180,30 +158,6 @@ const getStatusStyle = (status) => {
 }
 
 const getInitial = (name) => (name ? name.charAt(0) : '-')
-
-const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-  }
-}
-
-const pageNumbers = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-
-  if (total <= 5) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else if (current <= 3) {
-    pages.push(1, 2, 3, '...', total)
-  } else if (current >= total - 2) {
-    pages.push(1, '...', total - 2, total - 1, total)
-  } else {
-    pages.push(1, '...', current, '...', total)
-  }
-
-  return pages
-})
 
 const goToDetail = (detailId) => {
   router.push(`/recruitment/applicants/${detailId}`)
@@ -351,7 +305,7 @@ const emptyMessage = computed(() => {
         </thead>
         <tbody class="divide-y divide-gray-100">
           <tr
-            v-for="applicant in paginatedApplicants"
+            v-for="applicant in filteredApplicants"
             :key="applicant.id"
             class="hover:bg-gray-50 transition-colors"
           >
@@ -400,7 +354,7 @@ const emptyMessage = computed(() => {
             </td>
           </tr>
 
-          <tr v-if="paginatedApplicants.length === 0">
+          <tr v-if="filteredApplicants.length === 0">
             <td colspan="6" class="px-6 py-12 text-center text-gray-500">
               {{ emptyMessage }}
             </td>
@@ -412,44 +366,6 @@ const emptyMessage = computed(() => {
         <p class="text-sm text-gray-600">
           총 {{ totalCount }}명 중 {{ startIndex }}-{{ endIndex }}
         </p>
-
-        <div class="flex items-center gap-1">
-          <button
-            @click="goToPage(currentPage - 1)"
-            :disabled="currentPage === 1"
-            class="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          <template v-for="(page, index) in pageNumbers" :key="index">
-            <span v-if="page === '...'" class="px-2 text-gray-400">...</span>
-            <button
-              v-else
-              @click="goToPage(page)"
-              :class="[
-                'w-9 h-9 rounded-lg text-sm font-medium transition-colors',
-                currentPage === page
-                  ? 'bg-brand-600 text-white'
-                  : 'hover:bg-gray-200 text-gray-700'
-              ]"
-            >
-              {{ page }}
-            </button>
-          </template>
-
-          <button
-            @click="goToPage(currentPage + 1)"
-            :disabled="currentPage === totalPages"
-            class="p-2 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </div>
       </div>
     </div>
   </div>

@@ -690,8 +690,11 @@ const handleBookingConfirm = async (booking) => {
   if (!selectedRoom.value?.serverId) return
   try {
     const response = await meetingRoomApi.reserve(selectedRoom.value.serverId, {
+      title: booking.title || '회의실 예약',
+      description: booking.description || '',
       startDatetime: toLocalDateTime(booking.startTime),
-      endDatetime: toLocalDateTime(booking.endTime)
+      endDatetime: toLocalDateTime(booking.endTime),
+      participantMemberIds: booking.participantMemberIds || []
     })
     const saved = response?.data?.data
     if (!saved?.id) return
