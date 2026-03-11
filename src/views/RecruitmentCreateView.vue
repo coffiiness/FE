@@ -686,6 +686,28 @@ const handleSubmit = async () => {
     return
   }
 
+  const startDate = new Date(form.value.startDate)
+  const endDate = new Date(form.value.endDate)
+  const now = new Date()
+
+  if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate <= startDate) {
+    openNoticeModal({
+      title: '입력 확인',
+      message: '마감일시는 시작일시 이후여야 합니다.',
+      type: 'warning'
+    })
+    return
+  }
+
+  if (!Number.isNaN(endDate.getTime()) && endDate <= now) {
+    openNoticeModal({
+      title: '입력 확인',
+      message: '마감일시는 현재 시각 이후여야 합니다.',
+      type: 'warning'
+    })
+    return
+  }
+
   if (!form.value.applicationTemplateId) {
     openNoticeModal({
       title: '입력 확인',
