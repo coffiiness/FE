@@ -115,6 +115,17 @@ const parseSseChunk = (chunk) => {
     }
   }
 
+  if (event.type === 'message' && event.data) {
+    try {
+      const parsed = JSON.parse(event.data)
+      if (parsed?.event) {
+        event.type = parsed.event
+      }
+    } catch {
+      // Ignore non-JSON heartbeat/comment payloads.
+    }
+  }
+
   return event
 }
 
@@ -138,6 +149,7 @@ export const useNotificationStore = defineStore('notification', () => {
 
   let streamAbortController = null
   let streamReconnectTimer = null
+  let streamStoppedManually = false
 
   const unreadCount = computed(() => unreadCountValue.value)
 
@@ -230,6 +242,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   const handleStreamEvent = async (event) => {
+    if (event.type === 'heartbeat' || event.type === 'connected') return
     if (event.type !== 'notification-created') return
 
     try {
@@ -240,6 +253,8 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   const stopNotificationStream = () => {
+    streamStoppedManually = true
+
     if (streamReconnectTimer) {
       clearTimeout(streamReconnectTimer)
       streamReconnectTimer = null
@@ -254,7 +269,7 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   const scheduleReconnect = () => {
-    if (streamReconnectTimer) return
+    if (streamReconnectTimer || streamStoppedManually) return
 
     streamReconnectTimer = setTimeout(() => {
       streamReconnectTimer = null
@@ -265,6 +280,8 @@ export const useNotificationStore = defineStore('notification', () => {
   const startNotificationStream = async () => {
     if (typeof window === 'undefined') return
     if (streamAbortController) return
+
+    streamStoppedManually = false
 
     const accessToken = localStorage.getItem('accessToken')
     const workspaceId = localStorage.getItem('workspaceId')
@@ -282,8 +299,10 @@ export const useNotificationStore = defineStore('notification', () => {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'X-Tenant-ID': workspaceId,
-          Accept: 'text/event-stream'
+          Accept: 'text/event-stream',
+          'Cache-Control': 'no-cache'
         },
+        cache: 'no-store',
         signal: streamAbortController.signal
       })
 
@@ -313,11 +332,14 @@ export const useNotificationStore = defineStore('notification', () => {
     } catch (error) {
       if (error?.name !== 'AbortError') {
         console.error('알림 SSE 연결 실패:', error)
-        scheduleReconnect()
       }
     } finally {
       isStreamConnected.value = false
       streamAbortController = null
+
+      if (!streamStoppedManually) {
+        scheduleReconnect()
+      }
     }
   }
 
