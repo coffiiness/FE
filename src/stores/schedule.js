@@ -50,6 +50,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   const error = ref(null)
 
   const normalizeSchedule = (item) => {
+    const isAllDay = item.isAllDay === true
     return {
       id: item.id,
       title: item.title,
@@ -59,8 +60,9 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       type: item.type,
       description: item.description || '',
       roomId: item.roomId,
-      isBusy: item.isBusy,
-      time: `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
+      isAllDay,
+      isBusy: item.isBusy !== false,
+      time: isAllDay ? '종일' : `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
     }
   }
 
@@ -74,8 +76,20 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       return `${date}T${parts[0]}:${parts[1]}:00`
     }
 
-    const startDateTime = toDateTime(formData.date, formData.startTime)
-    const endDateTime = toDateTime(formData.date, formData.endTime)
+    const addOneDay = (date) => {
+      const next = new Date(`${date}T00:00:00`)
+      next.setDate(next.getDate() + 1)
+      const year = next.getFullYear()
+      const month = String(next.getMonth() + 1).padStart(2, '0')
+      const day = String(next.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const isAllDay = formData.isAllDay === true
+    const startDateTime = isAllDay ? `${formData.date}T00:00:00` : toDateTime(formData.date, formData.startTime)
+    const endDateTime = isAllDay
+      ? `${addOneDay(formData.date)}T00:00:00`
+      : toDateTime(formData.date, formData.endTime)
 
     return {
       title: formData.title,
@@ -83,9 +97,9 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       type: formData.type,
       startTime: startDateTime,
       endTime: endDateTime,
-      isAllDay: false,
+      isAllDay,
       roomId: formData.roomId || null,
-      isBusy: formData.isBusy !== undefined ? formData.isBusy : true,
+      isBusy: formData.isBusy !== false,
       attendeeIds: formData.attendeeIds || []
     }
   }

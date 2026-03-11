@@ -66,9 +66,13 @@ const form = ref({
   type: 'INTERVIEW',
   description: '',
   roomId: null,
+  isAllDay: false,
+  isBusy: true,
   attendees: [],
   attendeeIds: []
 })
+
+const lastTimedRange = ref({ startTime: '13:00', endTime: '14:00' })
 
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
@@ -174,6 +178,18 @@ const normalizeTimeInput = (timeValue, fallback = '00:00') => {
   return hour.padStart(2, '0') + ':' + minute.padStart(2, '0')
 }
 
+// 종일 일정 여부에 따라 충돌 계산용 시간을 정규화한다.
+const getEffectiveTimeRange = (target) => {
+  if (target?.isAllDay === true) {
+    return { startMinutes: 0, endMinutes: 24 * 60 }
+  }
+
+  return {
+    startMinutes: toMinutes(target?.startTime),
+    endMinutes: toMinutes(target?.endTime)
+  }
+}
+
 const roomSchedulesOnDate = computed(() => {
   const selectedRoomId = Number(form.value.roomId)
   if (!Number.isFinite(selectedRoomId) || !form.value.date) return []
@@ -194,14 +210,14 @@ const roomSchedulesOnDate = computed(() => {
       id: schedule.id,
       title: schedule.title || '제목 없음',
       startTime: normalizeTimeInput(schedule.startTime),
-      endTime: normalizeTimeInput(schedule.endTime)
+      endTime: normalizeTimeInput(schedule.endTime),
+      isAllDay: schedule.isAllDay === true
     }))
     .sort((a, b) => (toMinutes(a.startTime) ?? 0) - (toMinutes(b.startTime) ?? 0))
 })
 
 const roomSchedulesWithOverlap = computed(() => {
-  const startMinutes = toMinutes(form.value.startTime)
-  const endMinutes = toMinutes(form.value.endTime)
+  const { startMinutes, endMinutes } = getEffectiveTimeRange(form.value)
   const hasRange = Number.isFinite(startMinutes) && Number.isFinite(endMinutes) && startMinutes < endMinutes
 
   return roomSchedulesOnDate.value.map((schedule) => {
@@ -209,13 +225,12 @@ const roomSchedulesWithOverlap = computed(() => {
       return { ...schedule, isOverlap: false }
     }
 
-    const scheduleStart = toMinutes(schedule.startTime)
-    const scheduleEnd = toMinutes(schedule.endTime)
+    const scheduleRange = getEffectiveTimeRange(schedule)
     const isOverlap =
-      Number.isFinite(scheduleStart) &&
-      Number.isFinite(scheduleEnd) &&
-      startMinutes < scheduleEnd &&
-      endMinutes > scheduleStart
+      Number.isFinite(scheduleRange.startMinutes) &&
+      Number.isFinite(scheduleRange.endMinutes) &&
+      startMinutes < scheduleRange.endMinutes &&
+      endMinutes > scheduleRange.startMinutes
 
     return { ...schedule, isOverlap }
   })
@@ -231,16 +246,26 @@ watch(
     if (!newVal) return
 
     if (props.initialData) {
+      const initialStartTime = normalizeTimeInput(props.initialData.startTime, '13:00')
+      const initialEndTime = normalizeTimeInput(props.initialData.endTime, '14:00')
+
       form.value = {
         ...props.initialData,
         date: props.initialData.date || props.initialDate || new Date().toISOString().split('T')[0],
-        startTime: normalizeTimeInput(props.initialData.startTime, '13:00'),
-        endTime: normalizeTimeInput(props.initialData.endTime, '14:00'),
+        startTime: initialStartTime,
+        endTime: initialEndTime,
         roomId: props.initialData.roomId ?? null,
+        isAllDay: props.initialData.isAllDay === true,
+        isBusy: props.initialData.isBusy !== false,
         attendees: Array.isArray(props.initialData.attendees) ? [...props.initialData.attendees] : [],
         attendeeIds: Array.isArray(props.initialData.attendeeIds)
           ? props.initialData.attendeeIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
           : []
+      }
+
+      lastTimedRange.value = {
+        startTime: props.initialData.isAllDay === true ? '13:00' : initialStartTime,
+        endTime: props.initialData.isAllDay === true ? '14:00' : initialEndTime
       }
     } else {
       form.value = {
@@ -251,14 +276,58 @@ watch(
         type: 'MEETING',
         description: '',
         roomId: null,
+        isAllDay: false,
+        isBusy: true,
         attendees: [],
         attendeeIds: []
       }
+
+      lastTimedRange.value = { startTime: '13:00', endTime: '14:00' }
     }
 
     attendeeInput.value = ''
     selectedGroupId.value = null
     memberSearchQuery.value = ''
+  }
+)
+
+watch(
+  () => form.value.isAllDay,
+  (isAllDay, wasAllDay) => {
+    if (!props.isOpen) return
+
+    if (isAllDay) {
+      if (!wasAllDay && form.value.startTime !== '00:00' && form.value.endTime !== '00:00') {
+        lastTimedRange.value = {
+          startTime: normalizeTimeInput(form.value.startTime, '13:00'),
+          endTime: normalizeTimeInput(form.value.endTime, '14:00')
+        }
+      }
+      form.value.startTime = '00:00'
+      form.value.endTime = '00:00'
+      return
+    }
+
+    if (wasAllDay) {
+      form.value.startTime = lastTimedRange.value.startTime
+      form.value.endTime = lastTimedRange.value.endTime
+    }
+  }
+)
+
+watch(
+  () => [form.value.startTime, form.value.endTime, form.value.isAllDay],
+  ([startTime, endTime, isAllDay]) => {
+    if (isAllDay) return
+
+    const normalizedStart = normalizeTimeInput(startTime, '13:00')
+    const normalizedEnd = normalizeTimeInput(endTime, '14:00')
+
+    if (normalizedStart === '00:00' && normalizedEnd === '00:00') {
+      return
+    }
+
+    lastTimedRange.value = { startTime: normalizedStart, endTime: normalizedEnd }
   }
 )
 
@@ -301,17 +370,19 @@ const save = () => {
     return
   }
 
-  if (!form.value.startTime || !form.value.endTime) {
+  if (!form.value.isAllDay && (!form.value.startTime || !form.value.endTime)) {
     openValidationModal('시작 시간과 종료 시간을 모두 입력해주세요.')
     return
   }
 
-  const startMinutes = toMinutes(form.value.startTime)
-  const endMinutes = toMinutes(form.value.endTime)
+  if (!form.value.isAllDay) {
+    const startMinutes = toMinutes(form.value.startTime)
+    const endMinutes = toMinutes(form.value.endTime)
 
-  if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || startMinutes >= endMinutes) {
-    openValidationModal('종료 시간은 시작 시간보다 늦어야 합니다.')
-    return
+    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || startMinutes >= endMinutes) {
+      openValidationModal('종료 시간은 시작 시간보다 늦어야 합니다.')
+      return
+    }
   }
 
   if (isMeetingType.value && overlappingRoomSchedules.value.length > 0) {
@@ -389,6 +460,31 @@ onMounted(() => {
             </div>
           </div>
 
+          <div>
+            <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">일정 옵션</label>
+            <div class="grid grid-cols-2 gap-3">
+              <button
+                @click="form.isAllDay = !form.isAllDay"
+                class="flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-bold transition-all"
+                :class="form.isAllDay ? 'border-brand-300 bg-brand-50 text-brand-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'"
+              >
+                <span>종일</span>
+                <span class="text-xs" :class="form.isAllDay ? 'text-brand-600' : 'text-slate-400'">{{ form.isAllDay ? '켜짐' : '꺼짐' }}</span>
+              </button>
+              <button
+                @click="form.isBusy = !form.isBusy"
+                class="flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-bold transition-all"
+                :class="form.isBusy ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'"
+              >
+                <span>바쁨 표시</span>
+                <span class="text-xs" :class="form.isBusy ? 'text-rose-600' : 'text-slate-400'">{{ form.isBusy ? '바쁨' : '한가함' }}</span>
+              </button>
+            </div>
+            <p class="mt-2 text-[11px] text-slate-500">
+              {{ form.isAllDay ? '종일 일정은 선택한 날짜 00:00부터 다음 날 00:00까지 저장됩니다.' : '시간이 지정된 일정으로 저장됩니다.' }}
+            </p>
+          </div>
+
           <div class="space-y-4">
             <div>
               <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">날짜</label>
@@ -397,7 +493,11 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div v-if="form.isAllDay" class="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+              선택한 날짜 전체가 종일 일정으로 저장됩니다. 시간 입력은 자동으로 00:00부터 다음 날 00:00까지 처리됩니다.
+            </div>
+
+            <div v-else class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">시작 시간</label>
                 <input v-model="form.startTime" type="time" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium text-center shadow-sm">
@@ -408,7 +508,6 @@ onMounted(() => {
               </div>
             </div>
           </div>
-
           <div v-if="isMeetingType">
             <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">회의실 선택</label>
             <select v-model="form.roomId" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium shadow-sm">
@@ -441,7 +540,7 @@ onMounted(() => {
                   :class="schedule.isOverlap ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="font-bold text-slate-700">{{ schedule.startTime }} - {{ schedule.endTime }}</span>
+                    <span class="font-bold text-slate-700">{{ schedule.isAllDay ? '종일' : schedule.startTime + ' - ' + schedule.endTime }}</span>
                     <span v-if="schedule.isOverlap" class="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">겹침</span>
                   </div>
                   <p class="mt-1 truncate text-slate-600">{{ schedule.title }}</p>

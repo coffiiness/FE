@@ -194,7 +194,12 @@ const currentListEvents = computed(() => {
   if (!selectedDate.value) return []
   return allSchedules.value
       .filter(e => e.date === selectedDate.value)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+      .sort((a, b) => {
+        if ((a.isAllDay === true) !== (b.isAllDay === true)) {
+          return a.isAllDay === true ? -1 : 1
+        }
+        return a.startTime.localeCompare(b.startTime)
+      })
 })
 
 const getDayColor = (index) => {
@@ -204,17 +209,40 @@ const getDayColor = (index) => {
 }
 
 const getEventsForDate = (date) => {
-  return allSchedules.value.filter(e => e.date === date)
+  return allSchedules.value
+    .filter(e => e.date === date)
+    .sort((a, b) => {
+      if ((a.isAllDay === true) !== (b.isAllDay === true)) {
+        return a.isAllDay === true ? -1 : 1
+      }
+      return a.startTime.localeCompare(b.startTime)
+    })
+}
+
+const getEventTimeLabel = (event) => event.isAllDay ? '종일' : event.startTime
+
+const getEventMeridiemLabel = (event) => {
+  if (event.isAllDay) return 'ALL DAY'
+  const hour = Number(String(event.startTime || '').split(':')[0])
+  if (!Number.isFinite(hour)) return 'TIME'
+  return hour >= 12 ? 'PM' : 'AM'
 }
 
 const getEventStyle = (event) => {
+  const baseHour = 9
+  const slotHeight = 80
+
+  if (event.isAllDay) {
+    return {
+      top: '0px',
+      height: `${timeSlots.length * slotHeight}px`
+    }
+  }
+
   const startHour = parseInt(event.startTime.split(':')[0])
   const startMin = parseInt(event.startTime.split(':')[1])
   const endHour = parseInt(event.endTime.split(':')[0])
   const endMin = parseInt(event.endTime.split(':')[1])
-
-  const baseHour = 9
-  const slotHeight = 80
 
   const top = ((startHour - baseHour) * slotHeight) + ((startMin / 60) * slotHeight)
   const durationHour = endHour - startHour
@@ -272,6 +300,7 @@ const toErrorText = (error) => {
   if (typeof payload?.error === 'string') return payload.error
   if (typeof payload?.error?.message === 'string') return payload.error.message
   if (typeof payload?.error?.detail === 'string') return payload.error.detail
+  if (typeof payload?.error?.data?.message === 'string') return payload.error.data.message
   if (Array.isArray(payload?.errors)) {
     const first = payload.errors[0]
     if (typeof first === 'string') return first
@@ -649,7 +678,7 @@ const confirmDisconnectGoogleCalendar = () => {
               </div>
               <div v-if="cell.events.length" class="mt-2 space-y-1.5">
                 <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="getEventClass(evt.type)">
-                  {{ evt.startTime }} {{ evt.title }}
+                  {{ getEventTimeLabel(evt) }} {{ evt.title }}
                 </div>
                 <div v-if="cell.events.length > 2" class="text-[10px] font-bold text-slate-400 pl-1">+ {{ cell.events.length - 2 }}개</div>
               </div>
@@ -708,7 +737,7 @@ const confirmDisconnectGoogleCalendar = () => {
                        class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
                        :class="getEventClassWeek(evt.type)"
                        :style="getEventStyle(evt)">
-                    <p class="text-[10px] font-bold opacity-90">{{ evt.startTime }}</p>
+                    <p class="text-[10px] font-bold opacity-90">{{ getEventTimeLabel(evt) }}</p>
                     <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
                   </div>
                 </div>
@@ -763,8 +792,8 @@ const confirmDisconnectGoogleCalendar = () => {
                  class="group p-8 rounded-[28px] border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all cursor-pointer flex items-center gap-10">
 
               <div class="w-24 text-center shrink-0 border-r-2 border-slate-100 pr-6">
-                <span class="block text-2xl font-black text-slate-800 tracking-tighter">{{ evt.startTime }}</span>
-                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">PM</span>
+                <span class="block text-2xl font-black text-slate-800 tracking-tighter">{{ getEventTimeLabel(evt) }}</span>
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{{ getEventMeridiemLabel(evt) }}</span>
               </div>
 
               <div class="flex-1 min-w-0">

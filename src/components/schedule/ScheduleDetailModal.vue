@@ -49,7 +49,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             </div>
             <div>
               <p class="text-sm font-bold text-slate-700">일시</p>
-              <p class="text-sm text-slate-600 mt-0.5">{{ event.date }} &middot; {{ event.time }}</p>
+              <p class="text-sm text-slate-600 mt-0.5">{{ event.date }} &middot; {{ event.isAllDay ? '종일' : event.time }}</p>
             </div>
           </div>
 
@@ -63,6 +63,23 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                 {{ event.room.name }} ({{ event.room.floor }}층)
               </p>
               <p class="text-sm text-slate-600 mt-0.5 whitespace-pre-wrap">{{ event.description || '상세 내용이 없습니다.' }}</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-4">
+            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0 text-slate-500">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6m3 6V7m3 10v-4m3 4V5M3 19h18" /></svg>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-slate-700">일정 상태</p>
+              <div class="mt-1.5 flex flex-wrap gap-2">
+                <span class="rounded-md border px-2.5 py-1 text-xs font-bold" :class="event.isAllDay ? 'border-brand-200 bg-brand-50 text-brand-700' : 'border-slate-200 bg-slate-50 text-slate-600'">
+                  {{ event.isAllDay ? '종일' : '시간 지정' }}
+                </span>
+                <span class="rounded-md border px-2.5 py-1 text-xs font-bold" :class="event.isBusy === false ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'">
+                  {{ event.isBusy === false ? '한가함' : '바쁨' }}
+                </span>
+              </div>
             </div>
           </div>
 
