@@ -3,7 +3,11 @@ import { onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: Boolean,
-  event: Object
+  event: Object,
+  showActions: {
+    type: Boolean,
+    default: true
+  }
 })
 
 const emit = defineEmits(['close', 'edit', 'delete'])
@@ -115,7 +119,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+        <div
+          v-if="showActions"
+          class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3"
+        >
           <button
             @click="$emit('delete', event.id)"
             class="px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"

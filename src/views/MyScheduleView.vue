@@ -4,7 +4,7 @@ import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
@@ -38,6 +38,7 @@ const selectedEventToEdit = ref(null)
 const selectedEventDetail = ref(null)
 const targetDeleteId = ref(null)
 const route = useRoute()
+const router = useRouter()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 const meetingRooms = ref([])
@@ -401,9 +402,31 @@ const openAlertModal = ({ title, message, type = 'warning' }) => {
 
 // --- [Events] ---
 
-const handleDateClick = (date) => {
+const clearConsumedScheduleQuery = async ({ clearDate = false } = {}) => {
+  const hasScheduleQuery = typeof route.query.scheduleId === 'string' && route.query.scheduleId.length > 0
+  const hasDateQuery = typeof route.query.date === 'string' && route.query.date.length > 0
+
+  if (!hasScheduleQuery && (!clearDate || !hasDateQuery)) {
+    return
+  }
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.scheduleId
+
+  if (clearDate) {
+    delete nextQuery.date
+  }
+
+  await router.replace({ query: nextQuery })
+}
+
+const handleDateClick = async (date) => {
   if (!date) return
+
+  await clearConsumedScheduleQuery({ clearDate: true })
   selectedDate.value = date
+  isDetailModalOpen.value = false
+  selectedEventDetail.value = null
   isListModalOpen.value = true
 }
 
@@ -430,9 +453,13 @@ const openScheduleFromRouteQuery = async () => {
   }
 
   const target = allSchedules.value.find((event) => event.id === scheduleId)
-  if (target) {
-    await openDetailModal(target)
+  if (!target) {
+    await clearConsumedScheduleQuery()
+    return
   }
+
+  await openDetailModal(target)
+  await clearConsumedScheduleQuery()
 }
 
 const mergeAcceptedSchedules = (items) => {
@@ -530,6 +557,8 @@ const handleSave = async (formData) => {
     }
 
     isFormModalOpen.value = false
+    isDetailModalOpen.value = false
+    selectedEventDetail.value = null
     await loadSchedules()
 
     openAlertModal({

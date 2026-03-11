@@ -4,15 +4,20 @@ import { useRouter } from 'vue-router'
 import { buildNotificationFallbackRoute, useNotificationStore, formatNotificationTimeAgo } from '@/stores/notification'
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
+import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import { storeToRefs } from 'pinia'
+import { useScheduleStore } from '@/stores/schedule'
 
 const router = useRouter()
 const store = useNotificationStore()
+const scheduleStore = useScheduleStore()
 const { dropdownNotifications, loadingDropdown, isMarkingAllRead } = storeToRefs(store)
 const emit = defineEmits(['close'])
 
 const rootRef = ref(null)
 const actionError = ref('')
+const showScheduleModal = ref(false)
+const scheduleDetail = ref(null)
 const {
   showAnnouncementModal,
   isAnnouncementLoading,
@@ -39,12 +44,25 @@ const goToNotificationsPage = async () => {
   await router.push({ path: '/notifications', query: { tab: 'all' } })
 }
 
+const closeScheduleModal = () => {
+  showScheduleModal.value = false
+  scheduleDetail.value = null
+}
+
 const handleNotificationClick = async (item) => {
   try {
     await store.markRead(item.id)
 
     if (item.targetType === 'ANNOUNCEMENT') {
       await openAnnouncementModal(item)
+      return
+    }
+
+    if (isScheduleNotification(item)) {
+      const detail = await scheduleStore.getScheduleDetail(item.targetId)
+      scheduleDetail.value = detail
+      showScheduleModal.value = true
+      emit('close')
       return
     }
 
@@ -208,6 +226,13 @@ onBeforeUnmount(() => {
     :error="announcementError"
     :announcement="announcementDetail"
     @close="closeAnnouncementModal"
+  />
+
+  <ScheduleDetailModal
+    :isOpen="showScheduleModal"
+    :event="scheduleDetail || {}"
+    :showActions="false"
+    @close="closeScheduleModal"
   />
 </template>
 
