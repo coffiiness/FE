@@ -74,25 +74,30 @@ const toggleGroup = (groupId) => {
   selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
 }
 
-const isSelectedMember = (memberId) =>
-  selectedParticipants.value.some((participant) => participant.memberId === memberId)
+const getMemberUserId = (member) => {
+  const rawId = Number(member?.userId ?? member?.id)
+  return Number.isFinite(rawId) && rawId > 0 ? rawId : null
+}
+
+const isSelectedMember = (userId) =>
+  selectedParticipants.value.some((participant) => participant.userId === userId)
 
 const toggleAttendee = (member) => {
-  const targetMemberId = member.id ?? null
-  if (isSelectedMember(targetMemberId)) {
+  const targetUserId = getMemberUserId(member)
+  if (isSelectedMember(targetUserId)) {
     selectedParticipants.value = selectedParticipants.value.filter(
-      (participant) => participant.memberId !== targetMemberId
+      (participant) => participant.userId !== targetUserId
     )
   } else {
-    selectedParticipants.value.push({ memberId: targetMemberId, name: member.name })
+    selectedParticipants.value.push({ userId: targetUserId, name: member.name })
   }
 }
 
 const selectAllGroup = (group) => {
   group.members.forEach((member) => {
-    const targetMemberId = member.id ?? null
-    if (!isSelectedMember(targetMemberId)) {
-      selectedParticipants.value.push({ memberId: targetMemberId, name: member.name })
+    const targetUserId = getMemberUserId(member)
+    if (!isSelectedMember(targetUserId)) {
+      selectedParticipants.value.push({ userId: targetUserId, name: member.name })
     }
   })
 }
@@ -100,7 +105,7 @@ const selectAllGroup = (group) => {
 const addAttendee = () => {
   const name = attendeeInput.value.trim()
   if (name && !selectedParticipants.value.some((participant) => participant.name === name)) {
-    selectedParticipants.value.push({ memberId: null, name })
+    selectedParticipants.value.push({ userId: null, name })
   }
   attendeeInput.value = ''
 }
@@ -267,9 +272,9 @@ const handleSubmit = () => {
   }
 
   const attendeesList = selectedParticipants.value.map((participant) => participant.name)
-  const participantMemberIds = selectedParticipants.value
-    .map((participant) => participant.memberId)
-    .filter((memberId) => Number.isFinite(memberId))
+  const participantUserIds = selectedParticipants.value
+    .map((participant) => participant.userId)
+    .filter((userId) => Number.isFinite(userId))
   const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
 
   emit('confirm', {
@@ -280,7 +285,7 @@ const handleSubmit = () => {
     endTime: endDateTime,
     organizer: organizerName,
     attendees: attendeesList,
-    participantMemberIds,
+    participantUserIds,
     status: 'confirmed'
   })
 
@@ -404,27 +409,27 @@ const handleSubmit = () => {
                   <div class="grid grid-cols-2 gap-2">
                     <button
                       v-for="member in currentGroup.members"
-                      :key="member.id"
+                      :key="getMemberUserId(member) ?? member.id ?? member.name"
                       @click="toggleAttendee(member)"
                       class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
-                      :class="isSelectedMember(member.id ?? null) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                      :class="isSelectedMember(getMemberUserId(member)) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
                     >
                       <div
                         class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                        :class="isSelectedMember(member.id ?? null) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'"
+                        :class="isSelectedMember(getMemberUserId(member)) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'"
                       >
                         {{ member.name?.[0] || '?' }}
                       </div>
                       <div class="flex-1 min-w-0">
                         <p
                           class="text-xs font-bold text-slate-700 truncate"
-                          :class="{ 'text-brand-700': isSelectedMember(member.id ?? null) }"
+                          :class="{ 'text-brand-700': isSelectedMember(getMemberUserId(member)) }"
                         >
                           {{ member.name }}
                         </p>
                         <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
                       </div>
-                      <div v-if="isSelectedMember(member.id ?? null)" class="text-brand-600">
+                      <div v-if="isSelectedMember(getMemberUserId(member))" class="text-brand-600">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                       </div>
                     </button>
@@ -443,7 +448,7 @@ const handleSubmit = () => {
           </div>
 
           <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm">
-                <span v-for="(person, index) in selectedParticipants" :key="`${person.memberId || 'external'}-${person.name}-${index}`"
+                <span v-for="(person, index) in selectedParticipants" :key="`${person.userId || 'external'}-${person.name}-${index}`"
                       class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up">
                   {{ person.name }}
                   <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">

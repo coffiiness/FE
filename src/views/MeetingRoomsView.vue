@@ -694,7 +694,7 @@ const handleBookingConfirm = async (booking) => {
       description: booking.description || '',
       startDatetime: toLocalDateTime(booking.startTime),
       endDatetime: toLocalDateTime(booking.endTime),
-      participantMemberIds: booking.participantMemberIds || []
+      participantUserIds: booking.participantUserIds || []
     })
     const saved = response?.data?.data
     if (!saved?.id) return
