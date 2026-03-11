@@ -10,14 +10,22 @@ import {
 } from '@/stores/notification'
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
+import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { storeToRefs } from 'pinia'
+import { useScheduleStore } from '@/stores/schedule'
 
 const route = useRoute()
 const router = useRouter()
 const store = useNotificationStore()
+const scheduleStore = useScheduleStore()
 const { notifications, loadingList, activeFilter, hasNext, isMarkingAllRead, isRemovingAll } = storeToRefs(store)
 const pageError = ref('')
 const loadingMore = ref(false)
+const showScheduleModal = ref(false)
+const scheduleDetail = ref(null)
+const showCancelledScheduleModal = ref(false)
+const cancelledScheduleNotification = ref(null)
 const {
   showAnnouncementModal,
   isAnnouncementLoading,
@@ -57,6 +65,8 @@ const filterToTabMap = {
 }
 
 const selectedFilter = computed(() => tabToFilterMap[route.query.tab] || 'ALL')
+const cancelledScheduleModalTitle = computed(() => '일정이 취소되었습니다.')
+const cancelledScheduleModalMessage = computed(() => '')
 
 const syncFromRoute = async () => {
   try {
@@ -72,6 +82,26 @@ const setFilter = (filter) => {
   router.replace({ query: { ...route.query, tab: filterToTabMap[filter] } })
 }
 
+const closeScheduleModal = () => {
+  showScheduleModal.value = false
+  scheduleDetail.value = null
+}
+
+const closeCancelledScheduleModal = () => {
+  showCancelledScheduleModal.value = false
+  cancelledScheduleNotification.value = null
+}
+
+const isScheduleNotification = (item) => {
+  const targetType = String(item?.targetType || '').toUpperCase()
+  const actionUrl = String(item?.actionUrl || '')
+  return Boolean(item?.targetId) && (targetType === 'SCHEDULE' || /\/schedule(?:\?|$|\/)/i.test(actionUrl))
+}
+
+const isCancelledScheduleNotification = (item) => {
+  return String(item?.type || '').toUpperCase() === 'SCHEDULE_CANCELLED'
+}
+
 const openNotification = async (item) => {
   try {
     if (!item.isRead) {
@@ -80,6 +110,19 @@ const openNotification = async (item) => {
 
     if (item.targetType === 'ANNOUNCEMENT') {
       await openAnnouncementModal(item)
+      return
+    }
+
+    if (isCancelledScheduleNotification(item)) {
+      cancelledScheduleNotification.value = item
+      showCancelledScheduleModal.value = true
+      return
+    }
+
+    if (isScheduleNotification(item)) {
+      const detail = await scheduleStore.getScheduleDetail(item.targetId)
+      scheduleDetail.value = detail
+      showScheduleModal.value = true
       return
     }
 
@@ -269,5 +312,23 @@ onBeforeUnmount(() => {
     :error="announcementError"
     :announcement="announcementDetail"
     @close="closeAnnouncementModal"
+  />
+
+  <ScheduleDetailModal
+    :isOpen="showScheduleModal"
+    :event="scheduleDetail || {}"
+    :showActions="false"
+    @close="closeScheduleModal"
+  />
+
+  <ConfirmModal
+    :show="showCancelledScheduleModal"
+    :title="cancelledScheduleModalTitle"
+    :message="cancelledScheduleModalMessage"
+    type="warning"
+    confirmText="확인"
+    :showCancel="false"
+    @confirm="closeCancelledScheduleModal"
+    @cancel="closeCancelledScheduleModal"
   />
 </template>

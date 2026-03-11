@@ -4,7 +4,7 @@ import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
 import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
@@ -38,6 +38,7 @@ const selectedEventToEdit = ref(null)
 const selectedEventDetail = ref(null)
 const targetDeleteId = ref(null)
 const route = useRoute()
+const router = useRouter()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 const meetingRooms = ref([])
@@ -190,11 +191,26 @@ const weekViewTitle = computed(() => {
   return `${startMonth}월 ${start.dateNum}일 - ${endMonth}월 ${end.dateNum}일`
 })
 
+const isAllDayEvent = (event) => {
+  if (!event) return false
+  return event.isAllDay === true || (
+    String(event.startTime || '') === '00:00' &&
+    String(event.endTime || '') === '00:00'
+  )
+}
+
+const sortEvents = (events) => {
+  return [...events].sort((a, b) => {
+    if (isAllDayEvent(a) !== isAllDayEvent(b)) {
+      return isAllDayEvent(a) ? -1 : 1
+    }
+    return String(a.startTime || '').localeCompare(String(b.startTime || ''))
+  })
+}
+
 const currentListEvents = computed(() => {
   if (!selectedDate.value) return []
-  return allSchedules.value
-      .filter(e => e.date === selectedDate.value)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+  return sortEvents(allSchedules.value.filter(e => e.date === selectedDate.value))
 })
 
 const getDayColor = (index) => {
@@ -204,17 +220,44 @@ const getDayColor = (index) => {
 }
 
 const getEventsForDate = (date) => {
-  return allSchedules.value.filter(e => e.date === date)
+  return sortEvents(allSchedules.value.filter(e => e.date === date))
 }
 
-const getEventStyle = (event) => {
+const getAllDayEventsForDate = (date) => {
+  return sortEvents(allSchedules.value.filter(e => e.date === date && isAllDayEvent(e)))
+}
+
+const getTimedEventsForDate = (date) => {
+  return sortEvents(allSchedules.value.filter(e => e.date === date && !isAllDayEvent(e)))
+}
+
+const maxAllDayEventsInWeek = computed(() => {
+  return currentWeekDays.value.reduce((max, day) => {
+    return Math.max(max, getAllDayEventsForDate(day.fullDate).length)
+  }, 0)
+})
+
+const weekAllDayAreaHeight = computed(() => {
+  return maxAllDayEventsInWeek.value > 0 ? `${maxAllDayEventsInWeek.value * 44 + 8}px` : '0px'
+})
+
+const getEventTimeLabel = (event) => isAllDayEvent(event) ? '종일' : event.startTime
+
+const getEventMeridiemLabel = (event) => {
+  if (isAllDayEvent(event)) return 'ALL DAY'
+  const hour = Number(String(event.startTime || '').split(':')[0])
+  if (!Number.isFinite(hour)) return 'TIME'
+  return hour >= 12 ? 'PM' : 'AM'
+}
+
+const getEventStyle = (event, eventIndex = 0) => {
+  const baseHour = 9
+  const slotHeight = 80
+
   const startHour = parseInt(event.startTime.split(':')[0])
   const startMin = parseInt(event.startTime.split(':')[1])
   const endHour = parseInt(event.endTime.split(':')[0])
   const endMin = parseInt(event.endTime.split(':')[1])
-
-  const baseHour = 9
-  const slotHeight = 80
 
   const top = ((startHour - baseHour) * slotHeight) + ((startMin / 60) * slotHeight)
   const durationHour = endHour - startHour
@@ -272,6 +315,7 @@ const toErrorText = (error) => {
   if (typeof payload?.error === 'string') return payload.error
   if (typeof payload?.error?.message === 'string') return payload.error.message
   if (typeof payload?.error?.detail === 'string') return payload.error.detail
+  if (typeof payload?.error?.data?.message === 'string') return payload.error.data.message
   if (Array.isArray(payload?.errors)) {
     const first = payload.errors[0]
     if (typeof first === 'string') return first
@@ -358,16 +402,64 @@ const openAlertModal = ({ title, message, type = 'warning' }) => {
 
 // --- [Events] ---
 
-const handleDateClick = (date) => {
+const clearConsumedScheduleQuery = async ({ clearDate = false } = {}) => {
+  const hasScheduleQuery = typeof route.query.scheduleId === 'string' && route.query.scheduleId.length > 0
+  const hasDateQuery = typeof route.query.date === 'string' && route.query.date.length > 0
+
+  if (!hasScheduleQuery && (!clearDate || !hasDateQuery)) {
+    return
+  }
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.scheduleId
+
+  if (clearDate) {
+    delete nextQuery.date
+  }
+
+  await router.replace({ query: nextQuery })
+}
+
+const handleDateClick = async (date) => {
   if (!date) return
+
+  await clearConsumedScheduleQuery({ clearDate: true })
   selectedDate.value = date
+  isDetailModalOpen.value = false
+  selectedEventDetail.value = null
   isListModalOpen.value = true
 }
 
-const openDetailModal = (event) => {
-  const room = getRoomInfo(event)
-  selectedEventDetail.value = { ...event, room }
-  isDetailModalOpen.value = true
+const openDetailModal = async (event) => {
+  try {
+    const detail = await scheduleStore.getScheduleDetail(event.id)
+    const resolvedEvent = detail ? { ...event, ...detail } : event
+    const room = getRoomInfo(resolvedEvent)
+    selectedEventDetail.value = { ...resolvedEvent, room }
+    isDetailModalOpen.value = true
+  } catch (error) {
+    console.error('일정 상세 조회 실패:', error)
+    const room = getRoomInfo(event)
+    selectedEventDetail.value = { ...event, room }
+    isDetailModalOpen.value = true
+  }
+}
+
+// 알림에서 넘어온 일정 ID로 상세 모달을 엽니다.
+const openScheduleFromRouteQuery = async () => {
+  const scheduleId = Number(route.query.scheduleId)
+  if (Number.isNaN(scheduleId)) {
+    return
+  }
+
+  const target = allSchedules.value.find((event) => event.id === scheduleId)
+  if (!target) {
+    await clearConsumedScheduleQuery()
+    return
+  }
+
+  await openDetailModal(target)
+  await clearConsumedScheduleQuery()
 }
 
 const mergeAcceptedSchedules = (items) => {
@@ -379,13 +471,13 @@ const mergeAcceptedSchedules = (items) => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSchedules(), loadMeetingRooms()])
-
-  const scheduleId = Number(route.query.scheduleId)
-  if (!Number.isNaN(scheduleId)) {
-    const target = allSchedules.value.find((e) => e.id === scheduleId)
-    if (target) openDetailModal(target)
+  const queryDate = typeof route.query.date === 'string' && route.query.date ? route.query.date : null
+  if (queryDate) {
+    selectedDate.value = queryDate
   }
+
+  await Promise.all([loadSchedules(), loadMeetingRooms()])
+  await openScheduleFromRouteQuery()
 })
 
 watch(
@@ -401,6 +493,23 @@ watch(
   () => selectedDate.value,
   async () => {
     await loadSchedules()
+    await openScheduleFromRouteQuery()
+  }
+)
+
+watch(
+  () => [route.query.date, route.query.scheduleId],
+  ([dateQuery, scheduleIdQuery], [previousDateQuery, previousScheduleIdQuery]) => {
+    if (dateQuery === previousDateQuery && scheduleIdQuery === previousScheduleIdQuery) {
+      return
+    }
+
+    if (typeof dateQuery === 'string' && dateQuery && dateQuery !== selectedDate.value) {
+      selectedDate.value = dateQuery
+      return
+    }
+
+    void openScheduleFromRouteQuery()
   }
 )
 
@@ -423,12 +532,19 @@ const openEditForm = async (event) => {
   if (!loaded) {
     openAlertModal({
       title: '회의실 목록 조회 실패',
-      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이 일정 수정은 가능합니다.'
+      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이도 일정 수정은 가능합니다.'
     })
   }
 
+  try {
+    const detail = await scheduleStore.getScheduleDetail(event.id)
+    selectedEventToEdit.value = detail ? { ...event, ...detail } : event
+  } catch (error) {
+    console.error('일정 상세 조회 실패:', error)
+    selectedEventToEdit.value = event
+  }
+
   isDetailModalOpen.value = false
-  selectedEventToEdit.value = event
   isFormModalOpen.value = true
 }
 
@@ -441,6 +557,8 @@ const handleSave = async (formData) => {
     }
 
     isFormModalOpen.value = false
+    isDetailModalOpen.value = false
+    selectedEventDetail.value = null
     await loadSchedules()
 
     openAlertModal({
@@ -649,7 +767,7 @@ const confirmDisconnectGoogleCalendar = () => {
               </div>
               <div v-if="cell.events.length" class="mt-2 space-y-1.5">
                 <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="getEventClass(evt.type)">
-                  {{ evt.startTime }} {{ evt.title }}
+                  {{ getEventTimeLabel(evt) }} {{ evt.title }}
                 </div>
                 <div v-if="cell.events.length > 2" class="text-[10px] font-bold text-slate-400 pl-1">+ {{ cell.events.length - 2 }}개</div>
               </div>
@@ -693,6 +811,31 @@ const confirmDisconnectGoogleCalendar = () => {
               </div>
             </div>
 
+            <div v-if="maxAllDayEventsInWeek > 0" class="grid grid-cols-[80px_1fr] border-b border-slate-300 bg-white">
+              <div class="border-r border-slate-300 bg-slate-50/40 flex items-start justify-center pt-3 text-[11px] font-bold text-slate-500">
+                종일
+              </div>
+              <div class="grid grid-cols-7">
+                <div
+                  v-for="day in currentWeekDays"
+                  :key="`all-day-${day.fullDate}`"
+                  class="border-r border-slate-300 last:border-0 p-1.5 space-y-1.5"
+                  :style="{ minHeight: weekAllDayAreaHeight }"
+                >
+                  <div
+                    v-for="evt in getAllDayEventsForDate(day.fullDate)"
+                    :key="evt.id"
+                    @click.stop="openDetailModal(evt)"
+                    class="rounded-xl border-l-4 px-2 py-1.5 shadow-sm cursor-pointer hover:scale-[1.02] transition-transform"
+                    :class="getEventClassWeek(evt.type)"
+                  >
+                    <p class="text-[10px] font-bold opacity-90">종일</p>
+                    <p class="text-[11px] font-extrabold leading-4 break-words">{{ evt.title }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="flex flex-1">
               <div class="w-20 border-r border-slate-300 shrink-0 bg-slate-50/10">
                 <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 text-[11px] font-bold text-slate-500 flex items-start justify-center pt-2">
@@ -703,12 +846,12 @@ const confirmDisconnectGoogleCalendar = () => {
                 <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="relative border-r border-slate-300 last:border-0 group">
                   <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
 
-                  <div v-for="evt in getEventsForDate(day.fullDate)" :key="evt.id"
+                  <div v-for="(evt, eventIndex) in getTimedEventsForDate(day.fullDate)" :key="evt.id"
                        @click.stop="openDetailModal(evt)"
                        class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
                        :class="getEventClassWeek(evt.type)"
-                       :style="getEventStyle(evt)">
-                    <p class="text-[10px] font-bold opacity-90">{{ evt.startTime }}</p>
+                       :style="getEventStyle(evt, eventIndex)">
+                    <p class="text-[10px] font-bold opacity-90">{{ getEventTimeLabel(evt) }}</p>
                     <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
                   </div>
                 </div>
@@ -763,8 +906,8 @@ const confirmDisconnectGoogleCalendar = () => {
                  class="group p-8 rounded-[28px] border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all cursor-pointer flex items-center gap-10">
 
               <div class="w-24 text-center shrink-0 border-r-2 border-slate-100 pr-6">
-                <span class="block text-2xl font-black text-slate-800 tracking-tighter">{{ evt.startTime }}</span>
-                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">PM</span>
+                <span class="block text-2xl font-black text-slate-800 tracking-tighter">{{ getEventTimeLabel(evt) }}</span>
+                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{{ getEventMeridiemLabel(evt) }}</span>
               </div>
 
               <div class="flex-1 min-w-0">

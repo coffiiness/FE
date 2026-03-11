@@ -4,15 +4,24 @@ import { useRouter } from 'vue-router'
 import { useNotificationStore, formatNotificationTimeAgo, buildNotificationFallbackRoute, getNotificationVisualType } from '@/stores/notification'
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
+import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { storeToRefs } from 'pinia'
+import { useScheduleStore } from '@/stores/schedule'
 
 const router = useRouter()
 const store = useNotificationStore()
+const scheduleStore = useScheduleStore()
 const { dropdownNotifications, loadingDropdown, isMarkingAllRead } = storeToRefs(store)
 const emit = defineEmits(['close'])
 
 const rootRef = ref(null)
 const actionError = ref('')
+const showScheduleModal = ref(false)
+const scheduleDetail = ref(null)
+const showCancelledScheduleModal = ref(false)
+const cancelledScheduleNotification = ref(null)
+
 const {
   showAnnouncementModal,
   isAnnouncementLoading,
@@ -23,6 +32,8 @@ const {
 } = useAnnouncementNotificationModal()
 
 const visibleCount = computed(() => dropdownNotifications.value.length)
+const cancelledScheduleModalTitle = computed(() => '일정이 취소되었습니다.')
+const cancelledScheduleModalMessage = computed(() => '')
 
 const getNotificationIconClass = (item) => {
   const visualType = getNotificationVisualType(item)
@@ -53,6 +64,33 @@ const navigateToNotificationTarget = async (item) => {
   await router.push(buildNotificationFallbackRoute(item))
 }
 
+const closeAnnouncementModalAndDropdown = () => {
+  closeAnnouncementModal()
+  emit('close')
+}
+
+const closeScheduleModal = () => {
+  showScheduleModal.value = false
+  scheduleDetail.value = null
+  emit('close')
+}
+
+const closeCancelledScheduleModal = () => {
+  showCancelledScheduleModal.value = false
+  cancelledScheduleNotification.value = null
+  emit('close')
+}
+
+function isScheduleNotification(item) {
+  const targetType = String(item?.targetType || '').toUpperCase()
+  const actionUrl = String(item?.actionUrl || '')
+  return Boolean(item?.targetId) && (targetType === 'SCHEDULE' || /\/schedule(?:\?|$|\/)/i.test(actionUrl))
+}
+
+function isCancelledScheduleNotification(item) {
+  return String(item?.type || '').toUpperCase() === 'SCHEDULE_CANCELLED'
+}
+
 const handleNotificationClick = async (item) => {
   try {
     await store.markRead(item.id)
@@ -62,10 +100,23 @@ const handleNotificationClick = async (item) => {
       return
     }
 
+    if (isCancelledScheduleNotification(item)) {
+      cancelledScheduleNotification.value = item
+      showCancelledScheduleModal.value = true
+      return
+    }
+
+    if (isScheduleNotification(item)) {
+      const detail = await scheduleStore.getScheduleDetail(item.targetId)
+      scheduleDetail.value = detail
+      showScheduleModal.value = true
+      return
+    }
+
     await navigateToNotificationTarget(item)
   } catch (error) {
-    console.error('알림 읽음 처리 실패:', error)
-    actionError.value = '알림을 열지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    console.error('알림 이동 실패:', error)
+    actionError.value = '알림 이동에 실패했습니다. 다시 한 번 시도해 주세요.'
   }
 }
 
@@ -94,6 +145,7 @@ const goToAllNotifications = async (tab = 'all') => {
 
 const onDocumentClick = (event) => {
   if (!rootRef.value) return
+  if (showScheduleModal.value || showAnnouncementModal.value || showCancelledScheduleModal.value) return
   if (!rootRef.value.contains(event.target)) {
     emit('close')
   }
@@ -220,7 +272,25 @@ onBeforeUnmount(() => {
     :loading="isAnnouncementLoading"
     :error="announcementError"
     :announcement="announcementDetail"
-    @close="closeAnnouncementModal"
+    @close="closeAnnouncementModalAndDropdown"
+  />
+
+  <ScheduleDetailModal
+    :isOpen="showScheduleModal"
+    :event="scheduleDetail || {}"
+    :showActions="false"
+    @close="closeScheduleModal"
+  />
+
+  <ConfirmModal
+    :show="showCancelledScheduleModal"
+    :title="cancelledScheduleModalTitle"
+    :message="cancelledScheduleModalMessage"
+    type="warning"
+    confirmText="확인"
+    :showCancel="false"
+    @confirm="closeCancelledScheduleModal"
+    @cancel="closeCancelledScheduleModal"
   />
 </template>
 
