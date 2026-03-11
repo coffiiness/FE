@@ -132,6 +132,19 @@ const allTeams = computed(() => {
       .map(team => ({ id: team.id, name: `${dept.name} > ${team.name}` }))
   )
 })
+
+const selectedLeadTeamName = computed(() => {
+  const leadTeamId = toPositiveNumber(form.value.leadTeamId)
+  if (!leadTeamId) return ''
+  return allTeams.value.find((team) => Number(team.id) === leadTeamId)?.name || ""
+})
+
+const selectedRefTeamNames = computed(() => {
+  const referenceTeamIds = new Set((form.value.referenceTeamIds || [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isFinite(id) && id > 0))
+  return allTeams.value.filter((team) => referenceTeamIds.has(Number(team.id)))
+})
 const toggleLeadDept = (deptId) => {
   if (leadExpandedDepts.value.has(deptId)) leadExpandedDepts.value.delete(deptId)
   else leadExpandedDepts.value.add(deptId)
@@ -1310,3 +1323,6 @@ watch(() => route.params.id, async () => {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 </style>
+
+
+
