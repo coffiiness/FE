@@ -30,16 +30,31 @@ onMounted(async () => {
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
   }
+
+  try {
+    await notificationStore.initialize()
+  } catch (error) {
+    console.error('알림 초기화 실패:', error)
+  }
 })
 
 const isNotificationOpen = ref(false)
 const notificationStore = useNotificationStore()
 const { unreadCount } = storeToRefs(notificationStore)
 
-const toggleNotification = () => {
+const toggleNotification = async () => {
   isNotificationOpen.value = !isNotificationOpen.value
-  if (!isNotificationOpen.value) {
-    notificationStore.markAllRead()
+  notificationStore.setDropdownOpen(isNotificationOpen.value)
+
+  if (isNotificationOpen.value) {
+    try {
+      await Promise.all([
+        notificationStore.fetchUnreadCount(),
+        notificationStore.fetchDropdownNotifications()
+      ])
+    } catch (error) {
+      console.error('알림 드롭다운 조회 실패:', error)
+    }
   }
 }
 

@@ -4,6 +4,9 @@ export const announcementBoardApi = {
   list() {
     return api.get('/announcement-boards')
   },
+  detail(id) {
+    return api.get(`/announcement-boards/${id}`)
+  },
   create(data) {
     return api.post('/announcement-boards', data)
   },
