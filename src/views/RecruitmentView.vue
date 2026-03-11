@@ -24,28 +24,60 @@ onMounted(async () => {
 })
 
 // --- BE 응답 → UI 필드 변환 헬퍼 ---
-const getDday = (startDate, endDate) => {
+const getDday = (recruitmentStatus, startDate, endDate) => {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
 
-  // startDate가 미래면 → '게시 전'
-  if (startDate) {
+  if (recruitmentStatus === 'CLOSED') {
+    return { text: '\uB9C8\uAC10', value: -1, detail: null }
+  }
+
+  if (recruitmentStatus === 'DRAFT') {
+    if (!startDate) {
+      return { text: '\uAC8C\uC2DC \uC804', value: 999, detail: null }
+    }
+
     const start = new Date(startDate)
     start.setHours(0, 0, 0, 0)
-    if (start > now) {
-      const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
-      return { text: '게시 전', value: 999, status: 'pending', detail: `${diffToStart}일 후 시작` }
+    const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
+
+    return {
+      text: '\uAC8C\uC2DC \uC804',
+      value: 999,
+      detail: diffToStart > 0 ? `${diffToStart}\uC77C \uD6C4 \uC2DC\uC791` : null
     }
   }
 
-  // endDate 기반 D-Day 계산
-  if (!endDate) return { text: '-', value: 99, status: 'active' }
+  if (!endDate) return { text: '-', value: 99, detail: null }
+
   const end = new Date(endDate)
   end.setHours(0, 0, 0, 0)
   const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 0) return { text: '마감', value: diffDays, status: 'closed' }
-  if (diffDays <= 3) return { text: `D-${diffDays}`, value: diffDays, status: 'urgent' }
-  return { text: `D-${diffDays}`, value: diffDays, status: 'active' }
+
+  if (diffDays <= 0) return { text: '\uB9C8\uAC10', value: diffDays, detail: null }
+  return { text: `D-${diffDays}`, value: diffDays, detail: null }
+}
+
+const getDisplayStatus = (recruitmentStatus, endDate) => {
+  if (recruitmentStatus === 'CLOSED') return 'closed'
+  if (recruitmentStatus === 'DRAFT') return 'pending'
+
+  if (recruitmentStatus === 'OPEN') {
+    if (!endDate) return 'active'
+
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    const end = new Date(endDate)
+    end.setHours(0, 0, 0, 0)
+
+    const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return 'closed'
+    if (diffDays <= 3) return 'urgent'
+    return 'active'
+  }
+
+  return 'pending'
 }
 
 const getCareerText = (job) => {
@@ -93,7 +125,7 @@ const weeklySchedules = computed(() => {
 
 const stats = computed(() => {
   // 1. 진행 중인 공고 (active + urgent)
-  const activeJobsCount = jobs.value.filter(j => j.status === 'active' || j.status === 'urgent').length
+  const activeJobsCount = jobs.value.filter(j => j.status === 'OPEN').length
 
   // 2. 이번 주 면접 예정 (일~토 기준)
   const interviewsThisWeek = weeklySchedules.value.length
@@ -187,13 +219,13 @@ const sortBy = ref('최신순')
 
 const filteredJobs = computed(() => {
   let result = jobs.value.map(job => {
-    const dday = getDday(job.startDate, job.endDate)
+    const dday = getDday(job.status, job.startDate, job.endDate)
     return {
       ...job,
       dday: dday.text,
       ddayValue: dday.value,
       ddayDetail: dday.detail || null,
-      displayStatus: job.status === 'CLOSED' ? 'closed' : dday.status,
+      displayStatus: getDisplayStatus(job.status, job.endDate),
       team: job.leadGroupName || '부서 미지정',
       position: getCareerText(job),
       funnel: (job.stages || []).map(s => ({
