@@ -44,9 +44,21 @@ const goToNotificationsPage = async () => {
   await router.push({ path: '/notifications', query: { tab: 'all' } })
 }
 
+const closeAnnouncementModalAndDropdown = () => {
+  closeAnnouncementModal()
+  emit('close')
+}
+
 const closeScheduleModal = () => {
   showScheduleModal.value = false
   scheduleDetail.value = null
+  emit('close')
+}
+
+function isScheduleNotification(item) {
+  const targetType = String(item?.targetType || '').toUpperCase()
+  const actionUrl = String(item?.actionUrl || '')
+  return Boolean(item?.targetId) && (targetType === 'SCHEDULE' || /\/schedule(?:\?|$|\/)/i.test(actionUrl))
 }
 
 const handleNotificationClick = async (item) => {
@@ -62,7 +74,6 @@ const handleNotificationClick = async (item) => {
       const detail = await scheduleStore.getScheduleDetail(item.targetId)
       scheduleDetail.value = detail
       showScheduleModal.value = true
-      emit('close')
       return
     }
 
@@ -102,6 +113,7 @@ const goToAllNotifications = async (tab = 'all') => {
 
 const onDocumentClick = (event) => {
   if (!rootRef.value) return
+  if (showScheduleModal.value || showAnnouncementModal.value) return
   if (!rootRef.value.contains(event.target)) {
     emit('close')
   }
@@ -225,7 +237,7 @@ onBeforeUnmount(() => {
     :loading="isAnnouncementLoading"
     :error="announcementError"
     :announcement="announcementDetail"
-    @close="closeAnnouncementModal"
+    @close="closeAnnouncementModalAndDropdown"
   />
 
   <ScheduleDetailModal
