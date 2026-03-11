@@ -11,6 +11,14 @@ const jobId = Number(route.params.id) // URL에서 수정할 공고 ID 가져오
 const loading = ref(false)
 const dataLoading = ref(true) // 초기 데이터 로딩 상태
 const showSuccessModal = ref(false)
+const noticeModal = ref({
+  show: false,
+  title: '알림',
+  message: '',
+  type: 'info',
+  confirmText: '확인',
+  onConfirm: null
+})
 
 const store = useRecruitmentStore()
 const { jobs } = storeToRefs(store)
@@ -125,6 +133,20 @@ const toDateTimeLocal = (value) => {
   const mi = String(date.getMinutes()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
 }
+const openNoticeModal = ({ title = '알림', message = '', type = 'info', confirmText = '확인', onConfirm = null } = {}) => {
+  noticeModal.value = { show: true, title, message, type, confirmText, onConfirm }
+}
+
+const closeNoticeModal = () => {
+  noticeModal.value = { ...noticeModal.value, show: false, onConfirm: null }
+}
+
+const handleNoticeConfirm = () => {
+  const onConfirm = noticeModal.value.onConfirm
+  closeNoticeModal()
+  if (typeof onConfirm === 'function') onConfirm()
+}
+
 // 기존 데이터 불러오기 (Mock API)
 const fetchJobDetail = async () => {
   dataLoading.value = true
@@ -139,8 +161,12 @@ const fetchJobDetail = async () => {
     }
 
     if (!job) {
-      alert('공고를 찾을 수 없습니다.')
-      router.push('/recruitment')
+      openNoticeModal({
+        title: '조회 실패',
+        message: '공고를 찾을 수 없습니다.',
+        type: 'warning',
+        onConfirm: () => router.push('/recruitment')
+      })
       return
     }
 
@@ -225,7 +251,11 @@ const addStage = () => {
 
 const removeStage = (index) => {
   if (processes.value.length <= 2) {
-    alert('최소 2개 이상의 단계가 필요합니다.')
+    openNoticeModal({
+      title: '단계 설정',
+      message: '최소 2개 이상의 단계가 필요합니다.',
+      type: 'warning'
+    })
     return
   }
   processes.value.splice(index, 1)
@@ -264,17 +294,32 @@ const onDragEnd = () => {
 }
 
 const handleUpdate = async () => {
-  if (!form.value.title) return alert('제목을 입력해주세요.')
-  if (!form.value.startDate || !form.value.endDate) return alert('시작일시와 마감일시를 입력해주세요.')
-  if (!form.value.applicationTemplateId) return alert('지원서 양식을 선택해주세요.')
+  if (!form.value.title) {
+    openNoticeModal({ title: '입력 확인', message: '제목을 입력해주세요.', type: 'warning' })
+    return
+  }
+  if (!form.value.startDate || !form.value.endDate) {
+    openNoticeModal({ title: '입력 확인', message: '시작일시와 마감일시를 입력해주세요.', type: 'warning' })
+    return
+  }
+  if (!form.value.applicationTemplateId) {
+    openNoticeModal({ title: '입력 확인', message: '지원서 양식을 선택해주세요.', type: 'warning' })
+    return
+  }
 
   loading.value = true
   try {
     const selectedTeamIds = [...new Set((form.value.teamId || []).map(Number).filter(id => Number.isFinite(id) && id > 0))]
-    if (selectedTeamIds.length === 0) return alert('담당 조직을 최소 1개 선택해주세요.')
+    if (selectedTeamIds.length === 0) {
+      openNoticeModal({ title: '입력 확인', message: '담당 조직을 최소 1개 선택해주세요.', type: 'warning' })
+      return
+    }
 
     const interviewerIds = (form.value.interviewerIds || []).map(Number).filter(id => Number.isFinite(id) && id > 0)
-    if (interviewerIds.length === 0) return alert('면접관은 최소 1명 이상 선택해주세요.')
+    if (interviewerIds.length === 0) {
+      openNoticeModal({ title: '입력 확인', message: '면접관은 최소 1명 이상 선택해주세요.', type: 'warning' })
+      return
+    }
 
     const leadGroupIdCandidate = Number(form.value.leadGroupId || 0)
     const leadGroupId = selectedTeamIds.includes(leadGroupIdCandidate) ? leadGroupIdCandidate : selectedTeamIds[0]
@@ -310,7 +355,11 @@ const handleUpdate = async () => {
   } catch (e) {
     console.error(e)
     const message = e?.response?.data?.message || '수정 중 오류가 발생했습니다.'
-    alert(message)
+    openNoticeModal({
+      title: '오류',
+      message,
+      type: 'danger'
+    })
   } finally {
     loading.value = false
   }
@@ -607,7 +656,30 @@ onMounted(() => {
       </div>
 
     </div>
+    <div v-if="!dataLoading" class="pt-2 border-t border-slate-200 flex justify-end gap-3">
+      <button @click="router.back()" class="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors">
+        취소
+      </button>
+      <button @click="handleUpdate"
+              :disabled="loading || dataLoading"
+              class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center disabled:opacity-50">
+        <svg v-if="loading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+        변경사항 저장
+      </button>
+    </div>
+
   </div>
+
+  <ConfirmModal
+    :show="noticeModal.show"
+    :title="noticeModal.title"
+    :message="noticeModal.message"
+    :confirm-text="noticeModal.confirmText"
+    :type="noticeModal.type"
+    :show-cancel="false"
+    @confirm="handleNoticeConfirm"
+    @cancel="closeNoticeModal"
+  />
 
   <ConfirmModal
     :show="showSuccessModal"

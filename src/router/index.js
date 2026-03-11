@@ -121,7 +121,7 @@ const routes = [
       {
         path: 'recruitment/jobs/:id/edit',
         name: 'RecruitmentEdit',
-        component: () => import('@/views/RecruitmentEditView.vue')
+        component: () => import('@/views/RecruitmentCreateView.vue')
       },
       {
         path: 'recruitment/templates',
