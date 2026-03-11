@@ -397,40 +397,7 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- 면접관 응답 현황 -->
-          <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-            <h3 class="text-base font-bold text-gray-800 mb-6">면접관 응답 현황</h3>
-            <div v-if="interviewReport.responseRate.totalResponses === 0" class="text-center py-8 text-gray-400 text-sm">응답 데이터가 없습니다</div>
-            <template v-else>
-              <div class="flex items-center justify-center mb-6">
-                <div class="relative w-32 h-32">
-                  <!-- Donut chart via SVG -->
-                  <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#e5e7eb" stroke-width="4" />
-                    <circle
-                      cx="18" cy="18" r="14" fill="none" stroke="#10b981" stroke-width="4"
-                      :stroke-dasharray="`${interviewReport.responseRate.acceptRate * 0.88} ${88 - interviewReport.responseRate.acceptRate * 0.88}`"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                  <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="text-xl font-bold text-gray-800">{{ interviewReport.responseRate.acceptRate }}%</span>
-                    <span class="text-xs text-gray-400">수락률</span>
-                  </div>
-                </div>
-              </div>
-              <div class="flex items-center justify-center gap-6">
-                <div class="flex items-center gap-2">
-                  <span class="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
-                  <span class="text-sm text-gray-600">수락 {{ interviewReport.responseRate.acceptedCount }}건</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="w-3 h-3 rounded-full bg-rose-400 shrink-0" />
-                  <span class="text-sm text-gray-600">거절 {{ interviewReport.responseRate.declinedCount }}건</span>
-                </div>
-              </div>
-            </template>
-          </div>
+
         </div>
 
         <!-- 회의실별 면접 건수 -->
