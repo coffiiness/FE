@@ -26,7 +26,12 @@ const form = ref({
   applicationTemplateId: '',
   contents: '',
   teamId: [],
-  interviewerIds: []
+  interviewerIds: [],
+  careerType: 'NEW',
+  minExperienceYears: null,
+  maxExperienceYears: null,
+  leadGroupId: null,
+  referenceGroupIds: []
 })
 
 // --- 2. 채용 프로세스 데이터 ---
@@ -101,63 +106,115 @@ const toggleSelection = (list, id) => {
   }
 }
 
+const toDateTimeLocal = (value) => {
+  if (!value) return ''
+
+  if (typeof value === 'string') {
+    const normalized = value.replace(' ', 'T')
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(normalized)) return normalized.slice(0, 16)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return `${normalized}T09:00`
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
 // 기존 데이터 불러오기 (Mock API)
 const fetchJobDetail = async () => {
   dataLoading.value = true
-  
-  const job = jobs.value.find(j => j.id === jobId)
-  
-  if (job) {
-    // 팀 ID 역추적 (Mock 데이터에 팀 이름만 있고 ID는 없어서 임시 매핑)
-    const teamNameMap = {
-        '디자인팀': [1],
-        'Design Group': [1],
-        '개발본부': [2],
-        'Platform Team': [2],
-        'Web Core': [2],
-        '마케팅': [3],
-        '플랫폼팀': [10],
-        'Infra Unit': [13],
-        '인프라팀': [13]
+
+  try {
+    let job = jobs.value.find(j => Number(j.id) === jobId)
+
+    // 새로고침 진입 시 스토어가 비어있을 수 있어 목록을 1회 보강 조회
+    if (!job) {
+      await store.fetchRecruitments()
+      job = jobs.value.find(j => Number(j.id) === jobId)
     }
-    
-    // 면접관 ID 역추적
+
+    if (!job) {
+      alert('공고를 찾을 수 없습니다.')
+      router.push('/recruitment')
+      return
+    }
+
+    // 팀 ID 역추적 (이름 기반 데이터 호환용)
+    const teamNameMap = {
+      '디자인팀': [1],
+      'Design Group': [1],
+      '개발본부': [2],
+      'Platform Team': [2],
+      'Web Core': [2],
+      '마케팅': [3],
+      '플랫폼팀': [10],
+      'Infra Unit': [13],
+      '인프라팀': [13]
+    }
+
+    // 면접관 ID 역추적 (이름 기반 데이터 호환용)
     const interviewerNameMap = {}
-    interviewers.value.forEach(i => interviewerNameMap[i.name] = i.id)
+    interviewers.value.forEach(i => { interviewerNameMap[i.name] = i.id })
+
+    const leadGroupId = Number(job.leadGroupId || 0)
+    const referenceGroupIds = Array.isArray(job.referenceGroupIds)
+      ? job.referenceGroupIds.map(Number).filter(id => Number.isFinite(id) && id > 0)
+      : []
+    const fallbackTeamIds = teamNameMap[job.team] || []
+    const teamIds = [...new Set([leadGroupId, ...referenceGroupIds, ...fallbackTeamIds].filter(id => Number(id) > 0))]
+
+    const interviewerIds = Array.isArray(job.assignees)
+      ? job.assignees.map(a => Number(a.id)).filter(id => Number.isFinite(id) && id > 0)
+      : (job.interviewers || []).map(name => interviewerNameMap[name]).filter(id => Number(id) > 0)
 
     form.value = {
       id: job.id,
-      title: job.title,
-      status: job.status,
-      targetCount: job.targetCount || 1, // Store에 없을 수 있음
-      startDate: job.createdAt + 'T09:00', // 임시
-      endDate: job.endDate || '',
+      title: job.title || '',
+      status: job.status || 'ACTIVE',
+      targetCount: job.targetCount || 1,
+      startDate: toDateTimeLocal(job.startDate || job.createdAt),
+      endDate: toDateTimeLocal(job.endDate),
       applicationTemplateId: job.applicationTemplateId || 1,
       contents: job.contents || '',
-      teamId: teamNameMap[job.team] || [], // 이름으로 매핑 시도
-      interviewerIds: job.interviewers ? job.interviewers.map(name => interviewerNameMap[name]).filter(id => id) : []
+      teamId: teamIds,
+      interviewerIds,
+      careerType: job.careerType || 'NEW',
+      minExperienceYears: job.minExperienceYears ?? null,
+      maxExperienceYears: job.maxExperienceYears ?? null,
+      leadGroupId: leadGroupId || teamIds[0] || null,
+      referenceGroupIds
     }
-    
-    // 프로세스 복원
-    if (job.funnel) {
-        processes.value = job.funnel.map((f, idx) => ({
-            stageName: f.step,
-            stageType: 'INTERVIEW', // 기본값
-            stageStep: idx + 1
-        }))
-    } else {
-         processes.value = [
-          { stageName: '서류 전형', stageType: 'DOCUMENT', stageStep: 1 },
-          { stageName: '실무 면접', stageType: 'INTERVIEW', stageStep: 2 },
-          { stageName: '최종 합격', stageType: 'PASS', stageStep: 3 }
-        ]
-    }
-  } else {
-    alert('공고를 찾을 수 없습니다.')
-    router.push('/recruitment')
-  }
 
-  dataLoading.value = false
+    // 프로세스 복원 (신규 stages 우선, 기존 funnel 형식 호환)
+    if (Array.isArray(job.stages) && job.stages.length > 0) {
+      processes.value = [...job.stages]
+        .sort((a, b) => (a.stageStep || 0) - (b.stageStep || 0))
+        .map((s, idx) => ({
+          stageName: s.stageName,
+          stageType: s.stageType || 'INTERVIEW',
+          stageStep: Number(s.stageStep) || (idx + 1)
+        }))
+    } else if (Array.isArray(job.funnel) && job.funnel.length > 0) {
+      processes.value = job.funnel.map((f, idx) => ({
+        stageName: f.step,
+        stageType: 'INTERVIEW',
+        stageStep: idx + 1
+      }))
+    } else {
+      processes.value = [
+        { stageName: '서류 전형', stageType: 'DOCUMENT', stageStep: 1 },
+        { stageName: '실무 면접', stageType: 'INTERVIEW', stageStep: 2 },
+        { stageName: '최종 합격', stageType: 'PASS', stageStep: 3 }
+      ]
+    }
+  } finally {
+    dataLoading.value = false
+  }
 }
 
 const addStage = () => {
@@ -208,42 +265,52 @@ const onDragEnd = () => {
 
 const handleUpdate = async () => {
   if (!form.value.title) return alert('제목을 입력해주세요.')
-  
+  if (!form.value.startDate || !form.value.endDate) return alert('시작일시와 마감일시를 입력해주세요.')
+  if (!form.value.applicationTemplateId) return alert('지원서 양식을 선택해주세요.')
+
   loading.value = true
   try {
-    // 선택된 팀 이름 찾기
-    const selectedTeamNames = teams.value
-        .filter(t => form.value.teamId.includes(t.id))
-        .map(t => t.name)
-        .join(', ')
+    const selectedTeamIds = [...new Set((form.value.teamId || []).map(Number).filter(id => Number.isFinite(id) && id > 0))]
+    if (selectedTeamIds.length === 0) return alert('담당 조직을 최소 1개 선택해주세요.')
 
-    // 선택된 면접관 이름 찾기
-    const selectedInterviewerNames = interviewers.value
-        .filter(i => form.value.interviewerIds.includes(i.id))
-        .map(i => i.name)
+    const interviewerIds = (form.value.interviewerIds || []).map(Number).filter(id => Number.isFinite(id) && id > 0)
+    if (interviewerIds.length === 0) return alert('면접관은 최소 1명 이상 선택해주세요.')
 
+    const leadGroupIdCandidate = Number(form.value.leadGroupId || 0)
+    const leadGroupId = selectedTeamIds.includes(leadGroupIdCandidate) ? leadGroupIdCandidate : selectedTeamIds[0]
+    const referenceGroupIds = selectedTeamIds.filter(id => id !== leadGroupId)
+
+    // RecruitmentUpdateRequest 형식 payload
     const payload = {
-      ...form.value,
-      team: selectedTeamNames || '미지정',
-      interviewers: selectedInterviewerNames,
-      funnel: processes.value.map((p, index) => ({
-        step: p.stageName,
-        count: 0, // 초기화 혹은 기존 유지 로직 필요 (여기선 단순화)
-        active: false
+      title: form.value.title,
+      targetCount: Number(form.value.targetCount || 1),
+      applicationTemplateId: Number(form.value.applicationTemplateId),
+      contents: form.value.contents || '',
+      startDate: form.value.startDate,
+      endDate: form.value.endDate,
+      careerType: form.value.careerType || 'NEW',
+      minExperienceYears: (form.value.careerType || 'NEW') === 'EXPERIENCED'
+        ? Number(form.value.minExperienceYears ?? 0)
+        : null,
+      maxExperienceYears: (form.value.careerType || 'NEW') === 'EXPERIENCED'
+        ? Number(form.value.maxExperienceYears ?? 0)
+        : null,
+      leadGroupId,
+      referenceGroupIds,
+      interviewerIds,
+      stages: processes.value.map((p, index) => ({
+        stageName: p.stageName,
+        stageType: p.stageType,
+        stageStep: index + 1
       }))
     }
-    
-    // Store 업데이트
-    store.updateJob(payload)
-    
-    setTimeout(() => {
-      // alert('공고가 수정되었습니다.')
-      // router.push('/recruitment') // 목록으로 이동
-      showSuccessModal.value = true
-    }, 500)
+
+    await store.updateRecruitment(jobId, payload)
+    showSuccessModal.value = true
   } catch (e) {
     console.error(e)
-    alert('수정 중 오류가 발생했습니다.')
+    const message = e?.response?.data?.message || '수정 중 오류가 발생했습니다.'
+    alert(message)
   } finally {
     loading.value = false
   }

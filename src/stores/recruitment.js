@@ -15,6 +15,7 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     try {
       const res = await recruitmentApi.getRecruitments(params)
       jobs.value = res.data.data || []
+      return jobs.value
     } catch (err) {
       error.value = parseError(err)
       throw err
@@ -36,6 +37,59 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  // ── 채용 공고 수정 (PUT) ──
+  const updateRecruitment = async (recruitmentId, data) => {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await recruitmentApi.updateRecruitment(recruitmentId, data)
+      const updated = res.data.data || null
+
+      // 서버가 상세 응답을 내려줄 경우 목록에도 반영
+      if (updated?.id) {
+        const index = jobs.value.findIndex((job) => Number(job.id) === Number(updated.id))
+        if (index !== -1) {
+          jobs.value[index] = { ...jobs.value[index], ...updated }
+        }
+      }
+
+      return updated
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ── 채용 공고 삭제 (DELETE) ──
+  const deleteRecruitment = async (recruitmentId) => {
+    loading.value = true
+    error.value = null
+    try {
+      await recruitmentApi.deleteRecruitment(recruitmentId)
+      jobs.value = jobs.value.filter((job) => Number(job.id) !== Number(recruitmentId))
+      return recruitmentId
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // ── 기존 화면 호환용: 로컬 공고 갱신 ──
+  const updateJob = (updatedJob) => {
+    const index = jobs.value.findIndex((job) => Number(job.id) === Number(updatedJob?.id))
+    if (index === -1) return
+    jobs.value[index] = { ...jobs.value[index], ...updatedJob }
+  }
+
+  // ── 기존 화면 호환용: 삭제 API 연결 ──
+  const deleteJob = async (id) => {
+    return deleteRecruitment(id)
   }
 
   // ── 면접 일정 조회 (GET) ──
@@ -67,6 +121,12 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     }
     if (status === 401) {
       return { type: 'UNAUTHORIZED', message: '로그인이 필요합니다.' }
+    }
+    if (status === 404) {
+      return { type: 'NOT_FOUND', message: message || '대상을 찾을 수 없습니다.' }
+    }
+    if (status === 409) {
+      return { type: 'CONFLICT', message: message || '현재 상태에서는 처리할 수 없습니다.' }
     }
     return { type: 'SERVER_ERROR', message: '일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }
   }
@@ -104,7 +164,7 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
 
   return {
     jobs, loading, error, interviewSchedules,
-    fetchRecruitments, createRecruitment, fetchInterviewSchedules,
+    fetchRecruitments, createRecruitment, updateRecruitment, deleteRecruitment, updateJob, deleteJob, fetchInterviewSchedules,
     templates, addTemplate, updateTemplate, deleteTemplate
   }
 })

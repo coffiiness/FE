@@ -36,5 +36,21 @@ export const recruitmentApi = {
         return api.get(`/recruitments/${recruitmentId}/interview-schedules`, {
             params: { yearMonth }
         })
+    },
+
+    /**
+     * 채용 공고 수정
+     * PUT /api/v1/recruitments/{recruitmentId}
+     */
+    updateRecruitment(recruitmentId, data) {
+        return api.put(`/recruitments/${recruitmentId}`, data)
+    },
+
+    /**
+     * 채용 공고 삭제
+     * DELETE /api/v1/recruitments/{recruitmentId}
+     */
+    deleteRecruitment(recruitmentId) {
+        return api.delete(`/recruitments/${recruitmentId}`)
     }
 }

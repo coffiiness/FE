@@ -65,6 +65,7 @@ const activeMenuId = ref(null) // 드롭다운 메뉴 상태
 const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
+const deleting = ref(false) // 삭제 진행 상태
 
 // --- 면접 일정 관련 상태 ---
 const showWeeklyModal = ref(false)
@@ -165,13 +166,20 @@ const closeDeleteModal = () => {
 }
 
 // 3. 실제 삭제 수행
-const confirmDelete = () => {
-  if (deleteTargetId.value) {
-    store.deleteJob(deleteTargetId.value)
-  }
-  closeDeleteModal()
-}
+const confirmDelete = async () => {
+  if (!deleteTargetId.value || deleting.value) return
 
+  deleting.value = true
+  try {
+    await store.deleteRecruitment(deleteTargetId.value)
+    closeDeleteModal()
+  } catch (err) {
+    const message = err?.response?.data?.message || '채용 공고 삭제 중 오류가 발생했습니다.'
+    alert(message)
+  } finally {
+    deleting.value = false
+  }
+}
 // --- 검색 및 필터링 로직 ---
 const searchQuery = ref('')
 const statusFilter = ref('전체 상태')
