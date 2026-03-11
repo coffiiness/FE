@@ -54,7 +54,6 @@ const automationForm = ref({
   actionType: 'EMAIL',
   templateCode: ''
 })
-const isInterviewerEditModalOpen = ref(false)
 const draggingCardId = ref(null)
 const draggingOverColumnId = ref(null)
 const applicantBoardScrollRef = ref(null)
@@ -909,27 +908,6 @@ const copyRecruitmentLink = () => {
   })
 }
 
-const toggleInterviewerAssignment = (intr) => {
-  const targetUserId = getMemberUserId(intr)
-  if (!targetUserId) return
-
-  const index = interviewers.value.findIndex((interviewer) => getMemberUserId(interviewer) === targetUserId)
-  if (index === -1) {
-    interviewers.value.push({
-      ...intr,
-      bgClass: 'bg-slate-600',
-      borderClass: 'border-slate-700',
-      badgeTextClass: 'text-slate-700',
-      lightBgClass: 'bg-slate-50',
-      lightBorderClass: 'border-slate-100',
-      color: '#475569',
-      checked: true
-    })
-  } else {
-    interviewers.value.splice(index, 1)
-  }
-}
-
 const onDragStart = (evt, aid) => {
   if (!canMoveApplicants.value || movingApplicationId.value) {
     evt.preventDefault()
@@ -1332,7 +1310,6 @@ const getDayColor = (index) => {
         <div>
            <div class="flex justify-between items-center mb-4">
             <h5 class="text-xs font-bold text-slate-500">담당 면접관</h5>
-            <button @click="isInterviewerEditModalOpen = true" class="text-[10px] font-bold text-brand-600 hover:underline">편집</button>
           </div>
           <div class="space-y-3">
             <div v-for="member in interviewers" :key="getMemberUserId(member) ?? member.id" class="flex items-center">
@@ -1996,42 +1973,6 @@ const getDayColor = (index) => {
       </div>
     </div>
 
-    <div v-if="isInterviewerEditModalOpen" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="isInterviewerEditModalOpen = false">
-      <div class="bg-white rounded-2xl shadow-2xl w-[450px] max-w-[95%] overflow-hidden flex flex-col max-h-[80vh] animate-fade-in-up">
-        <div class="p-6 border-b border-slate-100 flex justify-between items-center">
-          <div>
-            <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
-            <p class="text-xs text-slate-500 mt-1">이 공고의 면접을 담당할 면접관을 배정합니다.</p>
-          </div>
-          <button @click="isInterviewerEditModalOpen = false" class="text-slate-400 hover:text-slate-600">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-        </div>
-        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-          <div v-for="intr in allEmployees" :key="getMemberUserId(intr) ?? intr.id" 
-               @click="toggleInterviewerAssignment(intr)"
-               class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
-               :class="interviewers.some(i => getMemberUserId(i) === getMemberUserId(intr)) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
-            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
-              {{ intr.name[0] }}
-            </div>
-            <div class="flex-1">
-              <p class="text-sm font-bold text-slate-800">{{ intr.name }}</p>
-              <p class="text-xs text-slate-400">{{ intr.position }}</p>
-            </div>
-            <div v-if="interviewers.some(i => getMemberUserId(i) === getMemberUserId(intr))" class="text-brand-500">
-              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
-            </div>
-          </div>
-        </div>
-        <div class="p-6 border-t border-slate-100 flex justify-end">
-          <button @click="isInterviewerEditModalOpen = false" class="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-colors">
-            저장 후 닫기
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- 모달: 링크 복사 성공 -->
     <Transition name="fade">
       <div v-if="showCopyModal" class="fixed inset-0 z-[70] flex items-center justify-center" role="dialog">
@@ -2097,3 +2038,4 @@ const getDayColor = (index) => {
   opacity: 0;
 }
 </style>
+
