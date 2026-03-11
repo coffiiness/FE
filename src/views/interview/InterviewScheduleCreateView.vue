@@ -41,6 +41,11 @@ const safeParseJson = (value, fallback) => {
 const interviewers = ref(safeParseJson(route.query.interviewers, []))
 const applicants = ref(safeParseJson(route.query.applicants, []))
 
+const getUserId = (person) => {
+  const rawId = Number(person?.userId ?? person?.id ?? person?.memberId)
+  return Number.isFinite(rawId) && rawId > 0 ? rawId : null
+}
+
 const showModal = ref(false)
 const showAutoModal = ref(false)
 const submitting = ref(false)
@@ -286,7 +291,7 @@ const loadAvailability = async () => {
   const normalizedFrom = new Date(fromBase)
   normalizedFrom.setSeconds(0, 0)
   const from = `${normalizedFrom.getFullYear()}-${pad2(normalizedFrom.getMonth() + 1)}-${pad2(normalizedFrom.getDate())}T${pad2(normalizedFrom.getHours())}:${pad2(normalizedFrom.getMinutes())}:00`
-  const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const interviewerIds = interviewers.value.map((m) => getUserId(m)).filter((id) => Number.isFinite(id))
   const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
   const interviewResult = await interviewApi
@@ -520,7 +525,7 @@ const confirmSchedule = async (memo) => {
     openModal({ title: '일정 확정 실패', message: '최소 1개 이상의 시간을 선택해주세요.', type: 'warning' })
     return
   }
-  const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const interviewerIds = interviewers.value.map((m) => getUserId(m)).filter((id) => Number.isFinite(id))
   const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   if (!interviewerIds.length || !applicantIds.length) {
     openModal({ title: '일정 확정 실패', message: '면접관/지원자 정보를 확인해주세요.', type: 'warning' })

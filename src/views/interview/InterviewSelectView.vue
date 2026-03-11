@@ -77,6 +77,11 @@ const selectStep = (step) => {
 const searchInterviewer = ref('')
 const selectedInterviewers = ref([])
 
+const getInterviewerUserId = (interviewer) => {
+  const rawId = Number(interviewer?.userId ?? interviewer?.id ?? interviewer?.memberId)
+  return Number.isFinite(rawId) && rawId > 0 ? rawId : null
+}
+
 const assignedInterviewers = computed(() => {
   const job = jobs.value.find((item) => Number(item.id) === Number(jobId))
   const detailInterviewers = Array.isArray(recruitmentDetail.value?.interviewers)
@@ -86,7 +91,8 @@ const assignedInterviewers = computed(() => {
 
   const normalizedFromDetail = detailInterviewers
     .map((interviewer) => ({
-      id: Number(interviewer?.memberId ?? interviewer?.id),
+      id: getInterviewerUserId(interviewer),
+      userId: getInterviewerUserId(interviewer),
       name: String(interviewer?.name || '').trim(),
       label: '담당 면접관'
     }))
@@ -98,7 +104,8 @@ const assignedInterviewers = computed(() => {
 
   return assignees
     .map((assignee) => ({
-      id: Number(assignee?.id ?? assignee?.userId ?? assignee?.memberId),
+      id: getInterviewerUserId(assignee),
+      userId: getInterviewerUserId(assignee),
       name: String(assignee?.name || '').trim(),
       label: '담당 면접관'
     }))
@@ -115,12 +122,19 @@ const filteredInterviewers = computed(() => {
 })
 
 const toggleInterviewer = (member) => {
-  const index = selectedInterviewers.value.findIndex((item) => item.id === member.id)
+  const targetUserId = getInterviewerUserId(member)
+  if (!targetUserId) return
+
+  const index = selectedInterviewers.value.findIndex((item) => item.id === targetUserId)
   if (index > -1) {
     selectedInterviewers.value.splice(index, 1)
     return
   }
-  selectedInterviewers.value.push(member)
+  selectedInterviewers.value.push({
+    ...member,
+    id: targetUserId,
+    userId: targetUserId
+  })
 }
 
 const removeInterviewer = (id) => {
@@ -133,9 +147,9 @@ const removeInterviewer = (id) => {
 watch(
   assignedInterviewers,
   (members) => {
-    const allowedIds = new Set(members.map((member) => member.id))
+    const allowedIds = new Set(members.map((member) => getInterviewerUserId(member)).filter(Boolean))
     selectedInterviewers.value = selectedInterviewers.value.filter((member) =>
-      allowedIds.has(member.id)
+      allowedIds.has(getInterviewerUserId(member))
     )
   },
   { immediate: true }
@@ -362,7 +376,7 @@ onMounted(async () => {
                 :key="member.id"
                 @click="toggleInterviewer(member)"
                 class="flex items-center p-3 rounded-lg cursor-pointer transition-colors"
-                :class="selectedInterviewers.find((item) => item.id === member.id) ? 'bg-brand-50 border border-brand-200' : 'hover:bg-slate-50 border border-transparent'"
+                :class="selectedInterviewers.find((item) => item.id === getInterviewerUserId(member)) ? 'bg-brand-50 border border-brand-200' : 'hover:bg-slate-50 border border-transparent'"
               >
                 <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 mr-3">
                   {{ member.name[0] }}
@@ -375,9 +389,9 @@ onMounted(async () => {
                 </div>
                 <div
                   class="w-5 h-5 rounded border flex items-center justify-center"
-                  :class="selectedInterviewers.find((item) => item.id === member.id) ? 'bg-brand-600 border-brand-600' : 'border-slate-300'"
+                  :class="selectedInterviewers.find((item) => item.id === getInterviewerUserId(member)) ? 'bg-brand-600 border-brand-600' : 'border-slate-300'"
                 >
-                  <svg v-if="selectedInterviewers.find((item) => item.id === member.id)" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg v-if="selectedInterviewers.find((item) => item.id === getInterviewerUserId(member))" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
