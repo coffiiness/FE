@@ -254,7 +254,7 @@ const stageTypeMeta = {
 const openInterviewDetail = (booking) => {
   selectedInterview.value = {
     ...booking,
-    host: getInterviewerName(booking.interviewerId),
+    host: booking.interviewerName || getInterviewerName(booking.interviewerId),
     // Use store's attendees if available, otherwise allow modal to handle it or fallback
     attendees: booking.attendees || (booking.applicantName ? [booking.applicantName] : []), 
   }
@@ -1020,7 +1020,7 @@ const getInterviewerName = (id) => {
   if (!id) return '미지정'
   const targetId = toPositiveNumber(id)
   const emp = allEmployees.value.find((employee) => getMemberUserId(employee) === targetId)
-  return emp ? emp.name : 'Unknown'
+  return emp ? emp.name : '미지정'
 }
 
 const getInterviewerColor = (id) => {
@@ -1077,11 +1077,18 @@ const normalizeSchedule = (item) => {
 
   const interviewerIds = Array.isArray(item?.interviewerIds) ? item.interviewerIds : []
   const interviewerId =
+    Number(item?.interviewerUserId) ||
     Number(item?.interviewer?.userId) ||
     Number(item?.interviewerId) ||
     Number(item?.interviewer?.id) ||
     Number(interviewerIds[0]) ||
     null
+
+  const interviewerName =
+    item?.interviewerName ||
+    item?.interviewer?.name ||
+    (Array.isArray(item?.interviewers) && item.interviewers.map((interviewer) => interviewer?.name).filter(Boolean).join(', ')) ||
+    ''
 
   const applicantName =
     item?.applicantName ||
@@ -1097,6 +1104,7 @@ const normalizeSchedule = (item) => {
     endTime: toHm(end),
     time: `${formatTime(toHm(start))} - ${formatTime(toHm(end))}`,
     interviewerId,
+    interviewerName,
     applicantName,
     title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
     description: item?.memo || item?.note || '',
@@ -1378,7 +1386,7 @@ const getDayColor = (index) => {
                       }"
                       @click.stop="openInterviewDetail(booking)"
                     >
-                      <span>{{ getInterviewerName(booking.interviewerId) }}</span>
+                      <span>{{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}</span>
                       <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ booking.startTime }}</span>
                     </div>
                     <button
@@ -1470,7 +1478,7 @@ const getDayColor = (index) => {
                               backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
                               color: getInterviewerColor(evt.interviewerId)
                             }">
-                        {{ getInterviewerName(evt.interviewerId) }}
+                        {{ evt.interviewerName || getInterviewerName(evt.interviewerId) }}
                       </span>
                       <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ evt.title }}</h4>
                       <p class="text-sm text-slate-500 mt-1 font-medium">{{ evt.description }}</p>
@@ -1513,12 +1521,12 @@ const getDayColor = (index) => {
                           backgroundColor: `${getInterviewerColor(booking.interviewerId)}1a`,
                           color: '#0f172a'
                         }">
-                    {{ getInterviewerName(booking.interviewerId) }}
+                    {{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}
                   </span>
                   <span class="text-[10px] text-slate-500 font-bold">{{ booking.time }}</span>
                 </div>
                 <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
-                <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ getInterviewerName(booking.interviewerId) }}</p>
+                <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}</p>
 
                 <div v-if="expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
                   <div class="text-xs text-slate-600 mb-2">

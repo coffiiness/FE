@@ -342,6 +342,15 @@ const toReservationErrorMessage = (error) => {
   return toErrorText(error) || '시간 중복이나 인증 정보를 확인해 주세요.'
 }
 
+const toDeleteRoomErrorMessage = (error) => {
+  const status = error?.response?.status
+  const code = error?.response?.data?.error?.code
+  if (status === 400 || status === 409 || code === 'E400' || code === 'E409') {
+    return '해당 회의실에 예정된 예약 또는 일정이 있어 삭제할 수 없습니다.'
+  }
+  return toErrorText(error) || '회의실 삭제에 실패했습니다.'
+}
+
 const getMonthRange = (dateString) => {
   const [y, m] = dateString.split('-').map(Number)
   const from = new Date(y, m - 1, 1, 0, 0, 0)
@@ -836,8 +845,9 @@ const confirmDeleteRoom = async () => {
     deleteRoomModalOpen.value = false
     deleteTargetRoomId.value = null
   } catch (error) {
-    console.error('회의실 삭제 실패:', error)
-    openErrorModal('회의실 삭제 실패', '회의실 삭제에 실패했습니다.')
+    const detail = toDeleteRoomErrorMessage(error)
+    console.error('회의실 삭제 실패:', detail, error)
+    openErrorModal('회의실 삭제 실패', detail)
   }
 }
 
