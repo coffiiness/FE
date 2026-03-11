@@ -1,9 +1,8 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
-
-import { useOrganizationStore } from '@/stores/organization'
-import { storeToRefs } from 'pinia'
+import { memberApi } from '@/api/member'
+import { groupApi } from '@/api/group'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -14,15 +13,53 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'save'])
+const members = ref([])
+const groups = ref([])
+const isMembersLoading = ref(false)
+const memberSearchQuery = ref('')
+const selectedGroupId = ref(null)
 
-const orgStore = useOrganizationStore()
-const { departments } = storeToRefs(orgStore)
+const groupedMembers = computed(() => {
+  const query = memberSearchQuery.value.trim().toLowerCase()
+  const normalizedMembers = members.value
+    .map((member) => ({
+      ...member,
+      groupName: String(member?.group || '').trim() || '미분류',
+      position: member?.memberType === 'HR' ? '인사담당자' : '면접관'
+    }))
+    .filter((member) => {
+      if (!query) return true
+      const text = `${member.name || ''} ${member.groupName || ''} ${member.position || ''}`.toLowerCase()
+      return text.includes(query)
+    })
 
-const selectedDeptId = ref(null)
-const currentDept = computed(() => departments.value.find((d) => d.id === selectedDeptId.value))
+  const groupOrder = groups.value.map((group) => group.name)
+  const groupedMap = new Map()
+  normalizedMembers.forEach((member) => {
+    if (!groupedMap.has(member.groupName)) {
+      groupedMap.set(member.groupName, [])
+    }
+    groupedMap.get(member.groupName).push(member)
+  })
 
-const toggleDept = (deptId) => {
-  selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
+  const orderedGroupNames = [
+    ...groupOrder.filter((name) => groupedMap.has(name)),
+    ...Array.from(groupedMap.keys()).filter((name) => !groupOrder.includes(name))
+  ]
+
+  return orderedGroupNames.map((groupName, index) => ({
+    id: groups.value.find((group) => group.name === groupName)?.id ?? `group-${index}`,
+    name: groupName,
+    members: groupedMap.get(groupName) ?? []
+  }))
+})
+
+const currentGroup = computed(
+  () => groupedMembers.value.find((group) => String(group.id) === String(selectedGroupId.value)) ?? null
+)
+
+const toggleGroup = (groupId) => {
+  selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
 }
 
 const toggleAttendee = (name) => {
@@ -33,8 +70,8 @@ const toggleAttendee = (name) => {
   }
 }
 
-const selectAllTeam = (team) => {
-  team.members.forEach((member) => {
+const selectAllGroup = (group) => {
+  group.members.forEach((member) => {
     if (!form.value.attendees.includes(member.name)) {
       form.value.attendees.push(member.name)
     }
@@ -55,6 +92,23 @@ const form = ref({
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
 const validationMessage = ref('')
+
+const loadMembers = async () => {
+  isMembersLoading.value = true
+  try {
+    const [memberResponse, groupResponse] = await Promise.all([
+      memberApi.getMembers(),
+      groupApi.getGroups()
+    ])
+    members.value = Array.isArray(memberResponse?.data?.data) ? memberResponse.data.data : []
+    groups.value = Array.isArray(groupResponse?.data?.data) ? groupResponse.data.data : []
+  } catch {
+    members.value = []
+    groups.value = []
+  } finally {
+    isMembersLoading.value = false
+  }
+}
 
 const scheduleTypes = [
   { value: 'MEETING', label: '회의', activeClass: 'bg-amber-50 border-amber-200 text-amber-600' },
@@ -158,7 +212,8 @@ watch(
     }
 
     attendeeInput.value = ''
-    selectedDeptId.value = null
+    selectedGroupId.value = null
+    memberSearchQuery.value = ''
   }
 )
 
@@ -230,6 +285,9 @@ const handleKeydown = (e) => {
 
 onMounted(() => window.addEventListener('keydown', handleKeydown))
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
+onMounted(() => {
+  loadMembers()
+})
 </script>
 
 <template>
@@ -339,27 +397,38 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
             <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">참석자 선택</label>
 
             <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 mb-3">
-              <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+              <input
+                v-model="memberSearchQuery"
+                type="text"
+                placeholder="실제 멤버 이름으로 검색"
+                class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+              >
+
+              <div v-if="isMembersLoading" class="text-center py-6 text-slate-400 text-xs">
+                멤버 목록을 불러오는 중입니다.
+              </div>
+
+              <div v-else class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                 <button
-                  v-for="dept in departments"
-                  :key="dept.id"
-                  @click="toggleDept(dept.id)"
+                  v-for="group in groupedMembers"
+                  :key="group.id"
+                  @click="toggleGroup(group.id)"
                   class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
-                  :class="selectedDeptId === dept.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
+                  :class="String(selectedGroupId) === String(group.id) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
                 >
-                  {{ dept.name }}
+                  {{ group.name }}
                 </button>
               </div>
 
-              <div v-if="currentDept" class="space-y-3 animate-fade-in-up">
-                <div v-for="team in currentDept.teams" :key="team.id">
+              <div v-if="currentGroup" class="space-y-3 animate-fade-in-up">
+                <div>
                   <h4 class="text-[11px] font-bold text-slate-400 mb-2 flex items-center gap-2">
-                    {{ team.name }}
-                    <button @click="selectAllTeam(team)" class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors">전체 선택</button>
+                    {{ currentGroup.name }}
+                    <button @click="selectAllGroup(currentGroup)" class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors">전체 선택</button>
                   </h4>
                   <div class="grid grid-cols-2 gap-2">
                     <button
-                      v-for="member in team.members"
+                      v-for="member in currentGroup.members"
                       :key="member.id"
                       @click="toggleAttendee(member.name)"
                       class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
@@ -382,7 +451,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
               </div>
 
               <div v-else class="text-center py-6 text-slate-400 text-xs">
-                부서를 선택하여 팀원을 추가하세요.
+                그룹을 선택하여 멤버를 추가하세요.
               </div>
             </div>
 

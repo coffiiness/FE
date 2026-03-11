@@ -38,19 +38,8 @@ const safeParseJson = (value, fallback) => {
   }
 }
 
-const dummyInterviewers = [
-  { id: 1, name: '김기술' },
-  { id: 2, name: '정민수' },
-  { id: 3, name: '박상수' }
-]
-const dummyApplicants = [
-  { id: 101, name: '홍길동' },
-  { id: 102, name: '김하늘' },
-  { id: 103, name: '박민준' }
-]
-
-const interviewers = ref(safeParseJson(route.query.interviewers, dummyInterviewers))
-const applicants = ref(safeParseJson(route.query.applicants, dummyApplicants))
+const interviewers = ref(safeParseJson(route.query.interviewers, []))
+const applicants = ref(safeParseJson(route.query.applicants, []))
 
 const showModal = ref(false)
 const showAutoModal = ref(false)

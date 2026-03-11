@@ -1,7 +1,7 @@
 <script setup>
-import { reactive, watch, ref, computed } from 'vue'
-import { useOrganizationStore } from '@/stores/organization'
-import { storeToRefs } from 'pinia'
+import { reactive, watch, ref, computed, onMounted } from 'vue'
+import { memberApi } from '@/api/member'
+import { groupApi } from '@/api/group'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -11,11 +11,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'confirm'])
-const orgStore = useOrganizationStore()
-const { departments } = storeToRefs(orgStore)
-
-const selectedDeptId = ref(null)
-const currentDept = computed(() => departments.value.find(d => d.id === selectedDeptId.value))
+const members = ref([])
+const groups = ref([])
+const isMembersLoading = ref(false)
+const memberSearchQuery = ref('')
+const selectedGroupId = ref(null)
+const selectedParticipants = ref([])
 const attendeeInput = ref('')
 const formError = ref('')
 const submitError = ref('')
@@ -28,33 +29,85 @@ const parseDateOnly = (value) => {
   return new Date(year, month - 1, day, 0, 0, 0, 0)
 }
 
-const toggleDept = (deptId) => {
-  selectedDeptId.value = selectedDeptId.value === deptId ? null : deptId
+const groupedMembers = computed(() => {
+  const query = memberSearchQuery.value.trim().toLowerCase()
+  const normalizedMembers = members.value
+    .map((member) => ({
+      ...member,
+      groupName: String(member?.group || '').trim() || '미분류',
+      position: member?.memberType === 'HR' ? '인사담당자' : '면접관'
+    }))
+    .filter((member) => {
+      if (!query) return true
+      const text = `${member.name || ''} ${member.position || ''} ${member.groupName || ''}`.toLowerCase()
+      return text.includes(query)
+    })
+
+  const groupOrder = groups.value.map((group) => group.name)
+  const groupedMap = new Map()
+
+  normalizedMembers.forEach((member) => {
+    if (!groupedMap.has(member.groupName)) {
+      groupedMap.set(member.groupName, [])
+    }
+    groupedMap.get(member.groupName).push(member)
+  })
+
+  const orderedGroupNames = [
+    ...groupOrder.filter((name) => groupedMap.has(name)),
+    ...Array.from(groupedMap.keys()).filter((name) => !groupOrder.includes(name))
+  ]
+
+  return orderedGroupNames.map((groupName, index) => ({
+    id: groups.value.find((group) => group.name === groupName)?.id ?? `group-${index}`,
+    name: groupName,
+    color: groups.value.find((group) => group.name === groupName)?.color ?? '#94a3b8',
+    members: groupedMap.get(groupName) ?? []
+  }))
+})
+
+const currentGroup = computed(
+  () => groupedMembers.value.find((group) => String(group.id) === String(selectedGroupId.value)) ?? null
+)
+
+const toggleGroup = (groupId) => {
+  selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
 }
 
-const toggleAttendee = (name) => {
-  if (state.attendees.includes(name)) {
-    state.attendees = state.attendees.filter(a => a !== name)
+const isSelectedMember = (memberId) =>
+  selectedParticipants.value.some((participant) => participant.memberId === memberId)
+
+const toggleAttendee = (member) => {
+  const targetMemberId = member.id ?? null
+  if (isSelectedMember(targetMemberId)) {
+    selectedParticipants.value = selectedParticipants.value.filter(
+      (participant) => participant.memberId !== targetMemberId
+    )
   } else {
-    state.attendees.push(name)
+    selectedParticipants.value.push({ memberId: targetMemberId, name: member.name })
   }
 }
 
-const selectAllTeam = (team) => {
-  team.members.forEach(member => {
-    if (!state.attendees.includes(member.name)) {
-      state.attendees.push(member.name)
+const selectAllGroup = (group) => {
+  group.members.forEach((member) => {
+    const targetMemberId = member.id ?? null
+    if (!isSelectedMember(targetMemberId)) {
+      selectedParticipants.value.push({ memberId: targetMemberId, name: member.name })
     }
   })
 }
 
 const addAttendee = () => {
   const name = attendeeInput.value.trim()
-  if (name && !state.attendees.includes(name)) { state.attendees.push(name) }
+  if (name && !selectedParticipants.value.some((participant) => participant.name === name)) {
+    selectedParticipants.value.push({ memberId: null, name })
+  }
   attendeeInput.value = ''
 }
 
-const removeAttendee = (index) => { state.attendees.splice(index, 1) }
+const removeAttendee = (index) => {
+  selectedParticipants.value.splice(index, 1)
+}
 
 const state = reactive({
   title: '',
@@ -62,8 +115,7 @@ const state = reactive({
   date: '',
   startTime: '09:00',
   endTime: '10:00',
-  organizer: '',
-  attendees: []
+  organizer: ''
 })
 
 const meridiemOptions = ['AM', 'PM']
@@ -95,6 +147,27 @@ const getCurrentUserName = () => {
   }
 }
 
+const loadMembers = async () => {
+  isMembersLoading.value = true
+  try {
+    const [memberResponse, groupResponse] = await Promise.all([
+      memberApi.getMembers(),
+      groupApi.getGroups()
+    ])
+    members.value = Array.isArray(memberResponse?.data?.data) ? memberResponse.data.data : []
+    groups.value = Array.isArray(groupResponse?.data?.data) ? groupResponse.data.data : []
+  } catch {
+    members.value = []
+    groups.value = []
+  } finally {
+    isMembersLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadMembers()
+})
+
 watch(
   () => props.open,
   (open) => {
@@ -111,9 +184,10 @@ watch(
     endMeridiem.value = endParts.period
     endHour12.value = endParts.hour12
     state.organizer = getCurrentUserName()
-    state.attendees = [] // 초기화
+    selectedParticipants.value = []
     submitError.value = ''
-    selectedDeptId.value = null
+    memberSearchQuery.value = ''
+    selectedGroupId.value = null
     attendeeInput.value = ''
     formError.value = ''
   }
@@ -192,7 +266,10 @@ const handleSubmit = () => {
     return
   }
 
-  const attendeesList = [...state.attendees]
+  const attendeesList = selectedParticipants.value.map((participant) => participant.name)
+  const participantMemberIds = selectedParticipants.value
+    .map((participant) => participant.memberId)
+    .filter((memberId) => Number.isFinite(memberId))
   const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
 
   emit('confirm', {
@@ -203,13 +280,14 @@ const handleSubmit = () => {
     endTime: endDateTime,
     organizer: organizerName,
     attendees: attendeesList,
+    participantMemberIds,
     status: 'confirmed'
   })
 
   state.title = ''
   state.description = ''
   state.organizer = ''
-  state.attendees = []
+  selectedParticipants.value = []
 }
 </script>
 
@@ -288,59 +366,86 @@ const handleSubmit = () => {
           <label class="text-sm font-medium text-slate-900">참석자</label>
 
           <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 mb-3">
-            <!-- 1. 부서 선택 -->
-            <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-              <button
-                  v-for="dept in departments"
-                  :key="dept.id"
-                  @click="toggleDept(dept.id)"
-                  class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
-                  :class="selectedDeptId === dept.id ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
-              >
-                {{ dept.name }}
-              </button>
+            <input
+              v-model="memberSearchQuery"
+              type="text"
+              placeholder="실제 멤버 이름으로 검색"
+              class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+            />
+
+            <div v-if="isMembersLoading" class="text-center py-6 text-slate-400 text-xs">
+              멤버 목록을 불러오는 중입니다.
             </div>
 
-            <!-- 2. 팀 및 멤버 목록 -->
-            <div v-if="currentDept" class="space-y-3 animate-fade-in-up">
-              <div v-for="team in currentDept.teams" :key="team.id">
-                <h4 class="text-[11px] font-bold text-slate-400 mb-2 flex items-center gap-2">
-                  {{ team.name }}
-                  <button @click="selectAllTeam(team)" class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors">전체 선택</button>
-                </h4>
-                <div class="grid grid-cols-2 gap-2">
-                  <button
-                      v-for="member in team.members"
+            <div v-else-if="groupedMembers.length" class="space-y-4 animate-fade-in-up">
+              <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                <button
+                  v-for="group in groupedMembers"
+                  :key="group.id"
+                  @click="toggleGroup(group.id)"
+                  class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
+                  :class="String(selectedGroupId) === String(group.id) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
+                >
+                  {{ group.name }}
+                </button>
+              </div>
+
+              <div v-if="currentGroup" class="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                <div class="mb-3">
+                  <div class="text-[11px] font-bold text-slate-500 mb-2 flex items-center gap-2">
+                    {{ currentGroup.name }}
+                    <button
+                      @click="selectAllGroup(currentGroup)"
+                      class="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded hover:bg-brand-100 transition-colors"
+                    >
+                      전체 선택
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button
+                      v-for="member in currentGroup.members"
                       :key="member.id"
-                      @click="toggleAttendee(member.name)"
+                      @click="toggleAttendee(member)"
                       class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
-                      :class="state.attendees.includes(member.name) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
-                  >
-                    <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                         :class="state.attendees.includes(member.name) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'">
-                      {{ member.name[0] }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <p class="text-xs font-bold text-slate-700 truncate" :class="{'text-brand-700': state.attendees.includes(member.name)}">{{ member.name }}</p>
-                      <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
-                    </div>
-                    <div v-if="state.attendees.includes(member.name)" class="text-brand-600">
-                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
-                    </div>
-                  </button>
+                      :class="isSelectedMember(member.id ?? null) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                    >
+                      <div
+                        class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                        :class="isSelectedMember(member.id ?? null) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'"
+                      >
+                        {{ member.name?.[0] || '?' }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p
+                          class="text-xs font-bold text-slate-700 truncate"
+                          :class="{ 'text-brand-700': isSelectedMember(member.id ?? null) }"
+                        >
+                          {{ member.name }}
+                        </p>
+                        <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
+                      </div>
+                      <div v-if="isSelectedMember(member.id ?? null)" class="text-brand-600">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                      </div>
+                    </button>
+                  </div>
                 </div>
+              </div>
+
+              <div v-else class="text-center py-6 text-slate-400 text-xs">
+                그룹을 선택하여 멤버를 추가하세요.
               </div>
             </div>
 
             <div v-else class="text-center py-6 text-slate-400 text-xs">
-              부서를 선택하여 팀원을 추가하세요.
+              선택 가능한 멤버가 없습니다.
             </div>
           </div>
 
           <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm">
-                <span v-for="(person, index) in state.attendees" :key="index"
+                <span v-for="(person, index) in selectedParticipants" :key="`${person.memberId || 'external'}-${person.name}-${index}`"
                       class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up">
-                  {{ person }}
+                  {{ person.name }}
                   <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -349,7 +454,7 @@ const handleSubmit = () => {
             <input
                 v-model="attendeeInput"
                 @keydown.enter.prevent="addAttendee"
-                @keydown.backspace="attendeeInput === '' && state.attendees.pop()"
+                @keydown.backspace="attendeeInput === '' && selectedParticipants.pop()"
                 type="text"
                 placeholder="외부 이름 직접 입력"
                 class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
