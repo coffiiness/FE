@@ -50,7 +50,11 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
   const error = ref(null)
 
   const normalizeSchedule = (item) => {
-    const isAllDay = item.isAllDay === true
+    const hasMidnightRange =
+      String(item.startTime || '') === '00:00' &&
+      String(item.endTime || '') === '00:00'
+    const isAllDay = item.isAllDay === true || item.allDay === true || hasMidnightRange
+    const isBusy = item.isBusy ?? item.busy ?? true
     return {
       id: item.id,
       title: item.title,
@@ -61,7 +65,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       description: item.description || '',
       roomId: item.roomId,
       isAllDay,
-      isBusy: item.isBusy !== false,
+      isBusy,
       time: isAllDay ? '종일' : `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
     }
   }

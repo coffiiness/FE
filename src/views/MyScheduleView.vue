@@ -190,16 +190,26 @@ const weekViewTitle = computed(() => {
   return `${startMonth}월 ${start.dateNum}일 - ${endMonth}월 ${end.dateNum}일`
 })
 
+const isAllDayEvent = (event) => {
+  if (!event) return false
+  return event.isAllDay === true || (
+    String(event.startTime || '') === '00:00' &&
+    String(event.endTime || '') === '00:00'
+  )
+}
+
+const sortEvents = (events) => {
+  return [...events].sort((a, b) => {
+    if (isAllDayEvent(a) !== isAllDayEvent(b)) {
+      return isAllDayEvent(a) ? -1 : 1
+    }
+    return String(a.startTime || '').localeCompare(String(b.startTime || ''))
+  })
+}
+
 const currentListEvents = computed(() => {
   if (!selectedDate.value) return []
-  return allSchedules.value
-      .filter(e => e.date === selectedDate.value)
-      .sort((a, b) => {
-        if ((a.isAllDay === true) !== (b.isAllDay === true)) {
-          return a.isAllDay === true ? -1 : 1
-        }
-        return a.startTime.localeCompare(b.startTime)
-      })
+  return sortEvents(allSchedules.value.filter(e => e.date === selectedDate.value))
 })
 
 const getDayColor = (index) => {
@@ -209,35 +219,39 @@ const getDayColor = (index) => {
 }
 
 const getEventsForDate = (date) => {
-  return allSchedules.value
-    .filter(e => e.date === date)
-    .sort((a, b) => {
-      if ((a.isAllDay === true) !== (b.isAllDay === true)) {
-        return a.isAllDay === true ? -1 : 1
-      }
-      return a.startTime.localeCompare(b.startTime)
-    })
+  return sortEvents(allSchedules.value.filter(e => e.date === date))
 }
 
-const getEventTimeLabel = (event) => event.isAllDay ? '종일' : event.startTime
+const getAllDayEventsForDate = (date) => {
+  return sortEvents(allSchedules.value.filter(e => e.date === date && isAllDayEvent(e)))
+}
+
+const getTimedEventsForDate = (date) => {
+  return sortEvents(allSchedules.value.filter(e => e.date === date && !isAllDayEvent(e)))
+}
+
+const maxAllDayEventsInWeek = computed(() => {
+  return currentWeekDays.value.reduce((max, day) => {
+    return Math.max(max, getAllDayEventsForDate(day.fullDate).length)
+  }, 0)
+})
+
+const weekAllDayAreaHeight = computed(() => {
+  return maxAllDayEventsInWeek.value > 0 ? `${maxAllDayEventsInWeek.value * 44 + 8}px` : '0px'
+})
+
+const getEventTimeLabel = (event) => isAllDayEvent(event) ? '종일' : event.startTime
 
 const getEventMeridiemLabel = (event) => {
-  if (event.isAllDay) return 'ALL DAY'
+  if (isAllDayEvent(event)) return 'ALL DAY'
   const hour = Number(String(event.startTime || '').split(':')[0])
   if (!Number.isFinite(hour)) return 'TIME'
   return hour >= 12 ? 'PM' : 'AM'
 }
 
-const getEventStyle = (event) => {
+const getEventStyle = (event, eventIndex = 0) => {
   const baseHour = 9
   const slotHeight = 80
-
-  if (event.isAllDay) {
-    return {
-      top: '0px',
-      height: `${timeSlots.length * slotHeight}px`
-    }
-  }
 
   const startHour = parseInt(event.startTime.split(':')[0])
   const startMin = parseInt(event.startTime.split(':')[1])
@@ -722,6 +736,31 @@ const confirmDisconnectGoogleCalendar = () => {
               </div>
             </div>
 
+            <div v-if="maxAllDayEventsInWeek > 0" class="grid grid-cols-[80px_1fr] border-b border-slate-300 bg-white">
+              <div class="border-r border-slate-300 bg-slate-50/40 flex items-start justify-center pt-3 text-[11px] font-bold text-slate-500">
+                종일
+              </div>
+              <div class="grid grid-cols-7">
+                <div
+                  v-for="day in currentWeekDays"
+                  :key="`all-day-${day.fullDate}`"
+                  class="border-r border-slate-300 last:border-0 p-1.5 space-y-1.5"
+                  :style="{ minHeight: weekAllDayAreaHeight }"
+                >
+                  <div
+                    v-for="evt in getAllDayEventsForDate(day.fullDate)"
+                    :key="evt.id"
+                    @click.stop="openDetailModal(evt)"
+                    class="rounded-xl border-l-4 px-2 py-1.5 shadow-sm cursor-pointer hover:scale-[1.02] transition-transform"
+                    :class="getEventClassWeek(evt.type)"
+                  >
+                    <p class="text-[10px] font-bold opacity-90">종일</p>
+                    <p class="text-[11px] font-extrabold leading-4 break-words">{{ evt.title }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="flex flex-1">
               <div class="w-20 border-r border-slate-300 shrink-0 bg-slate-50/10">
                 <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 text-[11px] font-bold text-slate-500 flex items-start justify-center pt-2">
@@ -732,11 +771,11 @@ const confirmDisconnectGoogleCalendar = () => {
                 <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="relative border-r border-slate-300 last:border-0 group">
                   <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
 
-                  <div v-for="evt in getEventsForDate(day.fullDate)" :key="evt.id"
+                  <div v-for="(evt, eventIndex) in getTimedEventsForDate(day.fullDate)" :key="evt.id"
                        @click.stop="openDetailModal(evt)"
                        class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
                        :class="getEventClassWeek(evt.type)"
-                       :style="getEventStyle(evt)">
+                       :style="getEventStyle(evt, eventIndex)">
                     <p class="text-[10px] font-bold opacity-90">{{ getEventTimeLabel(evt) }}</p>
                     <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
                   </div>
