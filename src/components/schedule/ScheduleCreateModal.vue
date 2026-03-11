@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import AttendeeAvailabilityPanel from '@/components/schedule/AttendeeAvailabilityPanel.vue'
 import { memberApi } from '@/api/member'
 import { groupApi } from '@/api/group'
 
@@ -663,6 +664,14 @@ onMounted(() => {
             </div>
           </div>
 
+          <AttendeeAvailabilityPanel
+            :is-open="isOpen"
+            :date="form.date"
+            :attendee-ids="form.attendeeIds"
+            :is-all-day="form.isAllDay"
+            :start-time="form.startTime"
+            :end-time="form.endTime"
+          />
           <div>
             <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">메모 / 장소</label>
             <textarea v-model="form.description" rows="3" placeholder="장소나 상세 내용을 입력하세요."

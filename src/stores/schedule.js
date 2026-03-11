@@ -83,6 +83,22 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     applicantName: item.applicantName || ''
   })
 
+  const normalizeBusySchedule = (item) => ({
+    scheduleId: Number(item?.scheduleId),
+    title: String(item?.title || '').trim() || '제목 없음',
+    startDateTime: item?.startDateTime || '',
+    endDateTime: item?.endDateTime || '',
+    isAllDay: item?.isAllDay === true
+  })
+
+  const normalizeAttendeeAvailability = (item) => ({
+    attendeeId: Number(item?.attendeeId),
+    attendeeName: String(item?.attendeeName || '').trim() || '이름 없는 사용자',
+    busySchedules: Array.isArray(item?.busySchedules)
+      ? item.busySchedules.map(normalizeBusySchedule)
+      : []
+  })
+
   const buildRequest = (formData) => {
     const toDateTime = (date, timeValue) => {
       if (!timeValue) return null
@@ -140,6 +156,28 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     }
   }
 
+  const getAttendeeAvailability = async (date, attendeeIds = []) => {
+    await ensureWorkspaceId()
+
+    const normalizedAttendeeIds = [...new Set(
+      attendeeIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )]
+
+    if (!date || normalizedAttendeeIds.length === 0) {
+      return []
+    }
+
+    const res = await scheduleApi.getAvailability({ date, attendeeIds: normalizedAttendeeIds })
+    const data = res.data?.data || res.data || null
+    const attendeeAvailabilities = Array.isArray(data?.attendeeAvailabilities)
+      ? data.attendeeAvailabilities
+      : []
+
+    return attendeeAvailabilities.map(normalizeAttendeeAvailability)
+  }
+
   const getScheduleDetail = async (scheduleId) => {
     await ensureWorkspaceId()
     const res = await scheduleApi.getScheduleDetail(scheduleId)
@@ -175,6 +213,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     getToday,
     formatTime,
     fetchSchedules,
+    getAttendeeAvailability,
     getScheduleDetail,
     createSchedule,
     updateSchedule,
