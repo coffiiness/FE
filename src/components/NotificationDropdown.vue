@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useNotificationStore, formatNotificationTimeAgo } from '@/stores/notification'
+import { useNotificationStore, formatNotificationTimeAgo, buildNotificationFallbackRoute, getNotificationVisualType } from '@/stores/notification'
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
 import { storeToRefs } from 'pinia'
@@ -25,18 +25,32 @@ const {
 const visibleCount = computed(() => dropdownNotifications.value.length)
 
 const getNotificationIconClass = (item) => {
-  if (item.filterType === 'ANNOUNCEMENT') {
+  const visualType = getNotificationVisualType(item)
+
+  if (visualType === 'announcement') {
     return 'bg-amber-50 text-amber-600 border border-amber-100'
   }
-  if (item.filterType === 'INTERVIEW') {
+  if (visualType === 'interview') {
     return 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+  }
+  if (visualType === 'kanban') {
+    return 'bg-indigo-50 text-indigo-600 border border-indigo-100'
   }
   return 'bg-slate-100 text-slate-500 border border-slate-200'
 }
 
-const goToNotificationsPage = async () => {
+const navigateToNotificationTarget = async (item) => {
+  const target = item?.actionUrl || buildNotificationFallbackRoute(item)
+  const resolved = router.resolve(target)
+
   emit('close')
-  await router.push({ path: '/notifications', query: { tab: 'all' } })
+
+  if (resolved?.matched?.length) {
+    await router.push(target)
+    return
+  }
+
+  await router.push(buildNotificationFallbackRoute(item))
 }
 
 const handleNotificationClick = async (item) => {
@@ -48,7 +62,7 @@ const handleNotificationClick = async (item) => {
       return
     }
 
-    await goToNotificationsPage()
+    await navigateToNotificationTarget(item)
   } catch (error) {
     console.error('알림 읽음 처리 실패:', error)
     actionError.value = '알림을 열지 못했습니다. 잠시 후 다시 시도해 주세요.'
@@ -158,11 +172,14 @@ onBeforeUnmount(() => {
 
         <div class="flex gap-4">
           <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center" :class="getNotificationIconClass(item)">
-            <svg v-if="item.filterType === 'ANNOUNCEMENT'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg v-if="getNotificationVisualType(item) === 'announcement'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882A1 1 0 0112.447 5l6.382 3.191A1 1 0 0119.382 9H20a1 1 0 110 2h-.618a1 1 0 01-.553.809L16 13.191V16a2 2 0 11-4 0v-.809l-2.829-1.382A1 1 0 018.618 13H8a1 1 0 110-2h.618a1 1 0 01.553-.809L11 8.809V5.882z" />
             </svg>
-            <svg v-else-if="item.filterType === 'INTERVIEW'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg v-else-if="getNotificationVisualType(item) === 'interview'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <svg v-else-if="getNotificationVisualType(item) === 'kanban'" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h7v12H4V6zm9 0h7v5h-7V6zm0 7h7v5h-7v-5z" />
             </svg>
             <svg v-else class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />

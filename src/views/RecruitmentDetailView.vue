@@ -702,15 +702,37 @@ const resetAutomationForm = () => {
 }
 
 const startEditAutomationRule = (rule) => {
+  const normalizedPayload = normalizeAutomationRulePayload(rule?.payload)
+
   ruleModalProcessId.value = rule.recruitmentProcessId ?? ruleModalProcessId.value
   editingRuleId.value = rule.ruleId
   automationForm.value = {
     recruitmentProcessId: rule.recruitmentProcessId ?? '',
     triggerType: rule.triggerType ?? 'ON_ENTER',
     actionType: rule.actionType ?? 'EMAIL',
-    templateCode: rule.payload?.templateCode ?? ''
+    templateCode: normalizedPayload?.templateCode ?? ''
   }
 }
+
+const normalizeAutomationRulePayload = (payload) => {
+  if (!payload) return {}
+
+  if (typeof payload === 'string') {
+    try {
+      const parsed = JSON.parse(payload)
+      return parsed && typeof parsed === 'object' ? parsed : {}
+    } catch {
+      return {}
+    }
+  }
+
+  return typeof payload === 'object' ? payload : {}
+}
+
+const normalizeAutomationRule = (rule) => ({
+  ...rule,
+  payload: normalizeAutomationRulePayload(rule?.payload)
+})
 
 const loadAutomationRules = async () => {
   if (!canMoveApplicants.value) return
@@ -721,7 +743,7 @@ const loadAutomationRules = async () => {
   try {
     const response = await automationRulesApi.getRecruitmentRules(jobId)
     const payload = automationRulesApi.extractResponseData(response)
-    automationRules.value = Array.isArray(payload) ? payload : []
+    automationRules.value = Array.isArray(payload) ? payload.map(normalizeAutomationRule) : []
     if (!editingRuleId.value) {
       resetAutomationForm()
     }
