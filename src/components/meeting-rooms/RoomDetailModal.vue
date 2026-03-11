@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
@@ -27,6 +29,12 @@ const roomBookings = () => {
     .filter((b) => b.roomId === props.room.id)
     .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
 }
+
+const isPastSelectedDate = computed(() => {
+  if (!props.selectedDate) return false
+  const target = new Date(`${props.selectedDate}T23:59:59`)
+  return target < new Date()
+})
 </script>
 
 <template>
@@ -62,10 +70,18 @@ const roomBookings = () => {
           <div>
             <div class="flex items-center justify-between mb-3">
               <h4 class="font-semibold text-slate-900">예약 일정</h4>
-              <button class="px-3 py-1 bg-emerald-600 text-white rounded text-sm" @click="emit('bookRoom', room)">
+              <button
+                class="px-3 py-1 rounded text-sm"
+                :class="isPastSelectedDate ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white'"
+                :disabled="isPastSelectedDate"
+                @click="!isPastSelectedDate && emit('bookRoom', room)"
+              >
                 예약하기
               </button>
             </div>
+            <p v-if="isPastSelectedDate" class="mb-3 text-xs text-rose-600">
+              지난 날짜에는 새 예약을 만들 수 없습니다.
+            </p>
             <div v-if="roomBookings().length" class="space-y-2 max-h-64 overflow-y-auto pr-1">
               <div
                 v-for="booking in roomBookings()"

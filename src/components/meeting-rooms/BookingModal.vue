@@ -20,6 +20,7 @@ const selectedParticipants = ref([])
 const attendeeInput = ref('')
 const formError = ref('')
 const submitError = ref('')
+const organizerUserId = ref(null)
 
 const parseDateOnly = (value) => {
   const [year, month, day] = String(value || '').split('-').map(Number)
@@ -27,6 +28,34 @@ const parseDateOnly = (value) => {
     return new Date(value)
   }
   return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+
+const isPastDateTime = (dateValue, timeValue) => {
+  if (!dateValue || !timeValue) return false
+  const [hour, minute] = String(timeValue).split(':').map(Number)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false
+  const target = parseDateOnly(dateValue)
+  target.setHours(hour, minute, 0, 0)
+  return target < new Date()
+}
+
+const getInitialBookingHour = (baseDate, selectedHour) => {
+  if (selectedHour !== null && selectedHour !== undefined) {
+    return Math.max(0, Math.min(22, selectedHour))
+  }
+
+  const now = new Date()
+  const sameDay =
+    baseDate.getFullYear() === now.getFullYear() &&
+    baseDate.getMonth() === now.getMonth() &&
+    baseDate.getDate() === now.getDate()
+
+  if (!sameDay) {
+    return 9
+  }
+
+  const nextHour = now.getMinutes() > 0 || now.getSeconds() > 0 ? now.getHours() + 1 : now.getHours()
+  return Math.max(9, Math.min(20, nextHour))
 }
 
 const groupedMembers = computed(() => {
@@ -84,6 +113,9 @@ const isSelectedMember = (userId) =>
 
 const toggleAttendee = (member) => {
   const targetUserId = getMemberUserId(member)
+  if (targetUserId && targetUserId === organizerUserId.value) {
+    return
+  }
   if (isSelectedMember(targetUserId)) {
     selectedParticipants.value = selectedParticipants.value.filter(
       (participant) => participant.userId !== targetUserId
@@ -96,6 +128,9 @@ const toggleAttendee = (member) => {
 const selectAllGroup = (group) => {
   group.members.forEach((member) => {
     const targetUserId = getMemberUserId(member)
+    if (targetUserId && targetUserId === organizerUserId.value) {
+      return
+    }
     if (!isSelectedMember(targetUserId)) {
       selectedParticipants.value.push({ userId: targetUserId, name: member.name })
     }
@@ -152,6 +187,16 @@ const getCurrentUserName = () => {
   }
 }
 
+const getCurrentUserId = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || 'null')
+    const userId = Number(user?.id)
+    return Number.isFinite(userId) && userId > 0 ? userId : null
+  } catch {
+    return null
+  }
+}
+
 const loadMembers = async () => {
   isMembersLoading.value = true
   try {
@@ -178,7 +223,7 @@ watch(
   (open) => {
     if (!open) return
     const baseDate = props.selectedDate || new Date()
-    const defaultHour = Math.max(0, Math.min(22, props.selectedHour ?? 9))
+    const defaultHour = getInitialBookingHour(baseDate, props.selectedHour)
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
     state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
@@ -188,9 +233,13 @@ watch(
     startHour12.value = startParts.hour12
     endMeridiem.value = endParts.period
     endHour12.value = endParts.hour12
+    organizerUserId.value = getCurrentUserId()
     state.organizer = getCurrentUserName()
     selectedParticipants.value = []
-    submitError.value = ''
+    submitError.value =
+      props.selectedHour !== null && isPastDateTime(state.date, state.startTime)
+        ? '이미 지난 시간은 예약할 수 없습니다. 현재 이후 시간으로 다시 선택해 주세요.'
+        : ''
     memberSearchQuery.value = ''
     selectedGroupId.value = null
     attendeeInput.value = ''
@@ -231,6 +280,7 @@ watch([endMeridiem, endHour12], ([period, hour]) => {
 
 const handleSubmit = () => {
   formError.value = ''
+  submitError.value = ''
   if (!props.room) {
     formError.value = '회의실 정보를 확인해주세요.'
     return
@@ -256,25 +306,27 @@ const handleSubmit = () => {
   }
 
   if (startDateTime >= endDateTime) {
-    submitError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
+    formError.value = '종료 시간은 시작 시간보다 늦어야 합니다.'
     return
   }
 
   if (startHour < 8 || startHour > 20 || endHour < 8 || endHour > 21) {
-    submitError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
+    formError.value = '예약 시간은 08:00~21:00 범위에서 입력해 주세요.'
     return
   }
 
   const now = new Date()
   if (startDateTime < now) {
-    submitError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
+    formError.value = '지난 시간으로는 예약할 수 없습니다. 현재 이후 시간으로 선택해 주세요.'
     return
   }
 
-  const attendeesList = selectedParticipants.value.map((participant) => participant.name)
+  const attendeesList = selectedParticipants.value
+    .filter((participant) => participant.userId !== organizerUserId.value)
+    .map((participant) => participant.name)
   const participantUserIds = selectedParticipants.value
     .map((participant) => participant.userId)
-    .filter((userId) => Number.isFinite(userId))
+    .filter((userId) => Number.isFinite(userId) && userId !== organizerUserId.value)
   const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
 
   emit('confirm', {
@@ -412,24 +464,33 @@ const handleSubmit = () => {
                       :key="getMemberUserId(member) ?? member.id ?? member.name"
                       @click="toggleAttendee(member)"
                       class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
-                      :class="isSelectedMember(getMemberUserId(member)) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                      :class="getMemberUserId(member) === organizerUserId
+                        ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                        : isSelectedMember(getMemberUserId(member))
+                          ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200'
+                          : 'bg-white border-slate-200 hover:border-brand-200'"
+                      :disabled="getMemberUserId(member) === organizerUserId"
                     >
                       <div
                         class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                        :class="isSelectedMember(getMemberUserId(member)) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'"
+                        :class="getMemberUserId(member) === organizerUserId
+                          ? 'bg-slate-200 text-slate-500'
+                          : isSelectedMember(getMemberUserId(member))
+                            ? 'bg-brand-200 text-brand-700'
+                            : 'bg-slate-100 text-slate-500'"
                       >
                         {{ member.name?.[0] || '?' }}
                       </div>
                       <div class="flex-1 min-w-0">
                         <p
                           class="text-xs font-bold text-slate-700 truncate"
-                          :class="{ 'text-brand-700': isSelectedMember(getMemberUserId(member)) }"
+                          :class="{ 'text-brand-700': isSelectedMember(getMemberUserId(member)) && getMemberUserId(member) !== organizerUserId }"
                         >
                           {{ member.name }}
                         </p>
-                        <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
+                        <p class="text-[10px] text-slate-400 truncate">{{ getMemberUserId(member) === organizerUserId ? '주최자 본인' : member.position }}</p>
                       </div>
-                      <div v-if="isSelectedMember(getMemberUserId(member))" class="text-brand-600">
+                      <div v-if="isSelectedMember(getMemberUserId(member)) && getMemberUserId(member) !== organizerUserId" class="text-brand-600">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                       </div>
                     </button>

@@ -19,6 +19,13 @@ const selectedDateObject = computed(() =>
   props.selectedDate ? new Date(`${props.selectedDate}T00:00:00`) : null
 )
 
+const isPastSlot = (hour) => {
+  if (!selectedDateObject.value) return false
+  const target = new Date(selectedDateObject.value)
+  target.setHours(hour, 0, 0, 0)
+  return target < new Date()
+}
+
 const getBookingsForRoomAndHour = (roomId, hour) => {
   return props.bookings.filter((booking) => {
     if (booking.roomId !== roomId) return false
@@ -99,8 +106,10 @@ const goToPage = (page) => {
               v-for="hour in hours"
               :key="hour"
               class="flex-1 border-r last:border-r-0 relative min-h-[80px]"
-              :class="getBookingsForRoomAndHour(room.id, hour).length === 0 ? 'cursor-pointer hover:bg-emerald-50/50' : ''"
-              @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && emit('timeSlotClick', room.id, hour)"
+              :class="getBookingsForRoomAndHour(room.id, hour).length === 0
+                ? (isPastSlot(hour) ? 'cursor-not-allowed bg-slate-100/70' : 'cursor-pointer hover:bg-emerald-50/50')
+                : ''"
+              @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && !isPastSlot(hour) && emit('timeSlotClick', room.id, hour)"
             >
               <template v-for="booking in getBookingsForRoomAndHour(room.id, hour)" :key="booking.id">
                 <div
