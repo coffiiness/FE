@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
@@ -44,7 +44,11 @@ onMounted(async () => {
 const loadTemplate = async () => {
   loading.value = true
   try {
-    template.value = recruitmentStore.templates.find((item) => item.id === templateId.value) || null
+    const fromList = recruitmentStore.templates.find((item) => item.id === templateId.value) || null
+    if (fromList) template.value = fromList
+
+    const detail = await recruitmentStore.fetchTemplateById(templateId.value)
+    template.value = detail || fromList
   } catch (error) {
     console.error('템플릿을 불러오지 못했습니다.', error)
   } finally {

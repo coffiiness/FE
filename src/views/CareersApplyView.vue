@@ -1,6 +1,7 @@
 ﻿<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import { careerApi } from '@/api/career'
 import applicantClient from '@/api/applicantClient'
 import { useApplicantAuth } from '@/composables/useApplicantAuth'
@@ -24,7 +25,8 @@ const formData = ref({
   gender: '',
   birthDate: '',
   phone: '',
-  email: ''
+  email: '',
+  shortBio: ''
 })
 
 const customAnswers = ref({})
@@ -32,22 +34,149 @@ const customAnswers = ref({})
 const parseCustomFields = (formData) => {
   const raw = formData?.customFields ?? formData?.questions ?? formData?.questionFields ?? []
 
-  let parsed = []
-  if (Array.isArray(raw)) {
-    parsed = raw
-  } else if (typeof raw === 'string') {
+  let parsed = raw
+  for (let i = 0; i < 3; i += 1) {
+    if (Array.isArray(parsed)) break
+    if (typeof parsed !== 'string') break
     try {
-      const json = JSON.parse(raw)
-      parsed = Array.isArray(json) ? json : []
+      parsed = JSON.parse(parsed)
     } catch {
       parsed = []
+      break
     }
   }
 
-  return parsed.map((field, index) => ({
-    ...field,
-    id: field?.id || `custom_${index}`
-  }))
+  if (!Array.isArray(parsed)) parsed = []
+
+  return parsed
+    .map((field, index) => ({
+      ...field,
+      id: field?.id || `custom_${index}`,
+      options: Array.isArray(field?.options)
+        ? field.options.map((item) => String(item || '').trim()).filter(Boolean)
+        : typeof field?.options === 'string'
+          ? field.options.split(/[\/,\n]/).map((item) => item.trim()).filter(Boolean)
+          : []
+    }))
+    .filter((field) => {
+      // "간단 자기소개"는 기본 정보 필드이므로 추가 질문 영역에서 제외
+      const normalizedId = String(field?.id || '').trim().toLowerCase()
+      const normalizedLabel = String(field?.label || '').trim().replace(/\s+/g, '')
+      if (normalizedId === 'shortbio') return false
+      if (normalizedLabel === '간단자기소개') return false
+      return true
+    })
+}
+
+const initAnswerForField = (field) => {
+  if (field.type === 'file') return null
+  if (field.type === 'checkbox') return []
+  return ''
+}
+
+const handleFileChange = (field, event) => {
+  const file = event?.target?.files?.[0]
+  if (!file) {
+    customAnswers.value[field.id] = null
+    return
+  }
+
+  const maxFileSizeMB = Number(field?.maxFileSizeMB || 10)
+  const maxBytes = maxFileSizeMB * 1024 * 1024
+  if (Number.isFinite(maxBytes) && maxBytes > 0 && file.size > maxBytes) {
+    errorMsg.value = `"${field.label}" 파일은 최대 ${maxFileSizeMB}MB까지 업로드할 수 있습니다.`
+    event.target.value = ''
+    customAnswers.value[field.id] = null
+    return
+  }
+
+  customAnswers.value[field.id] = file
+}
+
+const getFileName = (value) => {
+  if (typeof File !== 'undefined' && value instanceof File) return value.name
+  return ''
+}
+
+const normalizeSchemaForSubmit = (schema) => {
+  return Object.entries(schema).reduce((acc, [key, value]) => {
+    if (typeof File !== 'undefined' && value instanceof File) {
+      // /applications는 schema를 단순 값으로 받는 환경이 있어 파일명으로 전달
+      acc[key] = value.name || ''
+      return acc
+    }
+
+    if (Array.isArray(value) || (value && typeof value === 'object')) {
+      acc[key] = JSON.stringify(value)
+      return acc
+    }
+
+    acc[key] = value ?? ''
+    return acc
+  }, {})
+}
+
+const resolveApiData = (response) => {
+  const body = response?.data
+  if (body?.data !== undefined) return body.data
+  return body
+}
+
+const uploadApplicationFiles = async (applicationId, applicantId) => {
+  const fileFields = (applyForm.value?.parsedCustomFields || []).filter((field) => field.type === 'file')
+
+  for (const field of fileFields) {
+    const file = customAnswers.value[field.id]
+    if (!(typeof File !== 'undefined' && file instanceof File)) {
+      continue
+    }
+
+    const requestBody = {
+      applicationId,
+      applicantId,
+      fieldKey: field.id,
+      originalFilename: file.name,
+      contentType: file.type || 'application/octet-stream'
+    }
+
+    // 일부 환경에서 requesterUserId 쿼리 파라미터가 필요할 수 있어 4xx에만 fallback
+    let presignResponse
+    try {
+      presignResponse = await applicantClient.post('/application-files/presign-upload', requestBody)
+    } catch (error) {
+      const status = Number(error?.response?.status || 0)
+      const canFallback = status >= 400 && status < 500
+      if (!canFallback) throw error
+
+      presignResponse = await applicantClient.post(
+        `/application-files/presign-upload?requesterUserId=${applicantId}`,
+        requestBody
+      )
+    }
+
+    const presign = resolveApiData(presignResponse)
+    if (!presign?.uploadUrl || !presign?.fileId) {
+      throw new Error('파일 업로드 URL을 받지 못했습니다.')
+    }
+
+    await axios.put(presign.uploadUrl, file, {
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream'
+      }
+    })
+
+    try {
+      await applicantClient.post('/application-files/complete', { fileId: presign.fileId })
+    } catch (error) {
+      const status = Number(error?.response?.status || 0)
+      const canFallback = status >= 400 && status < 500
+      if (!canFallback) throw error
+
+      await applicantClient.post(`/application-files/complete?requesterUserId=${applicantId}`, {
+        fileId: presign.fileId
+      })
+    }
+  }
 }
 
 onMounted(async () => {
@@ -67,7 +196,7 @@ onMounted(async () => {
     }
 
     parsedCustomFields.forEach((field) => {
-      customAnswers.value[field.id] = ''
+      customAnswers.value[field.id] = initAnswerForField(field)
     })
 
     if (applicant.value) {
@@ -106,13 +235,15 @@ const validateForm = () => {
   if (!formData.value.birthDate) { errorMsg.value = '생년월일을 입력해주세요.'; return false }
   if (!formData.value.phone.trim()) { errorMsg.value = '연락처를 입력해주세요.'; return false }
   if (!formData.value.email.trim()) { errorMsg.value = '이메일을 입력해주세요.'; return false }
+  if (!formData.value.shortBio.trim()) { errorMsg.value = '간단 자기소개를 입력해주세요.'; return false }
 
   for (const field of applyForm.value?.parsedCustomFields || []) {
     const answer = customAnswers.value[field.id]
     const isEmptyString = typeof answer === 'string' && !answer.trim()
-    const isUnchecked = typeof answer === 'boolean' && !answer
+    const isUnchecked = Array.isArray(answer) ? answer.length === 0 : typeof answer === 'boolean' && !answer
+    const isEmptyFile = field.type === 'file' && !(typeof File !== 'undefined' && answer instanceof File)
 
-    if (field.required && (answer === null || answer === undefined || isEmptyString || isUnchecked)) {
+    if (field.required && (answer === null || answer === undefined || isEmptyString || isUnchecked || isEmptyFile)) {
       errorMsg.value = `"${field.label}" 항목을 입력해주세요.`
       return false
     }
@@ -134,20 +265,57 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
+    const applicantId = Number(applicant.value?.id ?? applicant.value?.applicantId ?? 0)
+    const hasFileAttachment = (applyForm.value?.parsedCustomFields || []).some((field) => {
+      if (field.type !== 'file') return false
+      const answer = customAnswers.value[field.id]
+      return typeof File !== 'undefined' && answer instanceof File
+    })
+
+    if (hasFileAttachment && (!Number.isFinite(applicantId) || applicantId <= 0)) {
+      throw new Error('지원자 정보 확인에 실패했습니다. 다시 로그인 후 시도해주세요.')
+    }
+
+    const schemaPayload = normalizeSchemaForSubmit({
+      ...customAnswers.value,
+      shortBio: formData.value.shortBio.trim()
+    })
+
     const payload = {
-      recruitmentId: Number(jobId.value),
-      recruitmentProcessId: applyForm.value.firstStageId,
-      templateId: applyForm.value.templateId,
+      applicantId: Number.isFinite(applicantId) && applicantId > 0 ? applicantId : null,
+      recruitmentId: Number(applyForm.value?.recruitmentId ?? jobId.value),
+      recruitmentProcessId: Number(applyForm.value?.firstStageId ?? 0) || null,
+      templateId: Number(applyForm.value?.templateId ?? 0) || null,
       name: formData.value.name.trim(),
       gender: formData.value.gender,
       birthDate: formData.value.birthDate,
       phone: formData.value.phone.trim(),
       email: formData.value.email.trim(),
-      schema: customAnswers.value
+      schema: schemaPayload
     }
 
-    await applicantClient.post('/applications', payload)
-    successMsg.value = '지원서가 성공적으로 제출되었습니다.'
+    const createResponse = await applicantClient.post('/applications', payload)
+    const created = resolveApiData(createResponse)
+    const applicationId = Number(created?.applicationId ?? created?.id ?? 0)
+
+    let fileUploadFailed = false
+
+    if (hasFileAttachment) {
+      if (!Number.isFinite(applicationId) || applicationId <= 0) {
+        throw new Error('지원서 ID 확인에 실패하여 파일 업로드를 진행할 수 없습니다.')
+      }
+
+      try {
+        await uploadApplicationFiles(applicationId, applicantId)
+      } catch (uploadError) {
+        fileUploadFailed = true
+        console.error('첨부파일 업로드 실패', uploadError)
+      }
+    }
+
+    successMsg.value = fileUploadFailed
+      ? '지원서는 제출되었지만 첨부파일 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+      : '지원서가 성공적으로 제출되었습니다.'
 
     setTimeout(() => {
       router.push(`/careers/${companySlug.value}`)
@@ -165,6 +333,7 @@ const handleSubmit = async () => {
 }
 
 const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
+const getValueLength = (value) => (value ? String(value).length : 0)
 </script>
 
 <template>
@@ -193,7 +362,7 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
       <div v-if="!isAuthenticated" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
         <div class="text-sm">지원서를 제출하려면 먼저 로그인해 주세요.</div>
         <button
-          @click="router.push({ path: `/careers/${companySlug}/login`, query: { redirect: route.fullPath } })"
+          @click="router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })"
           class="shrink-0 px-3 py-1.5 text-xs font-semibold text-amber-900 border border-amber-300 rounded-md hover:bg-amber-100 transition-colors"
         >
           로그인
@@ -204,7 +373,7 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <h1 class="text-2xl font-bold text-gray-900 mb-2">지원서 작성</h1>
-        <p class="text-gray-600 mb-1">{{ applyForm?.title }}</p>
+        <p class="text-3xl font-bold text-gray-900 mb-1">{{ applyForm?.title }}</p>
         <p class="text-sm text-gray-400 mb-8">아래 양식을 작성하고 지원서를 제출해 주세요.</p>
 
         <div v-if="errorMsg" class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">{{ errorMsg }}</div>
@@ -215,7 +384,7 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
 
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">이름 <span class="text-red-500">*</span></label>
-              <input v-model="formData.name" type="text" placeholder="이름을 입력해주세요" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              <input v-model="formData.name" type="text" placeholder="이름을 입력해주세요" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
             </div>
 
             <div class="mb-4">
@@ -234,36 +403,53 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
 
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">생년월일 <span class="text-red-500">*</span></label>
-              <input v-model="formData.birthDate" type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              <input v-model="formData.birthDate" type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
             </div>
 
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">연락처 <span class="text-red-500">*</span></label>
-              <input v-model="formData.phone" type="tel" placeholder="010-1234-5678" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              <label class="block text-sm font-medium text-gray-700 mb-2">연락처<span class="text-red-500">*</span></label>
+              <input v-model="formData.phone" type="tel" placeholder="010-1234-5678" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-700 mb-2">이메일<span class="text-red-500">*</span></label>
+              <input v-model="formData.email" type="email" placeholder="example@email.com" class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">이메일 <span class="text-red-500">*</span></label>
-              <input v-model="formData.email" type="email" placeholder="example@email.com" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500" />
+              <label class="block text-sm font-medium text-gray-700 mb-2">간단 자기소개 <span class="text-red-500">*</span></label>
+              <div class="relative">
+                <textarea
+                  v-model="formData.shortBio"
+                  :maxlength="1000"
+                  rows="4"
+                  placeholder="간단한 자기소개를 작성해주세요"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                ></textarea>
+                <span class="absolute bottom-3 right-3 text-xs text-gray-400">{{ getValueLength(formData.shortBio) }} / 1000</span>
+              </div>
             </div>
           </div>
 
           <div v-if="applyForm?.parsedCustomFields?.length > 0">
             <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">추가 질문</h2>
 
-            <div v-for="field in applyForm.parsedCustomFields" :key="field.id" class="mb-4">
+            <div v-for="field in applyForm.parsedCustomFields" :key="field.id" class="mb-4 rounded-xl border border-gray-200 bg-gray-50/40 p-4">
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 {{ field.label }}
                 <span v-if="field.required" class="text-red-500 ml-1">*</span>
               </label>
 
-              <input
-                v-if="field.type === 'short_text' || field.type === 'text'"
-                v-model="customAnswers[field.id]"
-                type="text"
-                :placeholder="field.placeholder || ''"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-              />
+              <template v-if="field.type === 'short_text' || field.type === 'text'">
+                <input
+                  v-model="customAnswers[field.id]"
+                  type="text"
+                  :placeholder="field.placeholder || ''"
+                  :maxlength="field.maxLength || 200"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                />
+                <p class="mt-1 text-right text-xs text-gray-400">{{ getValueLength(customAnswers[field.id]) }} / {{ field.maxLength || 200 }}</p>
+              </template>
 
               <div v-else-if="field.type === 'long_text' || field.type === 'textarea'" class="relative">
                 <textarea
@@ -271,7 +457,7 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
                   :placeholder="field.placeholder || ''"
                   :maxlength="field.maxLength || 1000"
                   rows="4"
-                  class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-800 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+                  class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
                 ></textarea>
                 <span class="absolute bottom-3 right-3 text-xs text-gray-400">{{ getTextLength(field.id) }} / {{ field.maxLength || 1000 }}</span>
               </div>
@@ -279,11 +465,11 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
               <select
                 v-else-if="field.type === 'select'"
                 v-model="customAnswers[field.id]"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
               >
                 <option value="">선택해주세요</option>
                 <option
-                  v-for="option in (field.options || '').split('/').map((item) => item.trim()).filter(Boolean)"
+                  v-for="option in field.options || []"
                   :key="option"
                   :value="option"
                 >
@@ -291,17 +477,43 @@ const getTextLength = (fieldId) => customAnswers.value[fieldId]?.length || 0
                 </option>
               </select>
 
-              <label v-else-if="field.type === 'checkbox'" class="flex items-center gap-2 cursor-pointer">
-                <input v-model="customAnswers[field.id]" type="checkbox" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" />
-                <span class="text-sm text-gray-700">{{ field.label }}</span>
-              </label>
+              <div v-else-if="field.type === 'checkbox'" class="space-y-2">
+                <label
+                  v-for="option in field.options || []"
+                  :key="`${field.id}-${option}`"
+                  class="flex items-center gap-2 cursor-pointer"
+                >
+                  <input
+                    v-model="customAnswers[field.id]"
+                    :value="option"
+                    type="checkbox"
+                    class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                  />
+                  <span class="text-sm text-gray-700">{{ option }}</span>
+                </label>
+              </div>
+
+              <div v-else-if="field.type === 'file'" class="space-y-2">
+                <input
+                  type="file"
+                  :accept="field.accept || undefined"
+                  @change="handleFileChange(field, $event)"
+                  class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 font-medium file:mr-3 file:px-3 file:py-1.5 file:rounded-md file:border-0 file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100"
+                />
+                <p class="text-xs text-gray-500">
+                  허용 확장자: {{ field.accept || '모든 파일' }} / 최대 {{ field.maxFileSizeMB || 10 }}MB
+                </p>
+                <p v-if="getFileName(customAnswers[field.id])" class="text-xs text-brand-700">
+                  선택 파일: {{ getFileName(customAnswers[field.id]) }}
+                </p>
+              </div>
 
               <input
                 v-else
                 v-model="customAnswers[field.id]"
                 type="text"
                 :placeholder="field.placeholder || ''"
-                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
               />
             </div>
           </div>

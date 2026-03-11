@@ -1,5 +1,5 @@
-const IN_USE = '\uC0AC\uC6A9\uC911' // »ç¿ëÁß
-const UNUSED = '\uBBF8\uC0AC\uC6A9' // ¹Ì»ç¿ë
+const IN_USE = '\uC0AC\uC6A9\uC911' // Korean status: in-use
+const UNUSED = '\uBBF8\uC0AC\uC6A9' // Korean status: unused
 
 export const TEMPLATE_STATUS = {
   IN_USE,
@@ -10,7 +10,7 @@ export const normalizeTemplateStatus = (rawStatus) => {
   const status = String(rawStatus || '').trim()
   if (!status) return UNUSED
 
-  // Handles "»ç¿ëÁß" and "»ç¿ë Áß"
+  // Accept both compact and spaced variants, e.g. "ì‚¬ìš©ì¤‘" and "ì‚¬ìš© ì¤‘".
   const compact = status.replace(/\s+/g, '')
   if (compact === IN_USE) return IN_USE
   if (compact === UNUSED) return UNUSED

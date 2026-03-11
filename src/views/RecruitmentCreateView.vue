@@ -1,10 +1,11 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { isTemplateInUse } from '@/utils/templateStatus'
 
 const router = useRouter()
 const store = useRecruitmentStore()
@@ -45,10 +46,12 @@ const stageTypes = [
 ]
 
 const templates = computed(() => {
-  return store.templates.map((template) => ({
-    id: template.id,
-    name: template.name || template.title || ''
-  }))
+  return store.templates
+    .filter((template) => template.id && isTemplateInUse(template.status))
+    .map((template) => ({
+      id: Number(template.id),
+      name: template.name || template.title || ''
+    }))
 })
 
 onMounted(async () => {
@@ -702,4 +705,3 @@ const handleSubmit = async () => {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 </style>
-

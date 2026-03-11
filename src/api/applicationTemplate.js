@@ -1,4 +1,4 @@
-﻿import api from './index'
+import api from './index'
 
 const BASE_PATH = '/application-templates'
 
@@ -25,6 +25,15 @@ const resolveWorkspaceBasePath = () => {
 }
 
 export const applicationTemplateApi = {
+  async getTemplate(templateId) {
+    try {
+      return await api.get(`${BASE_PATH}/${templateId}`)
+    } catch (error) {
+      const workspaceBasePath = resolveWorkspaceBasePath()
+      if (!workspaceBasePath || !shouldFallbackWorkspacePath(error)) throw error
+      return api.get(`${workspaceBasePath}/${templateId}`)
+    }
+  },
   async getTemplates(params = {}) {
     try {
       return await api.get(BASE_PATH, { params })

@@ -15,35 +15,94 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     const status = err.response?.status
     const message = err.response?.data?.message
 
-    if (status === 400) return { type: 'VALIDATION', message: message || '입력값을 확인해 주세요.' }
-    if (status === 403 || (status === 400 && message?.includes('권한'))) {
-      return { type: 'FORBIDDEN', message: '해당 요청을 수행할 권한이 없습니다.' }
+    if (status === 400) return { type: 'VALIDATION', message: message || '?낅젰媛믪쓣 ?뺤씤??二쇱꽭??' }
+    if (status === 403 || (status === 400 && message?.includes('沅뚰븳'))) {
+      return { type: 'FORBIDDEN', message: '?대떦 ?붿껌???섑뻾??沅뚰븳???놁뒿?덈떎.' }
     }
-    if (status === 401) return { type: 'UNAUTHORIZED', message: '로그인이 필요합니다.' }
-    return { type: 'SERVER_ERROR', message: '일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' }
+    if (status === 401) return { type: 'UNAUTHORIZED', message: '濡쒓렇?몄씠 ?꾩슂?⑸땲??' }
+    return { type: 'SERVER_ERROR', message: '?쇱떆?곸씤 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??' }
   }
 
   const parseCustomFields = (value) => {
     if (Array.isArray(value)) return value
+
     if (typeof value === 'string') {
       try {
         const parsed = JSON.parse(value)
-        return Array.isArray(parsed) ? parsed : []
+        return parseCustomFields(parsed)
       } catch (_) {
         return []
       }
     }
+
+    if (value && typeof value === 'object') {
+      const nestedCandidates = [
+        value.customFields,
+        value.customFieldsJson,
+        value.questions,
+        value.questionsJson,
+        value.questionFields,
+        value.fields,
+        value.items
+      ]
+
+      for (const candidate of nestedCandidates) {
+        const parsedCandidate = parseCustomFields(candidate)
+        if (parsedCandidate.length > 0) return parsedCandidate
+      }
+
+      const objectValues = Object.values(value)
+      if (objectValues.length > 0 && objectValues.every((item) => item && typeof item === 'object')) {
+        const looksLikeField = objectValues.every((item) => 'label' in item || 'type' in item)
+        if (looksLikeField) return objectValues
+      }
+    }
+
     return []
   }
 
+  const resolveTemplateId = (template = {}) => {
+    const rawId =
+      template.id ??
+      template.templateId ??
+      template.applicationTemplateId ??
+      template.applicationFormTemplateId
+
+    const numericId = Number(rawId)
+    return Number.isFinite(numericId) ? numericId : null
+  }
   const sanitizeCustomFields = (fields) => {
-    return parseCustomFields(fields).map((field, index) => ({
-      id: field?.id ?? `custom_${Date.now()}_${index}`,
-      label: String(field?.label || '').trim(),
-      type: String(field?.type || '').trim(),
-      required: Boolean(field?.required),
-      options: field?.options ?? ''
-    })).filter((field) => field.label && field.type)
+    const normalizeOptions = (value) => {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean)
+      }
+      if (typeof value === 'string') {
+        return value
+          .split(/[\/,\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      }
+      return []
+    }
+
+    const toNumberOrNull = (value) => {
+      const number = Number(value)
+      return Number.isFinite(number) && number > 0 ? number : null
+    }
+
+    return parseCustomFields(fields)
+      .map((field, index) => ({
+        id: field?.id ?? `custom_${Date.now()}_${index}`,
+        label: String(field?.label || '').trim(),
+        type: String(field?.type || '').trim(),
+        required: Boolean(field?.required),
+        options: normalizeOptions(field?.options),
+        maxLength: toNumberOrNull(field?.maxLength),
+        multiline: Boolean(field?.multiline),
+        accept: String(field?.accept || '*/*').trim() || '*/*',
+        maxFileSizeMB: toNumberOrNull(field?.maxFileSizeMB)
+      }))
+      .filter((field) => field.label && field.type)
   }
 
   const buildTemplatePayload = (template = {}) => {
@@ -59,14 +118,16 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
       customFieldsJson: JSON.stringify(normalizedCustomFields),
       questions: normalizedCustomFields,
       questionsJson: JSON.stringify(normalizedCustomFields),
-      questionFields: normalizedCustomFields
+      questionFields: normalizedCustomFields,
+      customQuestions: normalizedCustomFields,
+      templateFields: normalizedCustomFields
     }
   }
 
   const mapTemplate = (template) => ({
-    id: Number(template.id ?? template.templateId),
-    name: template.name || template.title || '',
-    title: template.title || template.name || '',
+    id: resolveTemplateId(template),
+    name: template.name || template.title || template.templateName || '',
+    title: template.title || template.name || template.templateName || '',
     createdAt: template.createdAt || '',
     updatedAt: template.updatedAt || '',
     status: normalizeTemplateStatus(template.status ?? template.templateStatus ?? template.useStatus),
@@ -74,7 +135,9 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     recruitmentCount: Number(template.recruitmentCount || 0),
     customFields: parseCustomFields(
       template.customFields ??
+      template.customFieldsJson ??
       template.questions ??
+      template.questionsJson ??
       template.questionFields ??
       template.customQuestions
     )
@@ -129,7 +192,9 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     try {
       const res = await applicationTemplateApi.getTemplates()
       const rawTemplates = res?.data?.data || []
-      templates.value = rawTemplates.map(mapTemplate)
+      templates.value = rawTemplates
+        .map(mapTemplate)
+        .filter((template) => template.id !== null)
       return templates.value
     } catch (err) {
       error.value = parseError(err)
@@ -196,6 +261,24 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     }
   }
 
+
+  const fetchTemplateById = async (templateId) => {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await applicationTemplateApi.getTemplate(templateId)
+      const mapped = mapTemplate(res?.data?.data || {})
+      const index = templates.value.findIndex((template) => template.id === mapped.id)
+      if (index !== -1) templates.value[index] = mapped
+      else if (mapped.id !== null) templates.value.unshift(mapped)
+      return mapped
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
   const fetchApplicationTemplates = fetchTemplates
 
   const deleteTemplate = async (id) => {
@@ -232,6 +315,7 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     fetchInterviewSchedules,
     fetchTemplates,
     fetchApplicationTemplates,
+    fetchTemplateById,
     addTemplate,
     updateTemplate,
     updateTemplateStatus,
@@ -240,5 +324,4 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     deleteJob
   }
 })
-
 
