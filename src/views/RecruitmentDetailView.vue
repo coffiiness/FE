@@ -84,6 +84,15 @@ const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}
 const selectedDay = ref(null)
 const expandedBookingIds = ref(new Set())
 
+const toPositiveNumber = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : null
+}
+
+const getMemberUserId = (member) => {
+  return toPositiveNumber(member?.userId ?? member?.id ?? member?.memberId)
+}
+
 // --- Constants ---
 const labels = {
   allInterviewers: '전체 면접관',
@@ -141,6 +150,20 @@ const recruitment = computed(() => {
   // 기간 텍스트
   const startStr = job.startDate ? new Date(job.startDate).toLocaleDateString('ko-KR') : '미정'
   const endStr = job.endDate ? new Date(job.endDate).toLocaleDateString('ko-KR') : '미정'
+  const assignees = Array.isArray(job.assignees) ? job.assignees : []
+  const rawInterviewerIds = Array.isArray(job.interviewerIds) ? job.interviewerIds : []
+  const interviewerIds = [...new Set([
+    ...rawInterviewerIds.map((id) => toPositiveNumber(id)).filter(Boolean),
+    ...assignees
+      .map((assignee) => toPositiveNumber(assignee?.userId ?? assignee?.id ?? assignee?.memberId))
+      .filter(Boolean)
+  ])]
+  const interviewerNames = [...new Set([
+    ...assignees.map((assignee) => assignee?.name || '?').filter(Boolean),
+    ...(Array.isArray(job.interviewers)
+      ? job.interviewers.map((interviewer) => typeof interviewer === 'string' ? interviewer : interviewer?.name).filter(Boolean)
+      : [])
+  ])]
 
   return {
     id: job.id,
@@ -151,7 +174,8 @@ const recruitment = computed(() => {
     totalApplicants: (job.stages || []).reduce((sum, s) => sum + (s.applicantCount || 0), 0),
     ongoingInterviews: 0,
     completionRate: 0,
-    interviewers: (job.assignees || []).map(a => a.name || '?'),
+    interviewers: interviewerNames,
+    interviewerIds,
     position: positionText,
     leadGroupName: job.leadGroupName || '-',
     stages: job.stages || []
@@ -170,9 +194,17 @@ const allEmployees = computed(() => {
 
 // Initialize interviewers based on recruitment data
 watch([recruitment, allEmployees], ([newVal, employees]) => {
-  if (newVal && newVal.id && newVal.interviewers && employees.length > 0) {
+  if (newVal && newVal.id && employees.length > 0) {
+    const interviewerIds = Array.isArray(newVal.interviewerIds)
+      ? newVal.interviewerIds.map((id) => toPositiveNumber(id)).filter(Boolean)
+      : []
+    const interviewerNames = Array.isArray(newVal.interviewers) ? newVal.interviewers : []
+
     interviewers.value = employees
-      .filter(emp => newVal.interviewers.includes(emp.name))
+      .filter((employee) => {
+        const userId = getMemberUserId(employee)
+        return (userId && interviewerIds.includes(userId)) || interviewerNames.includes(employee.name)
+      })
       .map((emp, idx) => ({
         ...emp,
         bgClass: 'bg-blue-600',
@@ -791,7 +823,10 @@ const copyRecruitmentLink = () => {
 }
 
 const toggleInterviewerAssignment = (intr) => {
-  const index = interviewers.value.findIndex(i => i.id === intr.id)
+  const targetUserId = getMemberUserId(intr)
+  if (!targetUserId) return
+
+  const index = interviewers.value.findIndex((interviewer) => getMemberUserId(interviewer) === targetUserId)
   if (index === -1) {
     interviewers.value.push({
       ...intr,
@@ -983,7 +1018,8 @@ const getBookingsForDay = (date) => {
 
 const getInterviewerName = (id) => {
   if (!id) return '미지정'
-  const emp = allEmployees.value.find(e => e.id === id)
+  const targetId = toPositiveNumber(id)
+  const emp = allEmployees.value.find((employee) => getMemberUserId(employee) === targetId)
   return emp ? emp.name : 'Unknown'
 }
 
@@ -1041,6 +1077,7 @@ const normalizeSchedule = (item) => {
 
   const interviewerIds = Array.isArray(item?.interviewerIds) ? item.interviewerIds : []
   const interviewerId =
+    Number(item?.interviewer?.userId) ||
     Number(item?.interviewerId) ||
     Number(item?.interviewer?.id) ||
     Number(interviewerIds[0]) ||
@@ -1093,6 +1130,9 @@ onMounted(async () => {
       console.error('채용 공고 목록 조회 실패:', error)
     })
   }
+  await organizationStore.loadOrganizations().catch((error) => {
+    console.error('조직도 조회 실패:', error)
+  })
   memberApi
     .getMyMember()
     .then((res) => {
@@ -1208,7 +1248,7 @@ const getDayColor = (index) => {
             <button @click="isInterviewerEditModalOpen = true" class="text-[10px] font-bold text-brand-600 hover:underline">편집</button>
           </div>
           <div class="space-y-3">
-            <div v-for="member in interviewers" :key="member.id" class="flex items-center">
+            <div v-for="member in interviewers" :key="getMemberUserId(member) ?? member.id" class="flex items-center">
               <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 mr-3 border border-slate-200">
                 {{ member.name[0] }}
               </div>
@@ -1881,10 +1921,10 @@ const getDayColor = (index) => {
           </button>
         </div>
         <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-          <div v-for="intr in allEmployees" :key="intr.id" 
+          <div v-for="intr in allEmployees" :key="getMemberUserId(intr) ?? intr.id" 
                @click="toggleInterviewerAssignment(intr)"
                class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
-               :class="interviewers.some(i => i.id === intr.id) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
+               :class="interviewers.some(i => getMemberUserId(i) === getMemberUserId(intr)) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
             <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3">
               {{ intr.name[0] }}
             </div>
@@ -1892,7 +1932,7 @@ const getDayColor = (index) => {
               <p class="text-sm font-bold text-slate-800">{{ intr.name }}</p>
               <p class="text-xs text-slate-400">{{ intr.position }}</p>
             </div>
-            <div v-if="interviewers.some(i => i.id === intr.id)" class="text-brand-500">
+            <div v-if="interviewers.some(i => getMemberUserId(i) === getMemberUserId(intr))" class="text-brand-500">
               <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
             </div>
           </div>
@@ -1970,3 +2010,6 @@ const getDayColor = (index) => {
   opacity: 0;
 }
 </style>
+
+
+

@@ -111,34 +111,27 @@ const filteredOrganizations = computed(() => {
 })
 
 // 선택된 면접관 상세 정보
+const getMemberUserId = (member) => {
+  const id = toPositiveNumber(member?.userId ?? member?.id ?? member?.memberId)
+  return id || null
+}
+
 const selectedInterviewerDetails = computed(() => {
   return form.value.interviewerIds.map(id => {
-    const member = allMembers.value.find(m => m.id === id)
-    return member || { id, name: '알 수 없음', position: '', teamName: '' }
+    const numericId = Number(id)
+    const member = allMembers.value.find(m => getMemberUserId(m) === numericId)
+    return member || { id: numericId, userId: numericId, name: '? ? ??', position: '', teamName: '' }
   })
 })
 
 // 전체 팀 목록 (담당/참조 조직 선택용)
 const allTeams = computed(() => {
   return organizations.value.flatMap(dept =>
-    dept.teams.map(team => ({ id: team.id, name: `${dept.name} > ${team.name}` }))
+    dept.teams
+      .filter(team => team.selectable !== false)
+      .map(team => ({ id: team.id, name: `${dept.name} > ${team.name}` }))
   )
 })
-
-// 선택된 담당 조직 이름
-const selectedLeadTeamName = computed(() => {
-  const team = allTeams.value.find(t => t.id === form.value.leadTeamId)
-  return team ? team.name : null
-})
-
-// 선택된 참조 조직 이름들
-const selectedRefTeamNames = computed(() => {
-  return form.value.referenceTeamIds.map(id => {
-    const team = allTeams.value.find(t => t.id === id)
-    return team ? { id, name: team.name } : { id, name: '?' }
-  })
-})
-
 const toggleLeadDept = (deptId) => {
   if (leadExpandedDepts.value.has(deptId)) leadExpandedDepts.value.delete(deptId)
   else leadExpandedDepts.value.add(deptId)
@@ -366,7 +359,7 @@ const collectInterviewerIds = (source, memberNameMap) => {
   for (const item of source) {
     const directId = toPositiveNumber(
       typeof item === 'object' && item !== null
-        ? (item.id ?? item.memberId ?? item.userId ?? item.interviewerId)
+        ? (item.userId ?? item.interviewerId ?? item.id ?? item.memberId)
         : item
     )
 
@@ -408,7 +401,6 @@ const normalizeStageType = (typeValue, stageName = '') => {
 
   return 'INTERVIEW'
 }
-
 const normalizeStages = (job) => {
   const stageSources = [
     job.stages,
@@ -554,11 +546,11 @@ const setFormFromJob = (job) => {
 
   const memberNameMap = new Map()
   for (const member of allMembers.value) {
-    const memberId = toPositiveNumber(member.id)
-    if (!memberId) continue
+    const userId = getMemberUserId(member)
+    if (!userId) continue
 
-    memberNameMap.set(member.name, memberId)
-    memberNameMap.set(normalizeText(member.name), memberId)
+    memberNameMap.set(member.name, userId)
+    memberNameMap.set(normalizeText(member.name), userId)
   }
 
   const interviewerIds = uniquePositiveNumbers([
@@ -832,6 +824,11 @@ const applyRouteMode = async () => {
   showSuccessModal.value = false
   closeNoticeModal()
 
+  try {
+    await orgStore.loadOrganizations()
+  } catch (_) {
+  }
+
   if (isEditMode.value) {
     resetToCreateDefaults()
     await fetchJobDetail()
@@ -999,7 +996,7 @@ watch(() => route.params.id, async () => {
                     <span class="text-[10px] text-slate-400">{{ dept.teams.length }}팀</span>
                   </button>
                   <div v-if="leadExpandedDepts.has(dept.id)">
-                    <button v-for="team in dept.teams" :key="team.id"
+                    <button v-for="team in dept.teams.filter(team => team.selectable !== false)" :key="team.id"
                             @click="form.leadTeamId = team.id"
                             type="button"
                             class="w-full flex items-center pl-10 pr-4 py-2.5 border-b border-slate-100 transition-all text-left"
@@ -1052,7 +1049,7 @@ watch(() => route.params.id, async () => {
                     <span class="text-[10px] text-slate-400">{{ dept.teams.length }}팀</span>
                   </button>
                   <div v-if="refExpandedDepts.has(dept.id)">
-                    <button v-for="team in dept.teams" :key="team.id"
+                    <button v-for="team in dept.teams.filter(team => team.selectable !== false)" :key="team.id"
                             @click="toggleSelection(form.referenceTeamIds, team.id)"
                             type="button"
                             class="w-full flex items-center pl-10 pr-4 py-2.5 border-b border-slate-100 transition-all text-left"
@@ -1080,14 +1077,14 @@ watch(() => route.params.id, async () => {
               
               <!-- 선택된 면접관 칩 -->
               <div v-if="selectedInterviewerDetails.length > 0" class="flex flex-wrap gap-2 mb-4 p-3 bg-brand-50/50 rounded-xl border border-brand-100">
-                <div v-for="member in selectedInterviewerDetails" :key="member.id"
+                <div v-for="member in selectedInterviewerDetails" :key="getMemberUserId(member) ?? member.id"
                      class="inline-flex items-center gap-1.5 bg-white border border-brand-200 rounded-lg px-2.5 py-1.5 shadow-sm">
                   <div class="w-6 h-6 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 text-[10px] font-bold">
                     {{ member.name?.substring(0, 1) }}
                   </div>
                   <span class="text-xs font-bold text-slate-700">{{ member.name }}</span>
                   <span class="text-[10px] text-slate-400">{{ member.teamName }}</span>
-                  <button @click="removeInterviewer(member.id)" type="button" class="ml-0.5 text-slate-400 hover:text-rose-500 transition-colors">
+                  <button @click="removeInterviewer(getMemberUserId(member) ?? member.id)" type="button" class="ml-0.5 text-slate-400 hover:text-rose-500 transition-colors">
                     <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
@@ -1142,20 +1139,20 @@ watch(() => route.params.id, async () => {
 
                       <!-- 멤버(Member) 레벨 -->
                       <div v-if="expandedTeams.has(team.id)">
-                        <button v-for="member in team.members" :key="member.id"
-                                @click="toggleSelection(form.interviewerIds, member.id)"
+                        <button v-for="member in team.members" :key="getMemberUserId(member) ?? member.id"
+                                @click="toggleSelection(form.interviewerIds, getMemberUserId(member))"
                                 type="button"
                                 class="w-full flex items-center pl-14 pr-4 py-2.5 border-b border-slate-50 transition-all text-left"
-                                :class="form.interviewerIds.includes(member.id) ? 'bg-brand-50' : 'hover:bg-slate-50'">
+                                :class="form.interviewerIds.includes(getMemberUserId(member)) ? 'bg-brand-50' : 'hover:bg-slate-50'">
                           <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mr-3 transition-colors"
-                               :class="form.interviewerIds.includes(member.id) ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600'">
+                               :class="form.interviewerIds.includes(getMemberUserId(member)) ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600'">
                             {{ member.name.substring(0, 1) }}
                           </div>
                           <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium text-slate-700">{{ member.name }}</p>
                             <p class="text-[11px] text-slate-400">{{ member.position }}</p>
                           </div>
-                          <div v-if="form.interviewerIds.includes(member.id)">
+                          <div v-if="form.interviewerIds.includes(getMemberUserId(member))">
                             <svg class="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
                           </div>
                         </button>

@@ -29,8 +29,8 @@ const groupedMembers = computed(() => {
     }))
     .filter((member) => {
       if (!query) return true
-      const text = `${member.name || ''} ${member.groupName || ''} ${member.position || ''}`.toLowerCase()
-      return text.includes(query)
+      const searchText = [member.name || '', member.groupName || '', member.position || ''].join(' ').toLowerCase()
+      return searchText.includes(query)
     })
 
   const groupOrder = groups.value.map((group) => group.name)
@@ -48,7 +48,7 @@ const groupedMembers = computed(() => {
   ]
 
   return orderedGroupNames.map((groupName, index) => ({
-    id: groups.value.find((group) => group.name === groupName)?.id ?? `group-${index}`,
+    id: groups.value.find((group) => group.name === groupName)?.id ?? 'group-' + index,
     name: groupName,
     members: groupedMap.get(groupName) ?? []
   }))
@@ -58,26 +58,6 @@ const currentGroup = computed(
   () => groupedMembers.value.find((group) => String(group.id) === String(selectedGroupId.value)) ?? null
 )
 
-const toggleGroup = (groupId) => {
-  selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
-}
-
-const toggleAttendee = (name) => {
-  if (form.value.attendees.includes(name)) {
-    form.value.attendees = form.value.attendees.filter((a) => a !== name)
-  } else {
-    form.value.attendees.push(name)
-  }
-}
-
-const selectAllGroup = (group) => {
-  group.members.forEach((member) => {
-    if (!form.value.attendees.includes(member.name)) {
-      form.value.attendees.push(member.name)
-    }
-  })
-}
-
 const form = ref({
   title: '',
   date: '',
@@ -86,12 +66,73 @@ const form = ref({
   type: 'INTERVIEW',
   description: '',
   roomId: null,
-  attendees: []
+  attendees: [],
+  attendeeIds: []
 })
 
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
 const validationMessage = ref('')
+
+const toggleGroup = (groupId) => {
+  selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
+}
+
+const getMemberUserId = (member) => {
+  const rawId = Number(member?.userId ?? member?.id)
+  return Number.isFinite(rawId) && rawId > 0 ? rawId : null
+}
+
+const getMemberName = (member) => String(member?.name ?? '').trim()
+
+const isSelectedMember = (member) => {
+  const userId = getMemberUserId(member)
+  if (userId && form.value.attendeeIds.includes(userId)) {
+    return true
+  }
+
+  const name = getMemberName(member)
+  return !!name && form.value.attendees.includes(name)
+}
+
+const addMemberAttendee = (member) => {
+  const name = getMemberName(member)
+  const userId = getMemberUserId(member)
+
+  if (name && !form.value.attendees.includes(name)) {
+    form.value.attendees.push(name)
+  }
+
+  if (userId && !form.value.attendeeIds.includes(userId)) {
+    form.value.attendeeIds.push(userId)
+  }
+}
+
+const removeMemberAttendee = (member) => {
+  const name = getMemberName(member)
+  const userId = getMemberUserId(member)
+
+  if (name) {
+    form.value.attendees = form.value.attendees.filter((attendee) => attendee !== name)
+  }
+
+  if (userId) {
+    form.value.attendeeIds = form.value.attendeeIds.filter((attendeeId) => attendeeId !== userId)
+  }
+}
+
+const toggleAttendee = (member) => {
+  if (isSelectedMember(member)) {
+    removeMemberAttendee(member)
+    return
+  }
+
+  addMemberAttendee(member)
+}
+
+const selectAllGroup = (group) => {
+  group.members.forEach((member) => addMemberAttendee(member))
+}
 
 const loadMembers = async () => {
   isMembersLoading.value = true
@@ -130,7 +171,7 @@ const toMinutes = (timeValue) => {
 const normalizeTimeInput = (timeValue, fallback = '00:00') => {
   if (!timeValue) return fallback
   const [hour = '00', minute = '00'] = String(timeValue).split(':')
-  return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+  return hour.padStart(2, '0') + ':' + minute.padStart(2, '0')
 }
 
 const roomSchedulesOnDate = computed(() => {
@@ -196,7 +237,10 @@ watch(
         startTime: normalizeTimeInput(props.initialData.startTime, '13:00'),
         endTime: normalizeTimeInput(props.initialData.endTime, '14:00'),
         roomId: props.initialData.roomId ?? null,
-        attendees: Array.isArray(props.initialData.attendees) ? props.initialData.attendees : []
+        attendees: Array.isArray(props.initialData.attendees) ? [...props.initialData.attendees] : [],
+        attendeeIds: Array.isArray(props.initialData.attendeeIds)
+          ? props.initialData.attendeeIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+          : []
       }
     } else {
       form.value = {
@@ -207,7 +251,8 @@ watch(
         type: 'MEETING',
         description: '',
         roomId: null,
-        attendees: []
+        attendees: [],
+        attendeeIds: []
       }
     }
 
@@ -226,7 +271,18 @@ const addAttendee = () => {
 }
 
 const removeAttendee = (index) => {
-  form.value.attendees.splice(index, 1)
+  const removed = form.value.attendees.splice(index, 1)
+  const removedName = removed[0]
+  if (!removedName) return
+
+  const matchedUserIds = members.value
+    .filter((member) => getMemberName(member) === removedName)
+    .map((member) => getMemberUserId(member))
+    .filter((id) => Number.isFinite(id) && id > 0)
+
+  if (matchedUserIds.length === 0) return
+
+  form.value.attendeeIds = form.value.attendeeIds.filter((attendeeId) => !matchedUserIds.includes(attendeeId))
 }
 
 const openValidationModal = (message) => {
@@ -276,6 +332,7 @@ const save = () => {
     }
   }
 
+  payload.attendeeIds = [...new Set((payload.attendeeIds || []).map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))]
   emit('save', payload)
 }
 
@@ -429,20 +486,20 @@ onMounted(() => {
                   <div class="grid grid-cols-2 gap-2">
                     <button
                       v-for="member in currentGroup.members"
-                      :key="member.id"
-                      @click="toggleAttendee(member.name)"
+                      :key="getMemberUserId(member) ?? member.id ?? member.name"
+                      @click="toggleAttendee(member)"
                       class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
-                      :class="form.attendees.includes(member.name) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
+                      :class="isSelectedMember(member) ? 'bg-brand-50 border-brand-200 ring-1 ring-brand-200' : 'bg-white border-slate-200 hover:border-brand-200'"
                     >
                       <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                           :class="form.attendees.includes(member.name) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'">
+                           :class="isSelectedMember(member) ? 'bg-brand-200 text-brand-700' : 'bg-slate-100 text-slate-500'">
                         {{ member.name[0] }}
                       </div>
                       <div class="flex-1 min-w-0">
-                        <p class="text-xs font-bold text-slate-700 truncate" :class="{ 'text-brand-700': form.attendees.includes(member.name) }">{{ member.name }}</p>
+                        <p class="text-xs font-bold text-slate-700 truncate" :class="{ 'text-brand-700': isSelectedMember(member) }">{{ member.name }}</p>
                         <p class="text-[10px] text-slate-400 truncate">{{ member.position }}</p>
                       </div>
-                      <div v-if="form.attendees.includes(member.name)" class="text-brand-600">
+                      <div v-if="isSelectedMember(member)" class="text-brand-600">
                         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                       </div>
                     </button>
@@ -467,7 +524,7 @@ onMounted(() => {
               <input
                 v-model="attendeeInput"
                 @keydown.enter.prevent="addAttendee"
-                @keydown.backspace="attendeeInput === '' && form.attendees.pop()"
+                @keydown.backspace="attendeeInput === '' && form.attendees.length > 0 && removeAttendee(form.attendees.length - 1)"
                 type="text"
                 placeholder="외부 이름 직접 입력"
                 class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
