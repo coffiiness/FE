@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useNotificationStore, formatNotificationTimeAgo } from '@/stores/notification'
+import { buildNotificationFallbackRoute, useNotificationStore, formatNotificationTimeAgo } from '@/stores/notification'
 import { useAnnouncementNotificationModal } from '@/composables/useAnnouncementNotificationModal'
 import AnnouncementDetailModal from '@/components/announcement/AnnouncementDetailModal.vue'
 import { storeToRefs } from 'pinia'
@@ -48,10 +48,14 @@ const handleNotificationClick = async (item) => {
       return
     }
 
-    await goToNotificationsPage()
+    emit('close')
+
+    const target = item.actionUrl || buildNotificationFallbackRoute(item)
+    const resolved = router.resolve(target)
+    await router.push(resolved?.matched?.length ? target : buildNotificationFallbackRoute(item))
   } catch (error) {
-    console.error('알림 읽음 처리 실패:', error)
-    actionError.value = '알림을 열지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    console.error('알림 이동 실패:', error)
+    actionError.value = '알림 이동에 실패했습니다. 다시 한 번 시도해 주세요.'
   }
 }
 

@@ -19,6 +19,21 @@ const isMembersLoading = ref(false)
 const memberSearchQuery = ref('')
 const selectedGroupId = ref(null)
 
+const getCurrentUser = () => {
+  try {
+    const rawUser = JSON.parse(localStorage.getItem('user') || 'null')
+    const parsedId = Number(rawUser?.id)
+    return {
+      id: Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null,
+      name: String(rawUser?.name || '').trim()
+    }
+  } catch {
+    return { id: null, name: '' }
+  }
+}
+
+const currentUser = ref(getCurrentUser())
+
 const groupedMembers = computed(() => {
   const query = memberSearchQuery.value.trim().toLowerCase()
   const normalizedMembers = members.value
@@ -28,6 +43,14 @@ const groupedMembers = computed(() => {
       position: member?.memberType === 'HR' ? '인사담당자' : '면접관'
     }))
     .filter((member) => {
+      const memberUserId = getMemberUserId(member)
+      const memberName = getMemberName(member)
+      if (memberUserId && currentUser.value.id && memberUserId === currentUser.value.id) {
+        return false
+      }
+      if (!memberUserId && currentUser.value.name && memberName === currentUser.value.name) {
+        return false
+      }
       if (!query) return true
       const searchText = [member.name || '', member.groupName || '', member.position || ''].join(' ').toLowerCase()
       return searchText.includes(query)
@@ -83,7 +106,7 @@ const toggleGroup = (groupId) => {
 }
 
 const getMemberUserId = (member) => {
-  const rawId = Number(member?.userId ?? member?.id)
+  const rawId = Number(member?.userId)
   return Number.isFinite(rawId) && rawId > 0 ? rawId : null
 }
 
@@ -102,6 +125,13 @@ const isSelectedMember = (member) => {
 const addMemberAttendee = (member) => {
   const name = getMemberName(member)
   const userId = getMemberUserId(member)
+  const isCurrentUser =
+    (userId && currentUser.value.id && userId === currentUser.value.id) ||
+    (!userId && currentUser.value.name && name === currentUser.value.name)
+
+  if (isCurrentUser) {
+    return
+  }
 
   if (name && !form.value.attendees.includes(name)) {
     form.value.attendees.push(name)
@@ -244,6 +274,8 @@ watch(
   () => props.isOpen,
   (newVal) => {
     if (!newVal) return
+
+    currentUser.value = getCurrentUser()
 
     if (props.initialData) {
       const initialStartTime = normalizeTimeInput(props.initialData.startTime, '13:00')

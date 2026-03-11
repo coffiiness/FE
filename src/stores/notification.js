@@ -62,6 +62,7 @@ export const formatNotificationDateTime = (value) => {
 export const buildNotificationFallbackRoute = (item) => {
   if (item?.targetType === 'ANNOUNCEMENT') return '/dashboard'
   if (String(item?.targetType || '').startsWith('INTERVIEW')) return '/recruitment/interview/response'
+  if (item?.targetType === 'SCHEDULE') return '/schedule'
   return '/notifications'
 }
 

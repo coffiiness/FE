@@ -70,6 +70,19 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     }
   }
 
+  const normalizeScheduleDetail = (item) => ({
+    ...normalizeSchedule(item),
+    location: item.location || '',
+    ownerName: item.ownerName || '',
+    attendeeIds: Array.isArray(item.attendeeIds)
+      ? item.attendeeIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+      : [],
+    attendees: Array.isArray(item.attendees)
+      ? item.attendees.filter((name) => typeof name === 'string' && name.trim())
+      : [],
+    applicantName: item.applicantName || ''
+  })
+
   const buildRequest = (formData) => {
     const toDateTime = (date, timeValue) => {
       if (!timeValue) return null
@@ -127,6 +140,13 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     }
   }
 
+  const getScheduleDetail = async (scheduleId) => {
+    await ensureWorkspaceId()
+    const res = await scheduleApi.getScheduleDetail(scheduleId)
+    const data = res.data?.data || res.data || null
+    return data ? normalizeScheduleDetail(data) : null
+  }
+
   const createSchedule = async (formData) => {
     await ensureWorkspaceId()
     const request = buildRequest(formData)
@@ -155,6 +175,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     getToday,
     formatTime,
     fetchSchedules,
+    getScheduleDetail,
     createSchedule,
     updateSchedule,
     deleteSchedule,

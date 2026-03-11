@@ -407,10 +407,32 @@ const handleDateClick = (date) => {
   isListModalOpen.value = true
 }
 
-const openDetailModal = (event) => {
-  const room = getRoomInfo(event)
-  selectedEventDetail.value = { ...event, room }
-  isDetailModalOpen.value = true
+const openDetailModal = async (event) => {
+  try {
+    const detail = await scheduleStore.getScheduleDetail(event.id)
+    const resolvedEvent = detail ? { ...event, ...detail } : event
+    const room = getRoomInfo(resolvedEvent)
+    selectedEventDetail.value = { ...resolvedEvent, room }
+    isDetailModalOpen.value = true
+  } catch (error) {
+    console.error('일정 상세 조회 실패:', error)
+    const room = getRoomInfo(event)
+    selectedEventDetail.value = { ...event, room }
+    isDetailModalOpen.value = true
+  }
+}
+
+// 알림에서 넘어온 일정 ID로 상세 모달을 엽니다.
+const openScheduleFromRouteQuery = async () => {
+  const scheduleId = Number(route.query.scheduleId)
+  if (Number.isNaN(scheduleId)) {
+    return
+  }
+
+  const target = allSchedules.value.find((event) => event.id === scheduleId)
+  if (target) {
+    await openDetailModal(target)
+  }
 }
 
 const mergeAcceptedSchedules = (items) => {
@@ -422,13 +444,13 @@ const mergeAcceptedSchedules = (items) => {
 }
 
 onMounted(async () => {
-  await Promise.all([loadSchedules(), loadMeetingRooms()])
-
-  const scheduleId = Number(route.query.scheduleId)
-  if (!Number.isNaN(scheduleId)) {
-    const target = allSchedules.value.find((e) => e.id === scheduleId)
-    if (target) openDetailModal(target)
+  const queryDate = typeof route.query.date === 'string' && route.query.date ? route.query.date : null
+  if (queryDate) {
+    selectedDate.value = queryDate
   }
+
+  await Promise.all([loadSchedules(), loadMeetingRooms()])
+  await openScheduleFromRouteQuery()
 })
 
 watch(
@@ -444,6 +466,23 @@ watch(
   () => selectedDate.value,
   async () => {
     await loadSchedules()
+    await openScheduleFromRouteQuery()
+  }
+)
+
+watch(
+  () => [route.query.date, route.query.scheduleId],
+  ([dateQuery, scheduleIdQuery], [previousDateQuery, previousScheduleIdQuery]) => {
+    if (dateQuery === previousDateQuery && scheduleIdQuery === previousScheduleIdQuery) {
+      return
+    }
+
+    if (typeof dateQuery === 'string' && dateQuery && dateQuery !== selectedDate.value) {
+      selectedDate.value = dateQuery
+      return
+    }
+
+    void openScheduleFromRouteQuery()
   }
 )
 
@@ -466,12 +505,19 @@ const openEditForm = async (event) => {
   if (!loaded) {
     openAlertModal({
       title: '회의실 목록 조회 실패',
-      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이 일정 수정은 가능합니다.'
+      message: '회의실 목록을 불러오지 못했습니다. 회의실 선택 없이도 일정 수정은 가능합니다.'
     })
   }
 
+  try {
+    const detail = await scheduleStore.getScheduleDetail(event.id)
+    selectedEventToEdit.value = detail ? { ...event, ...detail } : event
+  } catch (error) {
+    console.error('일정 상세 조회 실패:', error)
+    selectedEventToEdit.value = event
+  }
+
   isDetailModalOpen.value = false
-  selectedEventToEdit.value = event
   isFormModalOpen.value = true
 }
 
