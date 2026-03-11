@@ -65,6 +65,16 @@ export const buildNotificationFallbackRoute = (item) => {
   return '/notifications'
 }
 
+export const getNotificationVisualType = (item) => {
+  const type = String(item?.type || '').toUpperCase()
+  const filterType = String(item?.filterType || '').toUpperCase()
+
+  if (filterType === 'ANNOUNCEMENT') return 'announcement'
+  if (type === 'APPLICATION_PROCESS_CHANGED') return 'kanban'
+  if (filterType === 'INTERVIEW') return 'interview'
+  return 'system'
+}
+
 const normalizeNotification = (item = {}) => ({
   id: item.id,
   type: item.type || '',
