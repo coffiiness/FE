@@ -1,265 +1,420 @@
-﻿import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { notificationApi } from '@/api/notification'
 
-const formatDisplayDate = (date) => {
-  const month = date.toLocaleString('en-US', { month: 'short' })
-  const day = String(date.getDate()).padStart(2, '0')
-  return { month, day }
+export const NOTIFICATION_FILTERS = [
+  { label: '전체', value: 'ALL' },
+  { label: '공지사항', value: 'ANNOUNCEMENT' },
+  { label: '면접', value: 'INTERVIEW' },
+  { label: '시스템', value: 'SYSTEM' }
+]
+
+const DEFAULT_DROPDOWN_SIZE = 5
+const DEFAULT_PAGE_SIZE = 20
+const SSE_RETRY_DELAY = 3000
+
+const pad = (value) => String(value).padStart(2, '0')
+
+const toDate = (value) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const getFilterValue = (item) => {
+  const targetType = String(item?.targetType || '').toUpperCase()
+  const type = String(item?.type || '').toUpperCase()
+
+  if (targetType === 'ANNOUNCEMENT' || type.startsWith('ANNOUNCEMENT')) {
+    return 'ANNOUNCEMENT'
+  }
+  if (targetType.startsWith('INTERVIEW') || type.startsWith('INTERVIEW')) {
+    return 'INTERVIEW'
+  }
+  return 'SYSTEM'
+}
+
+export const formatNotificationTimeAgo = (value) => {
+  const date = toDate(value)
+  if (!date) return '-'
+
+  const diffMs = Date.now() - date.getTime()
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000))
+
+  if (diffMinutes < 1) return '방금 전'
+  if (diffMinutes < 60) return `${diffMinutes}분 전`
+
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}시간 전`
+
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}일 전`
+
+  return formatNotificationDateTime(value)
+}
+
+export const formatNotificationDateTime = (value) => {
+  const date = toDate(value)
+  if (!date) return '-'
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+export const buildNotificationFallbackRoute = (item) => {
+  if (item?.targetType === 'ANNOUNCEMENT') return '/dashboard'
+  if (String(item?.targetType || '').startsWith('INTERVIEW')) return '/recruitment/interview/response'
+  return '/notifications'
+}
+
+const normalizeNotification = (item = {}) => ({
+  id: item.id,
+  type: item.type || '',
+  title: item.title || '',
+  content: item.content || '',
+  targetType: item.targetType || '',
+  targetId: item.targetId ?? null,
+  actionUrl: item.actionUrl || null,
+  isRead: Boolean(item.isRead),
+  readAt: item.readAt || null,
+  createdAt: item.createdAt || null,
+  filterType: getFilterValue(item)
+})
+
+const extractContents = (response) => {
+  const data = response?.data?.data
+  return {
+    contents: Array.isArray(data?.contents) ? data.contents.map(normalizeNotification) : [],
+    hasNext: Boolean(data?.hasNext)
+  }
+}
+
+const parseSseChunk = (chunk) => {
+  const lines = chunk.split(/\r?\n/)
+  const event = { type: 'message', data: '' }
+
+  for (const line of lines) {
+    if (!line || line.startsWith(':')) continue
+
+    if (line.startsWith('event:')) {
+      event.type = line.slice(6).trim() || 'message'
+      continue
+    }
+
+    if (line.startsWith('data:')) {
+      const value = line.slice(5).trim()
+      event.data = event.data ? `${event.data}\n${value}` : value
+    }
+  }
+
+  return event
 }
 
 export const useNotificationStore = defineStore('notification', () => {
-  const STORAGE_KEY = 'calfit.notifications'
-  const ENABLE_PERSIST = false
-  const defaultNotifications = [
-    {
-      id: 1,
-      type: 'request',
-      title: '면접 일정 확인 요청',
-      dateRaw: '2024-02-07',
-      timeRange: '13:00 - 14:30',
-      displayDate: { month: 'Feb', day: '07' },
-      applicant: '박지수',
-      location: '5층 회의실 A',
-      requester: '김인사',
-      memo: '지원자 포트폴리오를 사전에 확인해 주세요.',
-      recruitmentTitle: '2024 상반기 백엔드 개발자 공개채용',
-      recruitmentStage: '면접',
-      scheduleId: 101,
-      timeAgo: '10분 전',
-      read: true,
-      createdAt: 1707284400000
-    },
-    {
-      id: 5,
-      type: 'request',
-      title: '면접 일정 확인 요청',
-      dateRaw: '2024-02-12',
-      timeRange: '09:30 - 10:00',
-      displayDate: { month: 'Feb', day: '12' },
-      applicant: '정하늘',
-      location: '온라인(Teams)',
-      requester: '오인사',
-      memo: '직무 과제 제출 여부 확인 부탁드립니다.',
-      recruitmentTitle: '2024 상반기 백엔드 개발자 공개채용',
-      recruitmentStage: '면접',
-      scheduleId: 106,
-      timeAgo: '어제',
-      read: false,
-      createdAt: 1707739800000
-    },
-    {
-      id: 3,
-      type: 'alert',
-      status: 'success',
-      title: '면접 일정 확정',
-      content: '지원자 이혜린님의 면접 일정이 최종 확정되었습니다.',
-      timeAgo: '어제',
-      read: true,
-      createdAt: 1707198000000,
-      scheduleId: 101
-    }
-  ]
-
-  const containsCorruptedText = (value) => {
-    if (typeof value === 'string') {
-      return value.includes('�') || value.includes('쨌')
-    }
-    if (Array.isArray(value)) {
-      return value.some(containsCorruptedText)
-    }
-    if (value && typeof value === 'object') {
-      return Object.values(value).some(containsCorruptedText)
-    }
-    return false
-  }
-
-  const loadFromStorage = () => {
-    if (!ENABLE_PERSIST) return null
-    if (typeof window === 'undefined') return null
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (!raw) return null
-      const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return null
-      if (containsCorruptedText(parsed)) return null
-      return parsed
-    } catch {
-      return null
-    }
-  }
-
-  const notifications = ref(loadFromStorage() ?? defaultNotifications)
+  const notifications = ref([])
+  const dropdownNotifications = ref([])
+  const unreadCountValue = ref(0)
   const acceptedSchedules = ref([])
+  const activeFilter = ref('ALL')
+  const hasNext = ref(false)
+  const currentPage = ref(0)
+  const pageSize = ref(DEFAULT_PAGE_SIZE)
+  const initialized = ref(false)
+  const loadingList = ref(false)
+  const loadingDropdown = ref(false)
+  const isMarkingAllRead = ref(false)
+  const isRemovingAll = ref(false)
+  const isDropdownOpen = ref(false)
+  const isNotificationPageActive = ref(false)
+  const isStreamConnected = ref(false)
 
-  if (notifications.value.length === 0) {
-    notifications.value = [...defaultNotifications]
+  let streamAbortController = null
+  let streamReconnectTimer = null
+
+  const unreadCount = computed(() => unreadCountValue.value)
+
+  const fetchUnreadCount = async () => {
+    const response = await notificationApi.getUnreadCount()
+    unreadCountValue.value = Number(response?.data?.data?.unreadCount || 0)
+    return unreadCountValue.value
   }
 
-  const hasRequest = notifications.value.some((n) => n.type === 'request')
-  if (!hasRequest) {
-    notifications.value = [...defaultNotifications, ...notifications.value]
+  const fetchDropdownNotifications = async ({ size = DEFAULT_DROPDOWN_SIZE, type } = {}) => {
+    loadingDropdown.value = true
+    try {
+      const response = await notificationApi.getUnreadList({
+        page: 0,
+        size,
+        ...(type ? { type } : {})
+      })
+      const { contents } = extractContents(response)
+      dropdownNotifications.value = contents
+      return contents
+    } finally {
+      loadingDropdown.value = false
+    }
   }
 
-  const requestNotifications = computed(() =>
-    notifications.value.filter((n) => n.type === 'request')
-  )
+  const fetchNotifications = async ({
+    page = 0,
+    size = pageSize.value,
+    filter = activeFilter.value,
+    append = false
+  } = {}) => {
+    loadingList.value = true
+    try {
+      const response = await notificationApi.getList({
+        page,
+        size,
+        ...(filter !== 'ALL' ? { type: filter } : {})
+      })
+      const { contents, hasNext: next } = extractContents(response)
 
-  const requestCount = computed(() => requestNotifications.value.length)
+      notifications.value = append ? [...notifications.value, ...contents] : contents
+      currentPage.value = page
+      pageSize.value = size
+      activeFilter.value = filter
+      hasNext.value = next
 
-  const unreadCount = computed(() =>
-    notifications.value.filter((n) => !n.read).length
-  )
+      return contents
+    } finally {
+      loadingList.value = false
+    }
+  }
 
-  const sortedNotifications = computed(() => {
-    return [...notifications.value].sort((a, b) => {
-      const aTime = typeof a.createdAt === 'number' ? a.createdAt : 0
-      const bTime = typeof b.createdAt === 'number' ? b.createdAt : 0
-      return bTime - aTime
+  const fetchNextNotifications = async () => {
+    if (!hasNext.value || loadingList.value) return []
+    return fetchNotifications({
+      page: currentPage.value + 1,
+      size: pageSize.value,
+      filter: activeFilter.value,
+      append: true
     })
-  })
+  }
 
-  const dismissedInAll = ref(new Set())
+  const initialize = async () => {
+    if (initialized.value) return
+    await Promise.all([fetchUnreadCount(), fetchDropdownNotifications()])
+    startNotificationStream()
+    initialized.value = true
+  }
 
-  const filteredAllNotifications = computed(() => {
-    return sortedNotifications.value.filter(
-      (n) => !dismissedInAll.value.has(n.id)
-    )
-  })
+  const refreshVisibleData = async () => {
+    await fetchUnreadCount()
 
-  const sortedRequestNotifications = computed(() => {
-    return [...requestNotifications.value].sort((a, b) => {
-      const aTime = typeof a.createdAt === 'number' ? a.createdAt : 0
-      const bTime = typeof b.createdAt === 'number' ? b.createdAt : 0
-      return bTime - aTime
-    })
-  })
+    const tasks = []
 
-  const dismissedFromDropdown = ref(new Set())
-
-  const dropdownNotifications = computed(() => {
-    return sortedNotifications.value.filter(
-      (n) => !dismissedFromDropdown.value.has(n.id)
-    )
-  })
-
-  const respondToRequest = (id, decision) => {
-    const target = notifications.value.find(
-      (n) => n.id === id && n.type === 'request'
-    )
-    if (!target) return null
-
-    notifications.value = notifications.value.filter((n) => n.id !== id)
-
-    const now = new Date()
-    const status = decision === 'accept' ? 'success' : 'danger'
-    const actionLabel = decision === 'accept' ? '수락' : '거절'
-    const newAlert = {
-      id: Date.now(),
-      type: 'alert',
-      status,
-      title: `일정 ${actionLabel} 완료`,
-      content: `지원자 ${target.applicant}님의 면접 일정 요청을 ${actionLabel}했습니다.`,
-      timeAgo: '방금 전',
-      read: true,
-      displayDate: formatDisplayDate(now),
-      createdAt: now.getTime(),
-      scheduleId: target.scheduleId
+    if (isDropdownOpen.value) {
+      tasks.push(fetchDropdownNotifications())
     }
 
-    notifications.value.unshift(newAlert)
+    if (isNotificationPageActive.value) {
+      tasks.push(fetchNotifications({
+        page: 0,
+        size: Math.max(pageSize.value, (currentPage.value + 1) * pageSize.value),
+        filter: activeFilter.value
+      }))
+    }
 
-    if (decision === 'accept' && target.scheduleId) {
-      const [startTimeRaw, endTimeRaw] = (target.timeRange || '').split('-')
-      const startTime = startTimeRaw ? startTimeRaw.trim() : ''
-      const endTime = endTimeRaw ? endTimeRaw.trim() : ''
-      const scheduleExists = acceptedSchedules.value.some(
-        (s) => s.id === target.scheduleId
-      )
-      if (!scheduleExists) {
-        acceptedSchedules.value.push({
-          id: target.scheduleId,
-          type: 'INTERVIEW',
-          title: `면접: ${target.applicant}`,
-          date: target.dateRaw,
-          startTime,
-          endTime,
-          description: target.memo
-            ? `${target.location} · ${target.memo}`
-            : target.location,
-          time: `${startTime} - ${endTime}`
-        })
+    if (tasks.length > 0) {
+      await Promise.all(tasks)
+    }
+  }
+
+  const handleStreamEvent = async (event) => {
+    if (event.type !== 'notification-created') return
+
+    try {
+      await refreshVisibleData()
+    } catch (error) {
+      console.error('알림 SSE 후 재조회 실패:', error)
+    }
+  }
+
+  const stopNotificationStream = () => {
+    if (streamReconnectTimer) {
+      clearTimeout(streamReconnectTimer)
+      streamReconnectTimer = null
+    }
+
+    if (streamAbortController) {
+      streamAbortController.abort()
+      streamAbortController = null
+    }
+
+    isStreamConnected.value = false
+  }
+
+  const scheduleReconnect = () => {
+    if (streamReconnectTimer) return
+
+    streamReconnectTimer = setTimeout(() => {
+      streamReconnectTimer = null
+      startNotificationStream()
+    }, SSE_RETRY_DELAY)
+  }
+
+  const startNotificationStream = async () => {
+    if (typeof window === 'undefined') return
+    if (streamAbortController) return
+
+    const accessToken = localStorage.getItem('accessToken')
+    const workspaceId = localStorage.getItem('workspaceId')
+
+    if (!accessToken || !workspaceId) return
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+    const streamUrl = `${baseUrl}/notifications/stream`
+
+    streamAbortController = new AbortController()
+
+    try {
+      const response = await fetch(streamUrl, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-Tenant-ID': workspaceId,
+          Accept: 'text/event-stream'
+        },
+        signal: streamAbortController.signal
+      })
+
+      if (!response.ok || !response.body) {
+        throw new Error(`SSE connection failed: ${response.status}`)
       }
+
+      isStreamConnected.value = true
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+
+        for (const part of parts) {
+          const parsed = parseSseChunk(part)
+          await handleStreamEvent(parsed)
+        }
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        console.error('알림 SSE 연결 실패:', error)
+        scheduleReconnect()
+      }
+    } finally {
+      isStreamConnected.value = false
+      streamAbortController = null
     }
-
-    return newAlert
   }
 
-  const dismissFromDropdown = (id) => {
-    dismissedFromDropdown.value = new Set(dismissedFromDropdown.value)
-    dismissedFromDropdown.value.add(id)
+  const setDropdownOpen = (value) => {
+    isDropdownOpen.value = Boolean(value)
   }
 
-  const clearDropdownDismissed = () => {
-    dismissedFromDropdown.value = new Set(
-      sortedNotifications.value.map((n) => n.id)
+  const setNotificationPageActive = (value) => {
+    isNotificationPageActive.value = Boolean(value)
+  }
+
+  const syncReadState = (id) => {
+    notifications.value = notifications.value.map((item) =>
+      item.id === id ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() } : item
     )
+    const target = dropdownNotifications.value.find((item) => item.id === id)
+    if (target && !target.isRead) {
+      dropdownNotifications.value = dropdownNotifications.value.filter((item) => item.id !== id)
+      unreadCountValue.value = Math.max(0, unreadCountValue.value - 1)
+    }
   }
 
-  const dismissFromAll = (id) => {
-    dismissedInAll.value = new Set(dismissedInAll.value)
-    dismissedInAll.value.add(id)
+  const markRead = async (id) => {
+    const existing = notifications.value.find((item) => item.id === id) ||
+      dropdownNotifications.value.find((item) => item.id === id)
+
+    if (existing?.isRead) return
+
+    await notificationApi.markRead(id)
+    syncReadState(id)
   }
 
-  const clearAllDismissed = () => {
-    dismissedInAll.value = new Set(sortedNotifications.value.map((n) => n.id))
+  const markAllRead = async () => {
+    if (isMarkingAllRead.value) return
+
+    isMarkingAllRead.value = true
+    try {
+      await notificationApi.markAllRead()
+      notifications.value = notifications.value.map((item) => ({
+        ...item,
+        isRead: true,
+        readAt: item.readAt || new Date().toISOString()
+      }))
+      dropdownNotifications.value = []
+      unreadCountValue.value = 0
+    } finally {
+      isMarkingAllRead.value = false
+    }
   }
 
-  const toggleRead = (id) => {
-    notifications.value = notifications.value.map((n) =>
-      n.id === id ? { ...n, read: !n.read } : n
-    )
+  const removeNotification = async (id) => {
+    const listTarget = notifications.value.find((item) => item.id === id)
+    const dropdownTarget = dropdownNotifications.value.find((item) => item.id === id)
+
+    await notificationApi.remove(id)
+
+    notifications.value = notifications.value.filter((item) => item.id !== id)
+    dropdownNotifications.value = dropdownNotifications.value.filter((item) => item.id !== id)
+
+    if ((listTarget && !listTarget.isRead) || (dropdownTarget && !dropdownTarget.isRead)) {
+      unreadCountValue.value = Math.max(0, unreadCountValue.value - 1)
+    }
   }
 
-  const markRead = (id) => {
-    notifications.value = notifications.value.map((n) =>
-      n.id === id ? { ...n, read: true } : n
-    )
-  }
+  const removeAllNotifications = async () => {
+    if (isRemovingAll.value) return
 
-  const markAllRead = () => {
-    notifications.value = notifications.value.map((n) => ({
-      ...n,
-      read: true
-    }))
+    isRemovingAll.value = true
+    try {
+      await notificationApi.removeAll()
+      notifications.value = []
+      dropdownNotifications.value = []
+      unreadCountValue.value = 0
+      hasNext.value = false
+      currentPage.value = 0
+    } finally {
+      isRemovingAll.value = false
+    }
   }
-
-  watch(
-    notifications,
-    (value) => {
-      if (!ENABLE_PERSIST) return
-      if (typeof window === 'undefined') return
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-    },
-    { deep: true }
-  )
 
   return {
     notifications,
-    requestNotifications,
-    sortedNotifications,
-    sortedRequestNotifications,
-    filteredAllNotifications,
-    acceptedSchedules,
-    requestCount,
-    unreadCount,
-    respondToRequest,
     dropdownNotifications,
-    dismissFromDropdown,
-    clearDropdownDismissed,
-    dismissFromAll,
-    clearAllDismissed,
-    toggleRead,
+    acceptedSchedules,
+    unreadCount,
+    activeFilter,
+    hasNext,
+    currentPage,
+    pageSize,
+    initialized,
+    loadingList,
+    loadingDropdown,
+    isMarkingAllRead,
+    isRemovingAll,
+    isStreamConnected,
+    fetchUnreadCount,
+    fetchDropdownNotifications,
+    fetchNotifications,
+    fetchNextNotifications,
+    initialize,
+    startNotificationStream,
+    stopNotificationStream,
+    setDropdownOpen,
+    setNotificationPageActive,
     markRead,
-    markAllRead
+    markAllRead,
+    removeNotification,
+    removeAllNotifications
   }
 })
