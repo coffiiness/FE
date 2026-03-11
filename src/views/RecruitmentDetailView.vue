@@ -93,6 +93,106 @@ const getMemberUserId = (member) => {
   return toPositiveNumber(member?.userId ?? member?.id ?? member?.memberId)
 }
 
+const firstFilledString = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+const normalizeDisplayName = (value) => {
+  const text = String(value || '').trim()
+  if (!text || text === '?' || text === '알 수 없음') return ''
+  return text
+}
+
+const getAllMembers = () => {
+  return organizations.value.flatMap((dept) =>
+    (dept.teams || []).flatMap((team) => team.members || [])
+  )
+}
+
+const getTeamNameById = (teamId) => {
+  const id = toPositiveNumber(teamId)
+  if (!id) return ''
+
+  for (const dept of organizations.value) {
+    for (const team of dept.teams || []) {
+      if (Number(team.id) === id) {
+        return `${dept.name} > ${team.name}`
+      }
+    }
+  }
+
+  return ''
+}
+
+const resolveLeadGroupName = (job) => {
+  return (
+    normalizeDisplayName(job.leadGroupName) ||
+    normalizeDisplayName(job.leadTeamName) ||
+    normalizeDisplayName(job.team) ||
+    getTeamNameById(job.leadGroupId ?? job.leadTeamId ?? job.teamId) ||
+    '부서 미지정'
+  )
+}
+
+const resolveInterviewerInfo = (job) => {
+  const names = []
+  const ids = []
+  const addName = (candidate) => {
+    const normalized = normalizeDisplayName(candidate)
+    if (!normalized) return
+    if (!names.includes(normalized)) names.push(normalized)
+  }
+
+  const addId = (idCandidate) => {
+    const id = toPositiveNumber(idCandidate)
+    if (!id) return
+    if (!ids.includes(id)) ids.push(id)
+
+    const mappedName = memberNameById.get(id)
+    if (mappedName) addName(mappedName)
+  }
+
+  const memberNameById = new Map(
+    getAllMembers()
+      .map((member) => [getMemberUserId(member), normalizeDisplayName(member.name)])
+      .filter(([id, name]) => id && name)
+  )
+
+  const assignees = Array.isArray(job.assignees) ? job.assignees : []
+  const explicitInterviewerIds = Array.isArray(job.interviewerIds) ? job.interviewerIds : []
+  const interviewers = Array.isArray(job.interviewers) ? job.interviewers : []
+
+  explicitInterviewerIds.forEach((value) => {
+    if (typeof value === 'object' && value !== null) {
+      addId(value.userId ?? value.memberId ?? value.id)
+      addName(value.name)
+      return
+    }
+
+    addId(value)
+  })
+
+  assignees.forEach((assignee) => {
+    addId(assignee?.userId ?? assignee?.memberId ?? assignee?.id)
+    addName(assignee?.name)
+  })
+
+  interviewers.forEach((interviewer) => {
+    if (typeof interviewer === 'string') {
+      addName(interviewer)
+      return
+    }
+
+    addId(interviewer?.userId ?? interviewer?.memberId ?? interviewer?.id)
+    addName(interviewer?.name)
+  })
+
+  return { ids, names }
+}
+
 // --- Constants ---
 const labels = {
   allInterviewers: '전체 면접관',
@@ -150,20 +250,7 @@ const recruitment = computed(() => {
   // 기간 텍스트
   const startStr = job.startDate ? new Date(job.startDate).toLocaleDateString('ko-KR') : '미정'
   const endStr = job.endDate ? new Date(job.endDate).toLocaleDateString('ko-KR') : '미정'
-  const assignees = Array.isArray(job.assignees) ? job.assignees : []
-  const rawInterviewerIds = Array.isArray(job.interviewerIds) ? job.interviewerIds : []
-  const interviewerIds = [...new Set([
-    ...rawInterviewerIds.map((id) => toPositiveNumber(id)).filter(Boolean),
-    ...assignees
-      .map((assignee) => toPositiveNumber(assignee?.userId ?? assignee?.id ?? assignee?.memberId))
-      .filter(Boolean)
-  ])]
-  const interviewerNames = [...new Set([
-    ...assignees.map((assignee) => assignee?.name || '?').filter(Boolean),
-    ...(Array.isArray(job.interviewers)
-      ? job.interviewers.map((interviewer) => typeof interviewer === 'string' ? interviewer : interviewer?.name).filter(Boolean)
-      : [])
-  ])]
+  const { ids: interviewerIds, names: interviewerNames } = resolveInterviewerInfo(job)
 
   return {
     id: job.id,
@@ -177,7 +264,7 @@ const recruitment = computed(() => {
     interviewers: interviewerNames,
     interviewerIds,
     position: positionText,
-    leadGroupName: job.leadGroupName || '-',
+    leadGroupName: resolveLeadGroupName(job),
     stages: job.stages || []
   }
 })
@@ -2010,6 +2097,3 @@ const getDayColor = (index) => {
   opacity: 0;
 }
 </style>
-
-
-

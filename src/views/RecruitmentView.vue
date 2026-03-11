@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useScheduleStore } from '@/stores/schedule'
+import { useOrganizationStore } from '@/stores/organization'
 
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
@@ -11,8 +12,10 @@ import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewLi
 const router = useRouter()
 const store = useRecruitmentStore()
 const scheduleStore = useScheduleStore()
+const organizationStore = useOrganizationStore()
 const { jobs, loading } = storeToRefs(store)
 const { schedules } = storeToRefs(scheduleStore)
+const { organizations } = storeToRefs(organizationStore)
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
@@ -90,6 +93,92 @@ const getCareerText = (job) => {
     return '경력'
   }
   return '경력 무관'
+}
+
+const toPositiveNumber = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : null
+}
+
+const getAllMembers = () => {
+  return organizations.value.flatMap((dept) =>
+    (dept.teams || []).flatMap((team) => team.members || [])
+  )
+}
+
+const getTeamNameById = (teamId) => {
+  const id = toPositiveNumber(teamId)
+  if (!id) return ''
+
+  for (const dept of organizations.value) {
+    for (const team of dept.teams || []) {
+      if (Number(team.id) === id) {
+        return `${dept.name} > ${team.name}`
+      }
+    }
+  }
+
+  return ''
+}
+
+const normalizeDisplayName = (value) => {
+  const text = String(value || '').trim()
+  if (!text || text === '?' || text === '알 수 없음') return ''
+  return text
+}
+
+const resolveTeamName = (job) => {
+  return (
+    normalizeDisplayName(job.leadGroupName) ||
+    normalizeDisplayName(job.leadTeamName) ||
+    normalizeDisplayName(job.team) ||
+    getTeamNameById(job.leadGroupId ?? job.leadTeamId ?? job.teamId) ||
+    '부서 미지정'
+  )
+}
+
+const resolveInterviewerNames = (job) => {
+  const names = []
+  const addName = (candidate) => {
+    const normalized = normalizeDisplayName(candidate)
+    if (!normalized) return
+    if (!names.includes(normalized)) names.push(normalized)
+  }
+
+  const memberNameById = new Map(
+    getAllMembers()
+      .map((member) => [toPositiveNumber(member.userId ?? member.id ?? member.memberId), normalizeDisplayName(member.name)])
+      .filter(([id, name]) => id && name)
+  )
+
+  const addId = (idCandidate) => {
+    const id = toPositiveNumber(idCandidate)
+    if (!id) return
+    addName(memberNameById.get(id))
+  }
+
+  const assignees = Array.isArray(job.assignees) ? job.assignees : []
+  const explicitIds = Array.isArray(job.interviewerIds) ? job.interviewerIds : []
+  const interviewers = Array.isArray(job.interviewers) ? job.interviewers : []
+
+  explicitIds.forEach((id) => addId(id))
+
+  assignees.forEach((assignee) => {
+    addId(assignee?.userId ?? assignee?.memberId ?? assignee?.id)
+    addName(assignee?.name)
+  })
+
+  interviewers.forEach((interviewer) => {
+    if (typeof interviewer === 'string') {
+      addName(interviewer)
+      return
+    }
+
+    addId(interviewer?.userId ?? interviewer?.memberId ?? interviewer?.id)
+    addName(interviewer?.name)
+  })
+
+  return names
 }
 
 // --- 상태 관리 ---
@@ -226,14 +315,14 @@ const filteredJobs = computed(() => {
       ddayValue: dday.value,
       ddayDetail: dday.detail || null,
       displayStatus: getDisplayStatus(job.status, job.endDate),
-      team: job.leadGroupName || '부서 미지정',
+      team: resolveTeamName(job),
       position: getCareerText(job),
       funnel: (job.stages || []).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0
       })),
-      interviewers: (job.assignees || []).map(a => a.name || '?')
+      interviewers: resolveInterviewerNames(job)
     }
   })
 

@@ -372,7 +372,7 @@ const collectInterviewerIds = (source, memberNameMap) => {
   for (const item of source) {
     const directId = toPositiveNumber(
       typeof item === 'object' && item !== null
-        ? (item.userId ?? item.interviewerId ?? item.id ?? item.memberId)
+        ? (item.userId ?? item.memberId ?? item.interviewerId ?? item.id)
         : item
     )
 
@@ -566,12 +566,18 @@ const setFormFromJob = (job) => {
     memberNameMap.set(normalizeText(member.name), userId)
   }
 
+  const knownMemberIds = new Set(
+    allMembers.value
+      .map((member) => getMemberUserId(member))
+      .filter(Boolean)
+  )
+
   const interviewerIds = uniquePositiveNumbers([
     ...collectInterviewerIds(job.interviewerIds, memberNameMap),
     ...collectInterviewerIds(job.assigneeIds, memberNameMap),
     ...collectInterviewerIds(job.assignees, memberNameMap),
     ...collectInterviewerIds(job.interviewers, memberNameMap)
-  ])
+  ]).filter((id) => knownMemberIds.has(id))
 
   const templateId = toPositiveNumber(
     job.applicationTemplateId ??
@@ -1323,6 +1329,3 @@ watch(() => route.params.id, async () => {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 </style>
-
-
-
