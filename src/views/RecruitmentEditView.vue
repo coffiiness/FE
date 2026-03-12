@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
+import { recruitmentApi } from '@/api/recruitment'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { storeToRefs } from 'pinia'
 
@@ -133,6 +134,29 @@ const toDateTimeLocal = (value) => {
   const mi = String(date.getMinutes()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
 }
+
+// stage 타입이 비어 있어도 이름 기준으로 최대한 원래 타입을 복원한다.
+const normalizeStageType = (typeValue, stageName = '') => {
+  const type = String(typeValue || '').toUpperCase().trim()
+
+  if (type === 'DOCUMENT' || type === 'DOC' || type === 'DOCUMENT_SCREEN') return 'DOCUMENT'
+  if (type === 'INTERVIEW' || type === 'MEETING') return 'INTERVIEW'
+  if (type === 'TEST' || type === 'TASK' || type === 'ASSIGNMENT') return 'TEST'
+  if (type === 'OFFER') return 'OFFER'
+  if (type === 'PASS' || type === 'FINAL_PASS' || type === 'HIRED' || type === 'HIRE') return 'PASS'
+  if (type === 'FAIL' || type === 'REJECT') return 'FAIL'
+
+  const normalizedName = String(stageName || '').trim()
+  if (normalizedName.includes('서류')) return 'DOCUMENT'
+  if (normalizedName.includes('면접')) return 'INTERVIEW'
+  if (normalizedName.includes('과제') || normalizedName.includes('테스트')) return 'TEST'
+  if (normalizedName.includes('처우')) return 'OFFER'
+  if (normalizedName.includes('불합격') || normalizedName.includes('탈락')) return 'FAIL'
+  if (normalizedName.includes('합격') || normalizedName.includes('최종')) return 'PASS'
+
+  return 'INTERVIEW'
+}
+
 const openNoticeModal = ({ title = '알림', message = '', type = 'info', confirmText = '확인', onConfirm = null } = {}) => {
   noticeModal.value = { show: true, title, message, type, confirmText, onConfirm }
 }
@@ -160,7 +184,20 @@ const fetchJobDetail = async () => {
       job = jobs.value.find(j => Number(j.id) === jobId)
     }
 
-    if (!job) {
+    let detailJob = null
+    try {
+      const detailResponse = await recruitmentApi.getRecruitmentDetail(jobId)
+      detailJob = detailResponse?.data?.data || null
+    } catch (detailError) {
+      console.error('채용 공고 상세 조회 실패:', detailError)
+    }
+
+    const mergedJob = {
+      ...(job || {}),
+      ...(detailJob || {})
+    }
+
+    if (!mergedJob?.id) {
       openNoticeModal({
         title: '조회 실패',
         message: '공고를 찾을 수 없습니다.',
@@ -187,48 +224,57 @@ const fetchJobDetail = async () => {
     const interviewerNameMap = {}
     interviewers.value.forEach(i => { interviewerNameMap[i.name] = i.id })
 
-    const leadGroupId = Number(job.leadGroupId || 0)
-    const referenceGroupIds = Array.isArray(job.referenceGroupIds)
-      ? job.referenceGroupIds.map(Number).filter(id => Number.isFinite(id) && id > 0)
+    const leadGroupId = Number(mergedJob.leadGroupId || 0)
+    const referenceGroupIds = Array.isArray(mergedJob.referenceGroupIds)
+      ? mergedJob.referenceGroupIds.map(Number).filter(id => Number.isFinite(id) && id > 0)
       : []
-    const fallbackTeamIds = teamNameMap[job.team] || []
+    const fallbackTeamIds = teamNameMap[mergedJob.team] || []
     const teamIds = [...new Set([leadGroupId, ...referenceGroupIds, ...fallbackTeamIds].filter(id => Number(id) > 0))]
 
-    const interviewerIds = Array.isArray(job.assignees)
-      ? job.assignees.map(a => Number(a.id)).filter(id => Number.isFinite(id) && id > 0)
-      : (job.interviewers || []).map(name => interviewerNameMap[name]).filter(id => Number(id) > 0)
+    const interviewerIds = Array.isArray(mergedJob.assignees)
+      ? mergedJob.assignees
+          .map(a => Number(a.userId ?? a.id ?? a.memberId))
+          .filter(id => Number.isFinite(id) && id > 0)
+      : (mergedJob.interviewers || [])
+          .map((interviewer) => {
+            if (typeof interviewer === 'object' && interviewer !== null) {
+              return Number(interviewer.userId ?? interviewer.id ?? interviewer.memberId)
+            }
+            return interviewerNameMap[interviewer]
+          })
+          .filter(id => Number.isFinite(id) && id > 0)
 
     form.value = {
-      id: job.id,
-      title: job.title || '',
-      status: job.status || 'ACTIVE',
-      targetCount: job.targetCount || 1,
-      startDate: toDateTimeLocal(job.startDate || job.createdAt),
-      endDate: toDateTimeLocal(job.endDate),
-      applicationTemplateId: job.applicationTemplateId || 1,
-      contents: job.contents || '',
+      id: mergedJob.id,
+      title: mergedJob.title || '',
+      status: mergedJob.status || mergedJob.recruitmentStatus || 'ACTIVE',
+      targetCount: mergedJob.targetCount || 1,
+      startDate: toDateTimeLocal(mergedJob.startDate || mergedJob.createdAt),
+      endDate: toDateTimeLocal(mergedJob.endDate),
+      applicationTemplateId: mergedJob.applicationTemplateId || 1,
+      contents: mergedJob.contents || '',
       teamId: teamIds,
       interviewerIds,
-      careerType: job.careerType || 'NEW',
-      minExperienceYears: job.minExperienceYears ?? null,
-      maxExperienceYears: job.maxExperienceYears ?? null,
+      careerType: mergedJob.careerType || 'NEW',
+      minExperienceYears: mergedJob.minExperienceYears ?? null,
+      maxExperienceYears: mergedJob.maxExperienceYears ?? null,
       leadGroupId: leadGroupId || teamIds[0] || null,
       referenceGroupIds
     }
 
     // 프로세스 복원 (신규 stages 우선, 기존 funnel 형식 호환)
-    if (Array.isArray(job.stages) && job.stages.length > 0) {
-      processes.value = [...job.stages]
+    if (Array.isArray(mergedJob.stages) && mergedJob.stages.length > 0) {
+      processes.value = [...mergedJob.stages]
         .sort((a, b) => (a.stageStep || 0) - (b.stageStep || 0))
         .map((s, idx) => ({
           stageName: s.stageName,
-          stageType: s.stageType || 'INTERVIEW',
+          stageType: normalizeStageType(s.stageType ?? s.type, s.stageName),
           stageStep: Number(s.stageStep) || (idx + 1)
         }))
-    } else if (Array.isArray(job.funnel) && job.funnel.length > 0) {
-      processes.value = job.funnel.map((f, idx) => ({
+    } else if (Array.isArray(mergedJob.funnel) && mergedJob.funnel.length > 0) {
+      processes.value = mergedJob.funnel.map((f, idx) => ({
         stageName: f.step,
-        stageType: 'INTERVIEW',
+        stageType: normalizeStageType(f.stageType ?? f.type, f.step),
         stageStep: idx + 1
       }))
     } else {
