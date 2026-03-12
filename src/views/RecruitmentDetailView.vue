@@ -6,9 +6,12 @@ import { applicationBoardApi } from '@/api/applicationBoard'
 import { automationRulesApi } from '@/api/automationRules'
 import { automationTemplatesApi } from '@/api/automationTemplates'
 import { memberApi } from '@/api/member'
+import { recruitmentApi } from '@/api/recruitment'
+import { useAuth } from '@/composables/useAuth'
 // Stores
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
+import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()
@@ -17,6 +20,8 @@ const jobId = Number(route.params.id)
 
 const recruitmentStore = useRecruitmentStore()
 const organizationStore = useOrganizationStore()
+const scheduleStore = useScheduleStore()
+const { user } = useAuth()
 
 const { jobs } = storeToRefs(recruitmentStore)
 const { organizations } = storeToRefs(organizationStore)
@@ -65,6 +70,7 @@ const isInterviewDetailModalOpen = ref(false)
 const selectedInterview = ref(null)
 const showCopyModal = ref(false) // 링크 복사 모달
 const apiSchedules = ref([])
+const recruitmentDetail = ref(null)
 
 // --- Calendar State (New) ---
 const calendarState = reactive({
@@ -103,6 +109,47 @@ const normalizeDisplayName = (value) => {
   const text = String(value || '').trim()
   if (!text || text === '?' || text === '알 수 없음') return ''
   return text
+}
+
+const currentUserId = computed(() => toPositiveNumber(user.value?.id))
+const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
+
+const looksLikeRecruitmentDetail = (candidate) => {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false
+
+  return (
+    candidate.id !== undefined ||
+    typeof candidate.title === 'string' ||
+    typeof candidate.leadGroupName === 'string' ||
+    Array.isArray(candidate.interviewers) ||
+    Array.isArray(candidate.stages)
+  )
+}
+
+const extractRecruitmentDetail = (response) => {
+  const payload = response?.data ?? response
+  const candidates = [
+    payload?.data?.data,
+    payload?.data,
+    payload?.result?.data,
+    payload?.result,
+    payload?.recruitment,
+    payload?.item,
+    payload
+  ]
+
+  return candidates.find(looksLikeRecruitmentDetail) || null
+}
+
+const isCurrentUserMember = (member) => {
+  const memberUserId = getMemberUserId(member)
+  return !!memberUserId && !!currentUserId.value && memberUserId === currentUserId.value
+}
+
+const getInterviewerLabel = (member) => {
+  const name = normalizeDisplayName(member?.displayName || member?.name)
+  if (!name) return '이름 없음'
+  return isCurrentUserMember(member) ? `${name} (나)` : name
 }
 
 const getAllMembers = () => {
@@ -208,14 +255,34 @@ const labels = {
 }
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
+const interviewerPalette = ['#2563eb', '#10b981', '#6366f1']
 
 // --- Recruitment Data from API ---
 const recruitment = computed(() => {
-  const job = jobs.value.find(j => j.id === jobId)
+  const summaryJob = jobs.value.find((item) => Number(item.id) === jobId)
+  const detailJob = recruitmentDetail.value
+  const job = detailJob ? { ...(summaryJob || {}), ...detailJob } : summaryJob
   if (!job) return {}
 
+  const interviewerMembers = Array.isArray(detailJob?.interviewers)
+    ? detailJob.interviewers
+    : Array.isArray(job.interviewers)
+      ? job.interviewers.filter((interviewer) => typeof interviewer === 'object' && interviewer !== null)
+      : []
+
+  const interviewerSource =
+    interviewerMembers.length > 0
+      ? {
+          ...job,
+          interviewerIds: interviewerMembers
+            .map((interviewer) => toPositiveNumber(interviewer?.userId ?? interviewer?.id ?? interviewer?.memberId))
+            .filter(Boolean),
+          interviewers: interviewerMembers
+        }
+      : job
+
   // D-Day 계산
-  let statusText = job.status || 'DRAFT'
+  let statusText = job.status || job.recruitmentStatus || 'DRAFT'
   let ddayText = '-'
 
   const now = new Date()
@@ -249,7 +316,7 @@ const recruitment = computed(() => {
   // 기간 텍스트
   const startStr = job.startDate ? new Date(job.startDate).toLocaleDateString('ko-KR') : '미정'
   const endStr = job.endDate ? new Date(job.endDate).toLocaleDateString('ko-KR') : '미정'
-  const { ids: interviewerIds, names: interviewerNames } = resolveInterviewerInfo(job)
+  const { ids: interviewerIds, names: interviewerNames } = resolveInterviewerInfo(interviewerSource)
 
   return {
     id: job.id,
@@ -257,11 +324,14 @@ const recruitment = computed(() => {
     period: `${startStr} ~ ${endStr}`,
     status: statusText,
     dday: ddayText,
-    totalApplicants: (job.stages || []).reduce((sum, s) => sum + (s.applicantCount || 0), 0),
-    ongoingInterviews: 0,
+    totalApplicants:
+      Number(job.totalApplicants) ||
+      (job.stages || []).reduce((sum, s) => sum + (s.applicantCount || 0), 0),
+    ongoingInterviews: Number(job.processingInterview ?? job.ongoingInterviews ?? 0),
     completionRate: 0,
     interviewers: interviewerNames,
     interviewerIds,
+    interviewerMembers,
     position: positionText,
     leadGroupName: resolveLeadGroupName(job),
     stages: job.stages || []
@@ -272,41 +342,167 @@ const recruitment = computed(() => {
 
 const interviewers = ref([])
 
+const selectedInterviewerIds = computed(() =>
+  interviewers.value
+    .filter((member) => member.checked)
+    .map((member) => getMemberUserId(member))
+    .filter((id) => Number.isFinite(id) && id > 0)
+)
+
+const selectedInterviewerKey = computed(() => selectedInterviewerIds.value.join(','))
+
 // 조직도에서 전체 직원 가져오기
 const allEmployees = computed(() => {
   if (!organizations.value) return []
   return organizations.value.flatMap(dept => dept.teams.flatMap(team => team.members))
 })
 
-// Initialize interviewers based on recruitment data
-watch([recruitment, allEmployees], ([newVal, employees]) => {
-  if (newVal && newVal.id && employees.length > 0) {
-    const interviewerIds = Array.isArray(newVal.interviewerIds)
-      ? newVal.interviewerIds.map((id) => toPositiveNumber(id)).filter(Boolean)
-      : []
-    const interviewerNames = Array.isArray(newVal.interviewers) ? newVal.interviewers : []
+const buildInterviewerList = (recruitmentData, employees = []) => {
+  if (!recruitmentData?.id) return []
 
-    interviewers.value = employees
-      .filter((employee) => {
-        const userId = getMemberUserId(employee)
-        return (userId && interviewerIds.includes(userId)) || interviewerNames.includes(employee.name)
+  const employeeById = new Map(
+    employees
+      .map((employee) => [getMemberUserId(employee), employee])
+      .filter(([id]) => !!id)
+  )
+  const employeeByName = new Map(
+    employees
+      .map((employee) => [normalizeDisplayName(employee?.name), employee])
+      .filter(([name]) => !!name)
+  )
+  const previousCheckedByKey = new Map(
+    interviewers.value
+      .map((member) => {
+        const userId = getMemberUserId(member)
+        const name = normalizeDisplayName(member?.name)
+        const key = userId ? `id:${userId}` : name ? `name:${name}` : ''
+        return key ? [key, member.checked !== false] : null
       })
-      .map((emp, idx) => ({
-        ...emp,
-        bgClass: 'bg-blue-600',
-        borderClass: 'border-blue-700',
-        badgeTextClass: 'text-blue-700',
-        lightBgClass: 'bg-blue-50',
-        lightBorderClass: 'border-blue-100',
-        color: idx % 3 === 0 ? '#2563eb' : (idx % 3 === 1 ? '#10b981' : '#6366f1'),
-        checked: true
-      }))
+      .filter(Boolean)
+  )
+  const result = []
+  const seen = new Set()
+
+  const addCandidate = (candidate) => {
+    const candidateId = toPositiveNumber(candidate?.userId ?? candidate?.id ?? candidate?.memberId)
+    const candidateName = normalizeDisplayName(candidate?.name)
+    const matchedEmployee = candidateId
+      ? employeeById.get(candidateId)
+      : candidateName
+        ? employeeByName.get(candidateName)
+        : null
+    const resolvedId = candidateId ?? getMemberUserId(matchedEmployee)
+    const resolvedName =
+      normalizeDisplayName(matchedEmployee?.name) ||
+      candidateName ||
+      (resolvedId && resolvedId === currentUserId.value ? currentUserName.value : '')
+    const key = resolvedId ? `id:${resolvedId}` : resolvedName ? `name:${resolvedName}` : ''
+
+    if (!key || !resolvedName || seen.has(key)) return
+
+    seen.add(key)
+    result.push({
+      ...(matchedEmployee || {}),
+      ...(candidate && typeof candidate === 'object' ? candidate : {}),
+      userId: resolvedId,
+      name: resolvedName,
+      checked: previousCheckedByKey.has(key) ? previousCheckedByKey.get(key) : true
+    })
   }
+
+  ;(Array.isArray(recruitmentData.interviewerMembers) ? recruitmentData.interviewerMembers : []).forEach((member) => {
+    addCandidate(member)
+  })
+  ;(Array.isArray(recruitmentData.interviewerIds) ? recruitmentData.interviewerIds : []).forEach((id) => {
+    addCandidate({ userId: id })
+  })
+  ;(Array.isArray(recruitmentData.interviewers) ? recruitmentData.interviewers : []).forEach((interviewer) => {
+    if (typeof interviewer === 'string') {
+      addCandidate({ name: interviewer })
+      return
+    }
+
+    addCandidate(interviewer)
+  })
+
+  return result.map((member, idx) => ({
+    ...member,
+    bgClass: 'bg-blue-600',
+    borderClass: 'border-blue-700',
+    badgeTextClass: 'text-blue-700',
+    lightBgClass: 'bg-blue-50',
+    lightBorderClass: 'border-blue-100',
+    color: interviewerPalette[idx % interviewerPalette.length],
+    displayName: getInterviewerLabel(member),
+    checked: member.checked !== false
+  }))
+}
+
+// Initialize interviewers based on recruitment data
+watch([recruitment, allEmployees, currentUserId], ([newVal, employees]) => {
+  interviewers.value = buildInterviewerList(newVal, employees)
 }, { immediate: true })
 
 const toYearMonth = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 const toYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const toHm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+const toMonthRange = (date) => {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const start = new Date(year, month, 1)
+  const end = new Date(year, month + 1, 0)
+
+  return {
+    startDate: toYmd(start),
+    endDate: toYmd(end)
+  }
+}
+
+const getBookingPrimaryText = (booking) => booking?.applicantName || booking?.title || ''
+const getBookingSecondaryText = (booking) => booking?.entryType === 'BUSY'
+  ? booking?.interviewerName || getInterviewerName(booking?.interviewerId)
+  : booking?.title || ''
+const loadBusySchedulesByMonth = async (startDate, endDate, attendeeIds) => {
+  const start = new Date(`${startDate}T00:00:00`)
+  const end = new Date(`${endDate}T00:00:00`)
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return []
+  }
+
+  const merged = new Map()
+  const cursor = new Date(start)
+
+  while (cursor <= end) {
+    const date = toYmd(cursor)
+    const daily = await scheduleStore.getAttendeeAvailability(date, attendeeIds)
+
+    daily.forEach((attendee) => {
+      const current = merged.get(attendee.attendeeId) || {
+        attendeeId: attendee.attendeeId,
+        attendeeName: attendee.attendeeName,
+        busySchedules: []
+      }
+
+      current.busySchedules.push(...(Array.isArray(attendee.busySchedules) ? attendee.busySchedules : []))
+      merged.set(attendee.attendeeId, current)
+    })
+
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return [...merged.values()].map((attendee) => ({
+    ...attendee,
+    busySchedules: attendee.busySchedules.filter((schedule, index, schedules) =>
+      index === schedules.findIndex((candidate) =>
+        candidate.scheduleId === schedule.scheduleId &&
+        candidate.startDateTime === schedule.startDateTime &&
+        candidate.endDateTime === schedule.endDateTime
+      )
+    )
+  }))
+}
+
 const formatApplicantDate = (value) => {
   if (!value) return ''
 
@@ -338,6 +534,8 @@ const stageTypeMeta = {
 // ...
 
 const openInterviewDetail = (booking) => {
+  if (booking?.entryType === 'BUSY') return
+
   selectedInterview.value = {
     ...booking,
     host: booking.interviewerName || getInterviewerName(booking.interviewerId),
@@ -1199,21 +1397,81 @@ const normalizeSchedule = (item) => {
   }
 }
 
+const normalizeBusyScheduleEntry = (attendee, schedule) => {
+  const start = new Date(schedule.startDateTime)
+  if (Number.isNaN(start.getTime())) return null
+
+  const end = new Date(schedule.endDateTime)
+  const hasValidEnd = !Number.isNaN(end.getTime())
+  const fallbackEnd = new Date(start.getTime())
+
+  return {
+    id: `busy-${attendee.attendeeId}-${schedule.scheduleId}`,
+    recruitmentId: Number(jobId),
+    date: toYmd(start),
+    startTime: toHm(start),
+    endTime: hasValidEnd ? toHm(end) : toHm(fallbackEnd),
+    time: schedule.isAllDay ? '종일' : `${formatTime(toHm(start))} - ${formatTime(hasValidEnd ? toHm(end) : toHm(fallbackEnd))}`,
+    interviewerId: attendee.attendeeId,
+    interviewerName: attendee.attendeeName,
+    applicantName: schedule.title,
+    title: schedule.title,
+    description: '',
+    attendees: [],
+    entryType: 'BUSY',
+    isAllDay: schedule.isAllDay === true
+  }
+}
+
 const loadInterviewSchedules = async () => {
   try {
     const yearMonth = toYearMonth(calendarState.currentMonth)
     const raw = await recruitmentStore.fetchInterviewSchedules(jobId, yearMonth)
-    apiSchedules.value = Array.isArray(raw)
+    const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
       : []
+
+    const selectedIds = selectedInterviewerIds.value
+    const filteredInterviewSchedules = normalizedInterviewSchedules.filter((schedule) =>
+      selectedIds.includes(schedule.interviewerId)
+    )
+
+    const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
+    const availability = await loadBusySchedulesByMonth(
+      startDate,
+      endDate,
+      selectedIds
+    )
+    const busySchedules = availability.flatMap((attendee) =>
+      (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
+        .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
+        .filter(Boolean)
+    )
+
+    apiSchedules.value = [...filteredInterviewSchedules, ...busySchedules]
   } catch (error) {
     console.error('면접 일정 조회 실패:', error)
     apiSchedules.value = []
   }
 }
 
+const loadRecruitmentDetail = async () => {
+  if (!Number.isFinite(jobId) || jobId <= 0) {
+    recruitmentDetail.value = null
+    return
+  }
+
+  try {
+    const response = await recruitmentApi.getRecruitmentDetail(jobId)
+    recruitmentDetail.value = extractRecruitmentDetail(response)
+  } catch (error) {
+    recruitmentDetail.value = null
+    console.error('채용 공고 상세 조회 실패:', error)
+  }
+}
+
 watch(
-  () => toYearMonth(calendarState.currentMonth),
+  [() => toYearMonth(calendarState.currentMonth), () => selectedInterviewerKey.value],
   async () => {
     await loadInterviewSchedules()
   }
@@ -1225,9 +1483,12 @@ onMounted(async () => {
       console.error('채용 공고 목록 조회 실패:', error)
     })
   }
-  await organizationStore.loadOrganizations().catch((error) => {
-    console.error('조직도 조회 실패:', error)
-  })
+  await Promise.all([
+    organizationStore.loadOrganizations().catch((error) => {
+      console.error('조직도 조회 실패:', error)
+    }),
+    loadRecruitmentDetail()
+  ])
   memberApi
     .getMyMember()
     .then((res) => {
@@ -1346,7 +1607,7 @@ const getDayColor = (index) => {
               <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 mr-3 border border-slate-200">
                 {{ member.name[0] }}
               </div>
-              <div class="flex-1"><p class="text-sm font-bold text-slate-800">{{ member.name }}</p></div>
+              <div class="flex-1"><p class="text-sm font-bold text-slate-800">{{ member.displayName || getInterviewerLabel(member) }}</p></div>
               <label class="flex items-center cursor-pointer">
                 <input type="checkbox" v-model="member.checked" class="hidden">
                 <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors"
@@ -1472,7 +1733,7 @@ const getDayColor = (index) => {
                       }"
                       @click.stop="openInterviewDetail(booking)"
                     >
-                      <span>{{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}</span>
+                      <span>{{ getBookingPrimaryText(booking) }}</span>
                       <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ booking.startTime }}</span>
                     </div>
                     <button
@@ -1532,8 +1793,8 @@ const getDayColor = (index) => {
                            }">
                         <div class="flex flex-col h-full justify-center">
                            <!-- <p class="text-[9px] font-bold opacity-90 mb-0.5">{{ evt.time }}</p> -->
-                           <p class="text-[10px] font-extrabold truncate leading-tight">{{ evt.applicantName }}</p>
-                           <p class="text-[9px] font-medium truncate opacity-90">{{ evt.title }}</p>
+                           <p class="text-[10px] font-extrabold truncate leading-tight">{{ getBookingPrimaryText(evt) }}</p>
+                           <p class="text-[9px] font-medium truncate opacity-90">{{ getBookingSecondaryText(evt) }}</p>
                         </div>
                       </div>
                     </div>
@@ -1618,7 +1879,7 @@ const getDayColor = (index) => {
                   <div class="text-xs text-slate-600 mb-2">
                     {{ booking.description }}
                   </div>
-                  <button @click.stop="openInterviewDetail(booking)" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline">
+                  <button v-if="booking.entryType !== 'BUSY'" @click.stop="openInterviewDetail(booking)" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline">
                     {{ labels.detail }}
                   </button>
                 </div>

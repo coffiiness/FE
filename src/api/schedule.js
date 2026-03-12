@@ -9,6 +9,16 @@ const buildAvailabilityParams = ({ date, attendeeIds = [] }) => {
   return params
 }
 
+const buildAvailabilityRangeParams = ({ startDate, endDate, attendeeIds = [] }) => {
+  const params = new URLSearchParams()
+  params.append('startDate', startDate)
+  params.append('endDate', endDate)
+  attendeeIds
+    .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0)
+    .forEach((id) => params.append('attendeeIds', String(id)))
+  return params
+}
+
 export const scheduleApi = {
   /**
    * 일정 생성
@@ -40,6 +50,16 @@ export const scheduleApi = {
    * 일정 상세 조회
    * GET /api/v1/schedules/{scheduleId}
    */
+  /**
+   * 참석자 기간별 일정 현황 조회
+   * GET /api/v1/schedules/availability/range?startDate=yyyy-MM-dd&endDate=yyyy-MM-dd&attendeeIds=1&attendeeIds=2
+   */
+  getAvailabilityRange(payload) {
+    return api.get('/schedules/availability/range', {
+      params: buildAvailabilityRangeParams(payload)
+    })
+  },
+
   getScheduleDetail(scheduleId) {
     return api.get(`/schedules/${scheduleId}`)
   },

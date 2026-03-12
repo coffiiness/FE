@@ -1,110 +1,94 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRecruitmentStore } from '@/stores/recruitment'
+import { isTemplateInUse, normalizeTemplateStatus } from '@/utils/templateStatus'
 
 const router = useRouter()
 const recruitmentStore = useRecruitmentStore()
 
-// 검색
 const searchQuery = ref('')
-
-// 삭제 모달
 const showDeleteModal = ref(false)
 const deleteTarget = ref(null)
 
-// 페이지네이션
 const currentPage = ref(1)
 const itemsPerPage = 5
 
-// 더미 데이터
 const templates = computed(() => recruitmentStore.templates)
 
-// 필터링
+onMounted(async () => {
+  try {
+    await recruitmentStore.fetchApplicationTemplates()
+  } catch (error) {
+    console.error('템플릿 목록을 불러오지 못했습니다.', error)
+  }
+})
+
 const filteredTemplates = computed(() => {
-  return templates.value.filter(template => {
-    return !searchQuery.value ||
-      template.name.toLowerCase().includes(searchQuery.value.toLowerCase())
+  const keyword = searchQuery.value.trim().toLowerCase()
+  return templates.value.filter((template) => {
+    const name = String(template.name || template.title || '').toLowerCase()
+    return !keyword || name.includes(keyword)
   })
 })
 
-// 페이지네이션
-const totalPages = computed(() => Math.ceil(filteredTemplates.value.length / itemsPerPage))
+const totalPages = computed(() => Math.ceil(filteredTemplates.value.length / itemsPerPage) || 1)
 const paginatedTemplates = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage
   return filteredTemplates.value.slice(start, start + itemsPerPage)
 })
 
 const totalCount = computed(() => filteredTemplates.value.length)
-const startIndex = computed(() => (currentPage.value - 1) * itemsPerPage + 1)
+const startIndex = computed(() => (totalCount.value ? (currentPage.value - 1) * itemsPerPage + 1 : 0))
 const endIndex = computed(() => Math.min(currentPage.value * itemsPerPage, totalCount.value))
 
-// 상태 스타일
 const getStatusStyle = (status) => {
-  return status === '사용중'
+  return isTemplateInUse(status)
     ? 'bg-green-100 text-green-700 border-green-200'
     : 'bg-gray-100 text-gray-500 border-gray-200'
 }
 
-// 페이지 변경
 const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-  }
+  if (page >= 1 && page <= totalPages.value) currentPage.value = page
 }
 
-// 페이지 번호 목록
 const pageNumbers = computed(() => {
   const pages = []
   const total = totalPages.value
   const current = currentPage.value
 
   if (total <= 5) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    if (current <= 3) {
-      pages.push(1, 2, 3, '...', total)
-    } else if (current >= total - 2) {
-      pages.push(1, '...', total - 2, total - 1, total)
-    } else {
-      pages.push(1, '...', current, '...', total)
-    }
+    for (let i = 1; i <= total; i += 1) pages.push(i)
+    return pages
   }
-  return pages
+
+  if (current <= 3) return [1, 2, 3, '...', total]
+  if (current >= total - 2) return [1, '...', total - 2, total - 1, total]
+  return [1, '...', current, '...', total]
 })
 
-// 템플릿 생성 페이지로 이동
-const goToCreate = () => {
-  router.push('/recruitment/templates/create')
-}
+const goToCreate = () => router.push('/recruitment/templates/create')
+const goToDetail = (templateId) => router.push(`/recruitment/templates/${templateId}`)
+const goToEdit = (templateId) => router.push(`/recruitment/templates/${templateId}/edit`)
 
-// 템플릿 상세보기 페이지로 이동
-const goToDetail = (templateId) => {
-  router.push(`/recruitment/templates/${templateId}`)
-}
-
-// 템플릿 편집 페이지로 이동
-const goToEdit = (templateId) => {
-  router.push(`/recruitment/templates/${templateId}/edit`)
-}
-
-// 삭제 모달 열기
 const openDeleteModal = (template) => {
   deleteTarget.value = template
   showDeleteModal.value = true
 }
 
-// 삭제 확인
-const handleDeleteConfirm = () => {
+const handleDeleteConfirm = async () => {
   if (deleteTarget.value) {
-    recruitmentStore.deleteTemplate(deleteTarget.value.id)
+    try {
+      await recruitmentStore.deleteTemplate(deleteTarget.value.id)
+    } catch (error) {
+      console.error('템플릿 삭제에 실패했습니다.', error)
+    }
   }
   showDeleteModal.value = false
   deleteTarget.value = null
 }
 
-// 삭제 취소
 const handleDeleteCancel = () => {
   showDeleteModal.value = false
   deleteTarget.value = null
@@ -113,10 +97,8 @@ const handleDeleteCancel = () => {
 
 <template>
   <div class="space-y-6">
-    <!-- 헤더 -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div class="flex items-center gap-3">
-        <!-- 검색 -->
         <div class="relative">
           <input
             v-model="searchQuery"
@@ -128,10 +110,8 @@ const handleDeleteCancel = () => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
         </div>
-
       </div>
 
-      <!-- 템플릿 생성 버튼 -->
       <button
         @click="goToCreate"
         class="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium sm:ml-auto"
@@ -143,7 +123,6 @@ const handleDeleteCancel = () => {
       </button>
     </div>
 
-    <!-- 테이블 -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <table class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200">
@@ -161,51 +140,33 @@ const handleDeleteCancel = () => {
             :key="template.id"
             class="hover:bg-gray-50 transition-colors"
           >
-            <!-- 템플릿명 -->
             <td class="px-6 py-4">
               <button
                 @click="goToDetail(template.id)"
                 class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
               >
-                {{ template.name }}
+                {{ template.name || template.title }}
               </button>
             </td>
-
-            <!-- 생성일 -->
-            <td class="px-6 py-4 text-gray-700">{{ template.createdAt }}</td>
-
-            <!-- 수정일 -->
+            <td class="px-6 py-4 text-gray-700">{{ template.createdAt || '-' }}</td>
             <td class="px-6 py-4 text-gray-700">{{ template.updatedAt || '-' }}</td>
-
-            <!-- 상태 -->
             <td class="px-6 py-4">
-              <span
-                :class="[getStatusStyle(template.status), 'px-3 py-1 rounded-full text-sm font-medium border']"
-              >
-                {{ template.status }}
+              <span :class="[getStatusStyle(template.status), 'px-3 py-1 rounded-full text-sm font-medium border']">
+                {{ normalizeTemplateStatus(template.status) }}
               </span>
             </td>
-
-            <!-- 액션 -->
             <td class="px-6 py-4 text-right">
               <div class="flex items-center justify-end gap-3">
-                <button
-                  @click="goToEdit(template.id)"
-                  class="text-brand-600 hover:text-brand-700 text-sm font-medium"
-                >
+                <button @click="goToEdit(template.id)" class="text-brand-600 hover:text-brand-700 text-sm font-medium">
                   편집
                 </button>
-                <button
-                  @click="openDeleteModal(template)"
-                  class="text-red-500 hover:text-red-700 text-sm font-medium"
-                >
+                <button @click="openDeleteModal(template)" class="text-red-500 hover:text-red-700 text-sm font-medium">
                   삭제
                 </button>
               </div>
             </td>
           </tr>
 
-          <!-- 빈 상태 -->
           <tr v-if="paginatedTemplates.length === 0">
             <td colspan="5" class="px-6 py-12 text-center text-gray-500">
               검색 결과가 없습니다.
@@ -214,14 +175,10 @@ const handleDeleteCancel = () => {
         </tbody>
       </table>
 
-      <!-- 페이지네이션 -->
       <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-        <p class="text-sm text-gray-600">
-          총 {{ totalCount }}개 중 {{ startIndex }}-{{ endIndex }}
-        </p>
+        <p class="text-sm text-gray-600">총 {{ totalCount }}개 중 {{ startIndex }}-{{ endIndex }}</p>
 
         <div class="flex items-center gap-1">
-          <!-- 이전 -->
           <button
             @click="goToPage(currentPage - 1)"
             :disabled="currentPage === 1"
@@ -232,7 +189,6 @@ const handleDeleteCancel = () => {
             </svg>
           </button>
 
-          <!-- 페이지 번호 -->
           <template v-for="(page, index) in pageNumbers" :key="index">
             <span v-if="page === '...'" class="px-2 text-gray-400">...</span>
             <button
@@ -240,16 +196,13 @@ const handleDeleteCancel = () => {
               @click="goToPage(page)"
               :class="[
                 'w-9 h-9 rounded-lg text-sm font-medium transition-colors',
-                currentPage === page
-                  ? 'bg-brand-600 text-white'
-                  : 'hover:bg-gray-200 text-gray-700'
+                currentPage === page ? 'bg-brand-600 text-white' : 'hover:bg-gray-200 text-gray-700'
               ]"
             >
               {{ page }}
             </button>
           </template>
 
-          <!-- 다음 -->
           <button
             @click="goToPage(currentPage + 1)"
             :disabled="currentPage === totalPages"
@@ -263,11 +216,10 @@ const handleDeleteCancel = () => {
       </div>
     </div>
 
-    <!-- 삭제 확인 모달 -->
     <ConfirmModal
       :show="showDeleteModal"
       title="템플릿 삭제"
-      :message="`'${deleteTarget?.name}' 템플릿을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`"
+      :message="`'${deleteTarget?.name || deleteTarget?.title}' 템플릿을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`"
       confirm-text="삭제"
       cancel-text="취소"
       type="danger"

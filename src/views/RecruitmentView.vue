@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
@@ -382,8 +382,24 @@ const searchResultInterviewers = computed(() => {
   )
 })
 
-const copyLink = (id) => {
-  const link = `${window.location.origin}/careers/${id}`
+const copyLink = () => {
+  let workspaceId = localStorage.getItem('workspaceId')
+
+  if (!workspaceId) {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      workspaceId = user?.workspaceId ?? user?.workspace?.workspaceId ?? user?.workspace?.id ?? null
+    } catch (_) {
+      workspaceId = null
+    }
+  }
+
+  if (!workspaceId) {
+    alert('워크스페이스 정보를 찾을 수 없습니다.')
+    return
+  }
+
+  const link = `${window.location.origin}/careers/${workspaceId}`
   navigator.clipboard.writeText(link).then(() => {
     showCopyModal.value = true
     activeMenuId.value = null
