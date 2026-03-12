@@ -5,6 +5,7 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { isTemplateInUse } from '@/utils/templateStatus'
 import { recruitmentApi } from '@/api/recruitment'
 
 const route = useRoute()
@@ -67,11 +68,16 @@ const stageTypes = [
   { label: '불합격', value: 'FAIL' },
 ]
 
-const templates = ref([
-  { id: 1, name: '기본 개발직군 지원서' },
-  { id: 2, name: '디자인 포트폴리오 포함 지원서' },
-  { id: 3, name: '경력직 공통 지원서' },
-])
+const templates = ref([])
+
+const syncTemplatesFromStore = () => {
+  templates.value = (store.templates || [])
+    .filter((template) => template.id && isTemplateInUse(template.status))
+    .map((template) => ({
+      id: Number(template.id),
+      name: template.name || template.title || ''
+    }))
+}
 
 // --- 조직도 트리 상태 ---
 const expandedDepts = ref(new Set())
@@ -847,6 +853,12 @@ const applyRouteMode = async () => {
     await orgStore.loadOrganizations()
   } catch (_) {
   }
+  try {
+    await store.fetchApplicationTemplates()
+    syncTemplatesFromStore()
+  } catch (error) {
+    console.error('템플릿 목록을 불러오지 못했습니다:', error)
+  }
 
   if (isEditMode.value) {
     resetToCreateDefaults()
@@ -1329,3 +1341,6 @@ watch(() => route.params.id, async () => {
   animation: fadeInUp 0.5s ease-out forwards;
 }
 </style>
+
+
+

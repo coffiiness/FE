@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { careerApi } from '@/api/career'
@@ -15,9 +15,9 @@ const fetchCompanies = async (search) => {
   error.value = null
   try {
     const res = await careerApi.getCompanies(search || undefined)
-    companies.value = res.data.data || []
+    companies.value = res.data?.data || []
   } catch (err) {
-    error.value = '회사 목록을 불러오는데 실패했습니다.'
+    error.value = '회사 목록을 불러오는 데 실패했습니다.'
     console.error(err)
   } finally {
     loading.value = false
@@ -27,9 +27,9 @@ const fetchCompanies = async (search) => {
 onMounted(() => fetchCompanies())
 
 let debounceTimer = null
-watch(searchQuery, (val) => {
+watch(searchQuery, (value) => {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => fetchCompanies(val.trim()), 300)
+  debounceTimer = setTimeout(() => fetchCompanies(value.trim()), 300)
 })
 
 const getEmployeeScaleText = (scale) => {
@@ -50,7 +50,6 @@ const goToCompany = (workspaceId) => {
 
 <template>
   <div class="min-h-screen bg-gray-50">
-    <!-- Hero -->
     <section class="bg-white border-b border-gray-200">
       <div class="max-w-5xl mx-auto px-6 py-12 text-center">
         <h1 class="text-3xl font-bold text-gray-900 mb-3">채용 중인 기업</h1>
@@ -69,23 +68,15 @@ const goToCompany = (workspaceId) => {
       </div>
     </section>
 
-    <!-- Content -->
     <main class="max-w-5xl mx-auto px-6 py-8">
-      <!-- Loading -->
       <div v-if="loading" class="flex justify-center py-20">
         <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
       </div>
 
-      <!-- Error -->
-      <div v-else-if="error" class="text-center py-20 text-gray-500">
-        <p>{{ error }}</p>
-      </div>
+      <div v-else-if="error" class="text-center py-20 text-gray-500">{{ error }}</div>
 
-      <!-- Company List -->
       <div v-else>
-        <p class="text-gray-600 mb-6">
-          총 <span class="font-semibold text-gray-900">{{ companies.length }}</span>개 기업이 채용 중입니다.
-        </p>
+        <p class="text-gray-600 mb-6">총 <span class="font-semibold text-gray-900">{{ companies.length }}</span>개 기업이 채용 중입니다.</p>
 
         <div class="space-y-4">
           <div
@@ -98,9 +89,7 @@ const goToCompany = (workspaceId) => {
               {{ company.companyName?.charAt(0) || '?' }}
             </div>
             <div class="flex-1 min-w-0">
-              <h3 class="text-lg font-bold text-gray-900 group-hover:text-brand-600 transition-colors truncate">
-                {{ company.companyName }}
-              </h3>
+              <h3 class="text-lg font-bold text-gray-900 group-hover:text-brand-600 transition-colors truncate">{{ company.companyName }}</h3>
               <p class="text-sm text-gray-500">{{ getEmployeeScaleText(company.employeeScale) }}</p>
             </div>
             <span class="inline-flex items-center px-3 py-1 bg-brand-50 text-brand-700 text-sm font-bold rounded-lg flex-shrink-0">
@@ -112,10 +101,7 @@ const goToCompany = (workspaceId) => {
           </div>
         </div>
 
-        <!-- Empty -->
-        <div v-if="companies.length === 0" class="text-center py-20 text-gray-500">
-          검색 결과가 없습니다.
-        </div>
+        <div v-if="companies.length === 0" class="text-center py-20 text-gray-500">검색 결과가 없습니다.</div>
       </div>
     </main>
   </div>
