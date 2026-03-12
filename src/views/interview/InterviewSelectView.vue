@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { recruitmentApi } from '@/api/recruitment'
-import { applicationBoardApi } from '@/api/applicationBoard'
+import { interviewApi } from '@/api/interview'
 
 const router = useRouter()
 const route = useRoute()
@@ -15,7 +15,7 @@ const { jobs } = storeToRefs(recruitmentStore)
 const currentStep = ref(1)
 const jobId = Number(route.query.jobId)
 const recruitmentDetail = ref(null)
-const applicantBoardColumns = ref([])
+const pendingInterviewStages = ref([])
 const isLoadingApplicants = ref(false)
 
 const recruitment = computed(() => {
@@ -40,14 +40,41 @@ const recruitment = computed(() => {
 })
 
 const interviewSteps = computed(() => {
+  if (Array.isArray(pendingInterviewStages.value) && pendingInterviewStages.value.length > 0) {
+    return pendingInterviewStages.value.map((stage) => ({
+      id: stage.recruitmentStageId,
+      step: stage.stageName,
+      count: stage.pendingApplicantCount || 0,
+      stageStep: stage.stageStep,
+      applicants: Array.isArray(stage.applicants)
+        ? stage.applicants
+          .map((applicant) => {
+            const applicantId = Number(applicant?.applicantId)
+            const applicationId = Number(applicant?.applicationId)
+            if (!Number.isFinite(applicantId) || !Number.isFinite(applicationId)) return null
+
+            return {
+              id: applicantId,
+              applicantId,
+              applicationId,
+              name: applicant?.name ?? '-',
+              email: applicant?.email ?? '-'
+            }
+          })
+          .filter(Boolean)
+        : []
+    }))
+  }
+
   if (Array.isArray(recruitment.value.stages) && recruitment.value.stages.length > 0) {
     return recruitment.value.stages
       .filter((stage) => stage?.stageType === 'INTERVIEW' || String(stage?.stageName || '').includes('면접'))
       .map((stage) => ({
         id: stage.id,
         step: stage.stageName,
-        count: stage.applicantCount || 0,
-        stageStep: stage.stageStep
+        count: 0,
+        stageStep: stage.stageStep,
+        applicants: []
       }))
   }
 
@@ -63,7 +90,18 @@ const selectedStep = ref(null)
 watch(
   interviewSteps,
   (steps) => {
-    if (steps.length === 1 && !selectedStep.value) {
+    if (steps.length === 0) {
+      selectedStep.value = null
+      return
+    }
+
+    const matchedStep = steps.find((step) => step.id === selectedStep.value?.id)
+    if (matchedStep) {
+      selectedStep.value = matchedStep
+      return
+    }
+
+    if (steps.length === 1) {
       selectedStep.value = steps[0]
     }
   },
@@ -159,33 +197,7 @@ const searchApplicant = ref('')
 const selectedApplicants = ref([])
 
 const applicants = computed(() => {
-  const columns = Array.isArray(applicantBoardColumns.value) ? applicantBoardColumns.value : []
-  const result = []
-
-  columns.forEach((column) => {
-    const applications = Array.isArray(column?.applications) ? column.applications : []
-    applications.forEach((application) => {
-      const applicantId = Number(application?.applicantId ?? application?.id)
-      if (!Number.isFinite(applicantId)) return
-
-      result.push({
-        id: applicantId,
-        applicationId: Number(application?.applicationId ?? application?.id ?? applicantId),
-        name: application?.name ?? '-',
-        email: application?.email ?? '-',
-        status: column?.name || application?.status || '',
-        processId: column?.recruitmentProcessId ?? null
-      })
-    })
-  })
-
-  const deduped = new Map()
-  result.forEach((applicant) => {
-    if (!deduped.has(applicant.id)) {
-      deduped.set(applicant.id, applicant)
-    }
-  })
-  return Array.from(deduped.values())
+  return Array.isArray(selectedStep.value?.applicants) ? selectedStep.value.applicants : []
 })
 
 const filteredApplicants = computed(() => {
@@ -265,17 +277,17 @@ const goPrev = () => {
   router.back()
 }
 
-const loadApplicants = async () => {
+const loadPendingApplicants = async () => {
   if (!jobId) return
 
   isLoadingApplicants.value = true
   try {
-    const response = await applicationBoardApi.getBoard(jobId)
-    const payload = applicationBoardApi.extractResponseData(response)
-    applicantBoardColumns.value = Array.isArray(payload?.columns) ? payload.columns : []
+    const response = await interviewApi.getPendingApplicants(jobId)
+    const payload = interviewApi.extractResponseData(response)
+    pendingInterviewStages.value = Array.isArray(payload) ? payload : []
   } catch (error) {
-    applicantBoardColumns.value = []
-    console.error('지원자 보드 조회 실패:', error)
+    pendingInterviewStages.value = []
+    console.error('면접 단계별 대기 지원자 조회 실패:', error)
   } finally {
     isLoadingApplicants.value = false
   }
@@ -297,7 +309,7 @@ onMounted(async () => {
       .catch((error) => {
         console.error('채용 공고 상세 조회 실패:', error)
       })
-    await loadApplicants()
+    await loadPendingApplicants()
   }
 })
 </script>
@@ -330,11 +342,11 @@ onMounted(async () => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 max-w-2xl">
           <div
-            v-for="(step, idx) in interviewSteps"
-            :key="idx"
+            v-for="step in interviewSteps"
+            :key="step.id"
             @click="selectStep(step)"
             class="p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-md flex items-center justify-between group"
-            :class="selectedStep?.step === step.step ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'border-slate-200 bg-white hover:border-brand-300'"
+            :class="selectedStep?.id === step.id ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'border-slate-200 bg-white hover:border-brand-300'"
           >
             <div>
               <h3 class="font-bold text-lg text-slate-800 group-hover:text-brand-700">{{ step.step }}</h3>
@@ -342,9 +354,9 @@ onMounted(async () => {
             </div>
             <div
               class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
-              :class="selectedStep?.step === step.step ? 'border-brand-600 bg-brand-600' : 'border-slate-300'"
+              :class="selectedStep?.id === step.id ? 'border-brand-600 bg-brand-600' : 'border-slate-300'"
             >
-              <svg v-if="selectedStep?.step === step.step" class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg v-if="selectedStep?.id === step.id" class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -443,7 +455,7 @@ onMounted(async () => {
 
       <div v-else class="step-container animate-fade-in">
         <h2 class="step-title">지원자를 선택해주세요</h2>
-        <p class="step-desc">실제 지원자 보드의 지원자만 표시됩니다.</p>
+        <p class="step-desc">선택한 면접 단계에서 대기중인 지원자만 표시됩니다.</p>
 
         <div class="flex gap-6 mt-6 h-[500px]">
           <div class="flex-1 flex flex-col bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -473,7 +485,7 @@ onMounted(async () => {
                   <div class="flex-1">
                     <div class="flex items-center gap-2">
                       <span class="font-bold text-sm text-slate-900">{{ app.name }}</span>
-                      <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">{{ app.status }}</span>
+                      <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold border border-slate-200">{{ selectedStep?.step || '면접 단계' }}</span>
                     </div>
                     <div class="text-xs text-slate-500">{{ app.email }}</div>
                   </div>
