@@ -105,6 +105,10 @@ const lastHourLabel = computed(() => {
   if (!Number.isFinite(lastHour)) return ''
   return `${lastHour + 1}:00`
 })
+
+const trailingSpacerStyle = computed(() => ({
+  width: props.hours.length ? `${100 / props.hours.length}%` : '0%'
+}))
 </script>
 
 <template>
@@ -116,7 +120,8 @@ const lastHourLabel = computed(() => {
             <span class="w-2 h-2 rounded-full bg-slate-400"></span>
             <span>회의실</span>
           </div>
-          <div class="relative flex-1 min-h-[52px] bg-white">
+          <div class="flex-1 flex min-h-[52px] bg-white">
+            <div class="relative flex-1">
             <div class="absolute inset-0 flex pointer-events-none z-0">
               <div
                 v-for="hour in hours"
@@ -135,10 +140,12 @@ const lastHourLabel = computed(() => {
               </span>
             </div>
             <div v-if="lastHourLabel" class="absolute top-0 bottom-0 right-0 w-0 border-l border-slate-200 z-[1] pointer-events-none">
-              <span class="absolute top-1/2 right-0 -translate-y-1/2 bg-white px-1 text-sm font-semibold text-slate-700 whitespace-nowrap z-[2]">
+              <span class="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 bg-white px-1 text-sm font-semibold text-slate-700 whitespace-nowrap z-[2]">
                 {{ lastHourLabel }}
               </span>
             </div>
+            </div>
+            <div class="border-l border-slate-200 bg-white" :style="trailingSpacerStyle" />
           </div>
         </div>
 
@@ -191,6 +198,7 @@ const lastHourLabel = computed(() => {
                 </div>
               </div>
             </div>
+            <div class="border-l border-slate-200 bg-white/80 min-h-[80px]" :style="trailingSpacerStyle" />
           </div>
         </div>
       </div>
