@@ -1,6 +1,4 @@
 <script setup>
-import { ref } from 'vue'
-
 const props = defineProps({
   open: Boolean,
 
@@ -14,14 +12,12 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'submit'])
 
-const memo = ref('')
-
 const close = () => {
   emit('close')
 }
 
 const submit = () => {
-  emit('submit', memo.value)
+  emit('submit')
 }
 </script>
 
@@ -65,14 +61,6 @@ const submit = () => {
         </div>
 
       </div>
-
-      <!-- 메모 -->
-      <textarea
-          v-model="memo"
-          class="memo"
-          placeholder="일정 메모를 입력하세요"
-      />
-
       <!-- 버튼 -->
       <div class="btnRow">
 
@@ -150,31 +138,12 @@ const submit = () => {
   white-space: pre-line;
 }
 
-/* 메모 */
-.memo {
-  width: 100%;
-  height: 110px;
-  margin-top: 6px;
-  padding: 12px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #0f172a;
-  background: #f8fafc;
-  resize: none;
-}
-
-.memo::placeholder {
-  color: #94a3b8;
-}
-
 /* 버튼 영역 */
 .btnRow {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 8px;
 }
 
 /* 취소 */

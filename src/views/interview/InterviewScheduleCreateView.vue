@@ -96,6 +96,11 @@ const selectedRoomId = ref('')
 const selectedRoom = computed(() => rooms.value.find((r) => Number(r.id) === Number(selectedRoomId.value)) || rooms.value[0])
 const skipRoomResetOnce = ref(false)
 
+const parseRoomCapacity = (capacityText) => {
+  const parsed = Number(String(capacityText || '').replace(/[^0-9]/g, ''))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.MAX_SAFE_INTEGER
+}
+
 const parseCapacityRange = (capacityText) => {
   const normalized = String(capacityText || '').replace('인실', '').trim()
   if (!normalized) return [1, Number.MAX_SAFE_INTEGER]
@@ -235,7 +240,7 @@ const normalizeAttendeeNames = (raw) => {
   return []
 }
 
-const loadParticipantBusyFromLocalReservations = (reservationRows) => {
+const getParticipantBusyFromReservations = (reservationRows) => {
   const selectedParticipantNames = new Set(
     [
       ...interviewers.value.map((item) => String(item?.name || '').trim()),
@@ -243,8 +248,7 @@ const loadParticipantBusyFromLocalReservations = (reservationRows) => {
     ].filter(Boolean)
   )
   if (!selectedParticipantNames.size || !Array.isArray(reservationRows)) {
-    participantBusySlots.value = []
-    return
+    return []
   }
 
   let attendeeMap = {}
@@ -256,10 +260,14 @@ const loadParticipantBusyFromLocalReservations = (reservationRows) => {
     attendeeMap = {}
   }
 
-  participantBusySlots.value = reservationRows
+  return reservationRows
     .filter((reservation) => {
-      const attendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
-      return attendees.some((name) => selectedParticipantNames.has(name))
+      const attendees = normalizeAttendeeNames(reservation?.attendees)
+      const fallbackAttendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
+      const organizerName = String(reservation?.organizerName || '').trim()
+      return [...attendees, ...fallbackAttendees, organizerName].some((name) =>
+        selectedParticipantNames.has(name)
+      )
     })
     .map((reservation) => ({
       start: reservation?.startDatetime,
@@ -273,7 +281,13 @@ const loadMeetingRooms = async () => {
     const response = await meetingRoomApi.list()
     const data = response?.data?.data
     if (!Array.isArray(data)) return
-    rooms.value = data.map((room) => ({ id: room.id, name: room.name, capacity: `${room.capacity}인실`, blocked: [] }))
+    rooms.value = data
+      .map((room) => ({ id: room.id, name: room.name, capacity: `${room.capacity}인실`, blocked: [] }))
+      .sort((a, b) => {
+        const byCapacity = parseRoomCapacity(a.capacity) - parseRoomCapacity(b.capacity)
+        if (byCapacity !== 0) return byCapacity
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+      })
     if (rooms.value.length && !rooms.value.some((r) => Number(r.id) === Number(selectedRoomId.value))) {
       selectedRoomId.value = rooms.value[0].id
     }
@@ -282,12 +296,11 @@ const loadMeetingRooms = async () => {
   }
 }
 
-const loadAvailability = async () => {
-  if (!weekDays.value.length) return
-  const weekStart = new Date(toApiDateTime(weekDays.value[0].date))
+const fetchAvailabilitySnapshot = async ({ fromDatetime, toDatetime }) => {
   const now = new Date()
   const nowWithBuffer = new Date(now.getTime() + 60 * 1000)
-  const fromBase = weekStart > nowWithBuffer ? weekStart : nowWithBuffer
+  const requestedFrom = fromDatetime ? new Date(fromDatetime) : nowWithBuffer
+  const fromBase = requestedFrom > nowWithBuffer ? requestedFrom : nowWithBuffer
   const normalizedFrom = new Date(fromBase)
   normalizedFrom.setSeconds(0, 0)
   const from = `${normalizedFrom.getFullYear()}-${pad2(normalizedFrom.getMonth() + 1)}-${pad2(normalizedFrom.getDate())}T${pad2(normalizedFrom.getHours())}:${pad2(normalizedFrom.getMinutes())}:00`
@@ -308,8 +321,8 @@ const loadAvailability = async () => {
 
   const reservationResult = await meetingRoomApi
     .listReservations({
-      fromDatetime: toApiDateTime(weekDays.value[0].date),
-      toDatetime: toApiDateTime(weekDays.value[6].date, '23:59')
+      fromDatetime: from,
+      toDatetime
     })
     .catch((error) => {
       console.error('회의실 예약 조회 실패:', toErrorText(error))
@@ -320,7 +333,7 @@ const loadAvailability = async () => {
   const roomBusyFromInterview = normalizeRoomBusySlots(interviewData?.meetingRoomBusySlots)
   const reservationRows = Array.isArray(reservationResult?.data?.data) ? reservationResult.data.data : []
   const roomBusyFromReservations = normalizeRoomBusySlots(reservationRows)
-  loadParticipantBusyFromLocalReservations(reservationRows)
+  const nextParticipantBusySlots = getParticipantBusyFromReservations(reservationRows)
 
   const mergedRoomBusy = [...roomBusyFromInterview, ...roomBusyFromReservations]
   const uniqueRoomBusy = new Map()
@@ -330,14 +343,28 @@ const loadAvailability = async () => {
       uniqueRoomBusy.set(key, slot)
     }
   }
-  meetingRoomBusySlots.value = Array.from(uniqueRoomBusy.values())
+  return {
+    meetingRoomBusySlots: Array.from(uniqueRoomBusy.values()),
+    interviewerBusySlots: Array.isArray(interviewData?.interviewerBusySlots)
+      ? interviewData.interviewerBusySlots
+      : [],
+    applicantBusySlots: Array.isArray(interviewData?.applicantBusySlots)
+      ? interviewData.applicantBusySlots
+      : [],
+    participantBusySlots: nextParticipantBusySlots
+  }
+}
 
-  interviewerBusySlots.value = Array.isArray(interviewData?.interviewerBusySlots)
-    ? interviewData.interviewerBusySlots
-    : []
-  applicantBusySlots.value = Array.isArray(interviewData?.applicantBusySlots)
-    ? interviewData.applicantBusySlots
-    : []
+const loadAvailability = async () => {
+  if (!weekDays.value.length) return
+  const snapshot = await fetchAvailabilitySnapshot({
+    fromDatetime: toApiDateTime(weekDays.value[0].date),
+    toDatetime: toApiDateTime(weekDays.value[6].date, '23:59')
+  })
+  meetingRoomBusySlots.value = snapshot.meetingRoomBusySlots
+  interviewerBusySlots.value = snapshot.interviewerBusySlots
+  applicantBusySlots.value = snapshot.applicantBusySlots
+  participantBusySlots.value = snapshot.participantBusySlots
 }
 
 const isWeekend = (dateStr) => {
@@ -366,22 +393,35 @@ const isBlocked = (date, time) => {
 }
 
 const toHourTime = (hour) => `${pad2(hour)}:00`
-const isSlotBlockedForRoom = (date, hour, room) => {
+const isSlotBlockedForRoom = (date, hour, room, busySource = {}) => {
   const time = toHourTime(hour)
   if (isPastDate(date) || isPastDateTime(date, time) || isWeekend(date)) return true
 
+  const roomBusySource = Array.isArray(busySource.meetingRoomBusySlots)
+    ? busySource.meetingRoomBusySlots
+    : meetingRoomBusySlots.value
+  const interviewerBusySource = Array.isArray(busySource.interviewerBusySlots)
+    ? busySource.interviewerBusySlots
+    : interviewerBusySlots.value
+  const applicantBusySource = Array.isArray(busySource.applicantBusySlots)
+    ? busySource.applicantBusySlots
+    : applicantBusySlots.value
+  const participantBusySource = Array.isArray(busySource.participantBusySlots)
+    ? busySource.participantBusySlots
+    : participantBusySlots.value
+
   const blockedByStatic = (room?.blocked || []).some((b) => b.date === date && b.time === time)
-  const blockedByRoomBusy = hasBusyOverlap(date, time, meetingRoomBusySlots.value, 'meetingRoomId', room?.id)
-  const blockedByInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySlots.value, 'interviewerId')
-  const blockedByApplicantBusy = hasBusyOverlap(date, time, applicantBusySlots.value, 'applicantId')
-  const blockedByParticipantBusy = hasBusyOverlap(date, time, participantBusySlots.value, 'unused', null)
+  const blockedByRoomBusy = hasBusyOverlap(date, time, roomBusySource, 'meetingRoomId', room?.id)
+  const blockedByInterviewerBusy = hasBusyOverlap(date, time, interviewerBusySource, 'interviewerId')
+  const blockedByApplicantBusy = hasBusyOverlap(date, time, applicantBusySource, 'applicantId')
+  const blockedByParticipantBusy = hasBusyOverlap(date, time, participantBusySource, 'unused', null)
   return blockedByStatic || blockedByRoomBusy || blockedByInterviewerBusy || blockedByApplicantBusy || blockedByParticipantBusy
 }
 
-const canAssignContinuousHours = (date, startHour, durationHours, room) => {
+const canAssignContinuousHours = (date, startHour, durationHours, room, busySource = {}) => {
   for (let offset = 0; offset < durationHours; offset++) {
     const hour = startHour + offset
-    if (isSlotBlockedForRoom(date, hour, room)) return false
+    if (isSlotBlockedForRoom(date, hour, room, busySource)) return false
   }
   return true
 }
@@ -512,7 +552,7 @@ const submitTimeText = computed(() => {
     .join('\n')
 })
 
-const confirmSchedule = async (memo) => {
+const confirmSchedule = async () => {
   if (!recruitmentId) {
     openModal({ title: '일정 확정 실패', message: '채용 공고 정보가 없습니다.', type: 'warning' })
     return
@@ -547,12 +587,7 @@ const confirmSchedule = async (memo) => {
       ...interviewers.value.map((member) => String(member?.name || '').trim()),
       ...applicants.value.map((member) => String(member?.name || '').trim())
     ].filter(Boolean)
-    const mergedMemo = [
-      participantNames.length ? `참석자: ${participantNames.join(', ')}` : '',
-      String(memo || '').trim()
-    ]
-      .filter(Boolean)
-      .join('\n')
+    const mergedMemo = participantNames.length ? `참석자: ${participantNames.join(', ')}` : ''
 
     for (const slot of selectedRangePayloads.value) {
       await interviewApi.create({
@@ -609,7 +644,7 @@ const dayHeaderClass = (dayIndex) => {
   return ''
 }
 
-const handleAutoAssign = ({
+const handleAutoAssign = async ({
   useAllRooms = false,
   useStartTime = false,
   startHour = 9,
@@ -646,6 +681,11 @@ const handleAutoAssign = ({
     candidateDates.push(ymd(d))
   }
 
+  const availabilitySnapshot = await fetchAvailabilitySnapshot({
+    fromDatetime: toApiDateTime(candidateDates[0]),
+    toDatetime: toApiDateTime(candidateDates[candidateDates.length - 1], '23:59')
+  })
+
   for (const date of candidateDates) {
     if (isWeekend(date)) continue
 
@@ -657,7 +697,7 @@ const handleAutoAssign = ({
       if (candidateStartHour > latestStartHour) continue
 
       for (const room of candidateRooms) {
-        if (!canAssignContinuousHours(date, candidateStartHour, normalizedDuration, room)) continue
+        if (!canAssignContinuousHours(date, candidateStartHour, normalizedDuration, room, availabilitySnapshot)) continue
 
         skipRoomResetOnce.value = true
         selectedRoomId.value = room.id
