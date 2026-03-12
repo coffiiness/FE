@@ -12,14 +12,14 @@ const router = useRouter()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
 
-const { user } = useAuth()
+const { user, logout } = useAuth()
 const memberType = ref('')
 
 const userName = computed(() => user.value?.name || '사용자')
 const userInitial = computed(() => userName.value.charAt(0))
 const userRoleLabel = computed(() => {
   if (memberType.value === 'HR') return '인사담당자'
-  if (memberType.value === 'IVW') return '면접관'
+  if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
 })
 
@@ -30,16 +30,31 @@ onMounted(async () => {
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
   }
+
+  try {
+    await notificationStore.initialize()
+  } catch (error) {
+    console.error('알림 초기화 실패:', error)
+  }
 })
 
 const isNotificationOpen = ref(false)
 const notificationStore = useNotificationStore()
 const { unreadCount } = storeToRefs(notificationStore)
 
-const toggleNotification = () => {
+const toggleNotification = async () => {
   isNotificationOpen.value = !isNotificationOpen.value
-  if (!isNotificationOpen.value) {
-    notificationStore.markAllRead()
+  notificationStore.setDropdownOpen(isNotificationOpen.value)
+
+  if (isNotificationOpen.value) {
+    try {
+      await Promise.all([
+        notificationStore.fetchUnreadCount(),
+        notificationStore.fetchDropdownNotifications()
+      ])
+    } catch (error) {
+      console.error('알림 드롭다운 조회 실패:', error)
+    }
   }
 }
 
@@ -262,6 +277,14 @@ watch(
             </svg>
             {{ currentMonth }}
           </div>
+
+          <button
+              type="button"
+              @click="logout"
+              class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            로그아웃
+          </button>
 
           <div class="relative flex items-center">
             <button

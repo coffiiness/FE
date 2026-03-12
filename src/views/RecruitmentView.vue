@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useScheduleStore } from '@/stores/schedule'
+import { useOrganizationStore } from '@/stores/organization'
 
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
@@ -11,8 +12,10 @@ import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewLi
 const router = useRouter()
 const store = useRecruitmentStore()
 const scheduleStore = useScheduleStore()
+const organizationStore = useOrganizationStore()
 const { jobs, loading } = storeToRefs(store)
 const { schedules } = storeToRefs(scheduleStore)
+const { organizations } = storeToRefs(organizationStore)
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
@@ -24,28 +27,60 @@ onMounted(async () => {
 })
 
 // --- BE 응답 → UI 필드 변환 헬퍼 ---
-const getDday = (startDate, endDate) => {
+const getDday = (recruitmentStatus, startDate, endDate) => {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
 
-  // startDate가 미래면 → '게시 전'
-  if (startDate) {
+  if (recruitmentStatus === 'CLOSED') {
+    return { text: '\uB9C8\uAC10', value: -1, detail: null }
+  }
+
+  if (recruitmentStatus === 'DRAFT') {
+    if (!startDate) {
+      return { text: '\uAC8C\uC2DC \uC804', value: 999, detail: null }
+    }
+
     const start = new Date(startDate)
     start.setHours(0, 0, 0, 0)
-    if (start > now) {
-      const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
-      return { text: '게시 전', value: 999, status: 'pending', detail: `${diffToStart}일 후 시작` }
+    const diffToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24))
+
+    return {
+      text: '\uAC8C\uC2DC \uC804',
+      value: 999,
+      detail: diffToStart > 0 ? `${diffToStart}\uC77C \uD6C4 \uC2DC\uC791` : null
     }
   }
 
-  // endDate 기반 D-Day 계산
-  if (!endDate) return { text: '-', value: 99, status: 'active' }
+  if (!endDate) return { text: '-', value: 99, detail: null }
+
   const end = new Date(endDate)
   end.setHours(0, 0, 0, 0)
   const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 0) return { text: '마감', value: diffDays, status: 'closed' }
-  if (diffDays <= 3) return { text: `D-${diffDays}`, value: diffDays, status: 'urgent' }
-  return { text: `D-${diffDays}`, value: diffDays, status: 'active' }
+
+  if (diffDays <= 0) return { text: '\uB9C8\uAC10', value: diffDays, detail: null }
+  return { text: `D-${diffDays}`, value: diffDays, detail: null }
+}
+
+const getDisplayStatus = (recruitmentStatus, endDate) => {
+  if (recruitmentStatus === 'CLOSED') return 'closed'
+  if (recruitmentStatus === 'DRAFT') return 'pending'
+
+  if (recruitmentStatus === 'OPEN') {
+    if (!endDate) return 'active'
+
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    const end = new Date(endDate)
+    end.setHours(0, 0, 0, 0)
+
+    const diffDays = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
+    if (diffDays <= 0) return 'closed'
+    if (diffDays <= 3) return 'urgent'
+    return 'active'
+  }
+
+  return 'pending'
 }
 
 const getCareerText = (job) => {
@@ -60,11 +95,98 @@ const getCareerText = (job) => {
   return '경력 무관'
 }
 
+const toPositiveNumber = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : null
+}
+
+const getAllMembers = () => {
+  return organizations.value.flatMap((dept) =>
+    (dept.teams || []).flatMap((team) => team.members || [])
+  )
+}
+
+const getTeamNameById = (teamId) => {
+  const id = toPositiveNumber(teamId)
+  if (!id) return ''
+
+  for (const dept of organizations.value) {
+    for (const team of dept.teams || []) {
+      if (Number(team.id) === id) {
+        return `${dept.name} > ${team.name}`
+      }
+    }
+  }
+
+  return ''
+}
+
+const normalizeDisplayName = (value) => {
+  const text = String(value || '').trim()
+  if (!text || text === '?' || text === '알 수 없음') return ''
+  return text
+}
+
+const resolveTeamName = (job) => {
+  return (
+    normalizeDisplayName(job.leadGroupName) ||
+    normalizeDisplayName(job.leadTeamName) ||
+    normalizeDisplayName(job.team) ||
+    getTeamNameById(job.leadGroupId ?? job.leadTeamId ?? job.teamId) ||
+    '부서 미지정'
+  )
+}
+
+const resolveInterviewerNames = (job) => {
+  const names = []
+  const addName = (candidate) => {
+    const normalized = normalizeDisplayName(candidate)
+    if (!normalized) return
+    if (!names.includes(normalized)) names.push(normalized)
+  }
+
+  const memberNameById = new Map(
+    getAllMembers()
+      .map((member) => [toPositiveNumber(member.userId ?? member.id ?? member.memberId), normalizeDisplayName(member.name)])
+      .filter(([id, name]) => id && name)
+  )
+
+  const addId = (idCandidate) => {
+    const id = toPositiveNumber(idCandidate)
+    if (!id) return
+    addName(memberNameById.get(id))
+  }
+
+  const assignees = Array.isArray(job.assignees) ? job.assignees : []
+  const explicitIds = Array.isArray(job.interviewerIds) ? job.interviewerIds : []
+  const interviewers = Array.isArray(job.interviewers) ? job.interviewers : []
+
+  explicitIds.forEach((id) => addId(id))
+
+  assignees.forEach((assignee) => {
+    addId(assignee?.userId ?? assignee?.memberId ?? assignee?.id)
+    addName(assignee?.name)
+  })
+
+  interviewers.forEach((interviewer) => {
+    if (typeof interviewer === 'string') {
+      addName(interviewer)
+      return
+    }
+
+    addId(interviewer?.userId ?? interviewer?.memberId ?? interviewer?.id)
+    addName(interviewer?.name)
+  })
+
+  return names
+}
+
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
 const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
+const deleting = ref(false) // 삭제 진행 상태
 
 // --- 면접 일정 관련 상태 ---
 const showWeeklyModal = ref(false)
@@ -92,7 +214,7 @@ const weeklySchedules = computed(() => {
 
 const stats = computed(() => {
   // 1. 진행 중인 공고 (active + urgent)
-  const activeJobsCount = jobs.value.filter(j => j.status === 'active' || j.status === 'urgent').length
+  const activeJobsCount = jobs.value.filter(j => j.status === 'OPEN').length
 
   // 2. 이번 주 면접 예정 (일~토 기준)
   const interviewsThisWeek = weeklySchedules.value.length
@@ -165,13 +287,20 @@ const closeDeleteModal = () => {
 }
 
 // 3. 실제 삭제 수행
-const confirmDelete = () => {
-  if (deleteTargetId.value) {
-    store.deleteJob(deleteTargetId.value)
-  }
-  closeDeleteModal()
-}
+const confirmDelete = async () => {
+  if (!deleteTargetId.value || deleting.value) return
 
+  deleting.value = true
+  try {
+    await store.deleteRecruitment(deleteTargetId.value)
+    closeDeleteModal()
+  } catch (err) {
+    const message = err?.response?.data?.message || '채용 공고 삭제 중 오류가 발생했습니다.'
+    alert(message)
+  } finally {
+    deleting.value = false
+  }
+}
 // --- 검색 및 필터링 로직 ---
 const searchQuery = ref('')
 const statusFilter = ref('전체 상태')
@@ -179,21 +308,21 @@ const sortBy = ref('최신순')
 
 const filteredJobs = computed(() => {
   let result = jobs.value.map(job => {
-    const dday = getDday(job.startDate, job.endDate)
+    const dday = getDday(job.status, job.startDate, job.endDate)
     return {
       ...job,
       dday: dday.text,
       ddayValue: dday.value,
       ddayDetail: dday.detail || null,
-      displayStatus: job.status === 'CLOSED' ? 'closed' : dday.status,
-      team: job.leadGroupName || '부서 미지정',
+      displayStatus: getDisplayStatus(job.status, job.endDate),
+      team: resolveTeamName(job),
       position: getCareerText(job),
       funnel: (job.stages || []).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0
       })),
-      interviewers: (job.assignees || []).map(a => a.name || '?')
+      interviewers: resolveInterviewerNames(job)
     }
   })
 

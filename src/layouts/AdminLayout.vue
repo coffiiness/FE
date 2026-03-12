@@ -6,7 +6,7 @@ import { useAuth } from '@/composables/useAuth'
 const route = useRoute()
 const sidebarOpen = ref(true)
 
-const { user } = useAuth()
+const { user, logout } = useAuth()
 const userName = computed(() => user.value?.name || '관리자')
 const userInitial = computed(() => userName.value.charAt(0))
 
@@ -166,6 +166,14 @@ const currentMonth = computed(() => {
             </svg>
             {{ currentMonth }}
           </span>
+
+          <button
+            type="button"
+            @click="logout"
+            class="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            로그아웃
+          </button>
         </div>
       </header>
 

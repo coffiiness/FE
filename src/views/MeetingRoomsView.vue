@@ -75,6 +75,8 @@ const interviewSlotTitleMap = ref({})
 const RESERVATION_TITLE_MAP_KEY = 'meetingRoomReservationTitles'
 const RESERVATION_ATTENDEE_MAP_KEY = 'meetingRoomReservationAttendees'
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const loadReservationTitleMap = () => {
   try {
@@ -119,6 +121,26 @@ const loadInterviewSlotTitleMap = () => {
     interviewSlotTitleMap.value = parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     interviewSlotTitleMap.value = {}
+  }
+}
+
+const loadInterviewSlotParticipantMaps = () => {
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationInterviewerMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationInterviewerMap.value = {}
+  }
+
+  try {
+    const raw = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsed = raw ? JSON.parse(raw) : {}
+    interviewReservationApplicantMap.value =
+      parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    interviewReservationApplicantMap.value = {}
   }
 }
 
@@ -168,6 +190,19 @@ const parseLocalDateTime = (value) => {
     )
   }
   return new Date(value)
+}
+
+const isPastReservationSlot = (dateValue, hour = null) => {
+  if (!dateValue) return false
+  const base = parseDateOnly(dateValue)
+  if (Number.isFinite(hour)) {
+    base.setHours(hour, 0, 0, 0)
+    return base < new Date()
+  }
+
+  const endOfDay = new Date(base)
+  endOfDay.setHours(23, 59, 59, 999)
+  return endOfDay < new Date()
 }
 
 const toDateTimeKey = (meetingRoomId, startDatetime, endDatetime) => {
@@ -225,6 +260,14 @@ const isUnknownAttendeeName = (name) => {
 }
 
 const sanitizeAttendeeNames = (names) => uniqueNames(names).filter((name) => !isUnknownAttendeeName(name))
+
+const removeOrganizerFromAttendees = (attendees, organizerName) => {
+  const normalizedOrganizer = String(organizerName || '').trim()
+  if (!normalizedOrganizer) {
+    return sanitizeAttendeeNames(attendees)
+  }
+  return sanitizeAttendeeNames(attendees).filter((name) => name !== normalizedOrganizer)
+}
 
 const parseAttendeesFromText = (text) => {
   if (typeof text !== 'string' || !text.trim()) return []
@@ -318,6 +361,15 @@ const toReservationErrorMessage = (error) => {
     return '예약 충돌이 발생했습니다. 다른 시간대로 다시 시도해 주세요.'
   }
   return toErrorText(error) || '시간 중복이나 인증 정보를 확인해 주세요.'
+}
+
+const toDeleteRoomErrorMessage = (error) => {
+  const status = error?.response?.status
+  const code = error?.response?.data?.error?.code
+  if (status === 400 || status === 409 || code === 'E400' || code === 'E409') {
+    return '해당 회의실에 예정된 예약 또는 일정이 있어 삭제할 수 없습니다.'
+  }
+  return toErrorText(error) || '회의실 삭제에 실패했습니다.'
 }
 
 const getMonthRange = (dateString) => {
@@ -471,21 +523,32 @@ const loadInterviewReservationTitles = async (dateString = dateValue.value) => {
       }
     })
 
-    interviewReservationTitleMap.value = nextMap
-    interviewReservationAttendeeMap.value = nextAttendeeMap
-    interviewReservationInterviewerMap.value = nextInterviewerMap
-    interviewReservationApplicantMap.value = nextApplicantMap
+    interviewReservationTitleMap.value = {
+      ...interviewReservationTitleMap.value,
+      ...nextMap
+    }
+    interviewReservationAttendeeMap.value = {
+      ...interviewReservationAttendeeMap.value,
+      ...nextAttendeeMap
+    }
+    interviewReservationInterviewerMap.value = {
+      ...interviewReservationInterviewerMap.value,
+      ...nextInterviewerMap
+    }
+    interviewReservationApplicantMap.value = {
+      ...interviewReservationApplicantMap.value,
+      ...nextApplicantMap
+    }
   } catch (error) {
     interviewReservationTitleMap.value = {}
     interviewReservationAttendeeMap.value = {}
-    interviewReservationInterviewerMap.value = {}
-    interviewReservationApplicantMap.value = {}
     console.error('면접 예약 제목 매핑 조회 실패:', error)
   }
 }
 
 const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
   const reservationId = reservation?.id
+  const organizer = resolveOrganizerName(reservation)
   const scheduleId = Number(reservation?.interviewScheduleId)
   const titleFromApi =
     reservation?.title || reservation?.meetingTitle || reservation?.subject || reservation?.name
@@ -551,12 +614,12 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
     reservation?.description || reservation?.memo || ''
   )
   const attendees = sanitizeAttendeeNames(attendeesFromPayload).length
-    ? sanitizeAttendeeNames(attendeesFromPayload)
+    ? removeOrganizerFromAttendees(attendeesFromPayload, organizer)
     : sanitizeAttendeeNames(attendeesFromLocal).length
-      ? sanitizeAttendeeNames(attendeesFromLocal)
+      ? removeOrganizerFromAttendees(attendeesFromLocal, organizer)
     : attendeesFromInterviewResolved.length
       ? attendeesFromInterviewResolved
-      : sanitizeAttendeeNames(attendeesFromDescription)
+      : removeOrganizerFromAttendees(attendeesFromDescription, organizer)
 
   return {
     id: `b-${reservationId}`,
@@ -565,7 +628,7 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
     roomServerId: reservation.meetingRoomId,
     title: titleFromLocalInterview || titleFromInterview || titleFromSchedule || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
-    organizer: resolveOrganizerName(reservation),
+    organizer,
     interviewers,
     applicants,
     attendees,
@@ -610,6 +673,7 @@ onMounted(async () => {
   loadReservationTitleMap()
   loadReservationAttendeeMap()
   loadInterviewSlotTitleMap()
+  loadInterviewSlotParticipantMaps()
   await loadInterviewReservationTitles()
   await loadRoomsFromApi()
   await loadBookingsFromApi()
@@ -624,6 +688,10 @@ watch(
 )
 
 const handleTimeSlotClick = (roomId, hour) => {
+  if (isPastReservationSlot(dateValue.value, hour)) {
+    openErrorModal('예약 불가', '이미 지난 시간은 예약할 수 없습니다.')
+    return
+  }
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
   selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour
@@ -656,14 +724,21 @@ const handleBookRoomClick = (room) => {
 const handleBookingConfirm = async (booking) => {
   if (!selectedRoom.value?.serverId) return
   try {
+    const normalizedAttendees = removeOrganizerFromAttendees(
+      booking.attendees || [],
+      booking.organizer || getCurrentUser()?.name || ''
+    )
     const response = await meetingRoomApi.reserve(selectedRoom.value.serverId, {
+      title: booking.title || '회의실 예약',
+      description: booking.description || '',
       startDatetime: toLocalDateTime(booking.startTime),
-      endDatetime: toLocalDateTime(booking.endTime)
+      endDatetime: toLocalDateTime(booking.endTime),
+      participantUserIds: booking.participantUserIds || []
     })
     const saved = response?.data?.data
     if (!saved?.id) return
     setReservationTitle(saved.id, booking.title)
-    setReservationAttendees(saved.id, booking.attendees || [])
+    setReservationAttendees(saved.id, normalizedAttendees)
 
     bookings.value.push({
       id: `b-${saved.id}`,
@@ -675,7 +750,7 @@ const handleBookingConfirm = async (booking) => {
       organizer: booking.organizer || getCurrentUser()?.name || '',
       interviewers: [],
       applicants: [],
-      attendees: booking.attendees || [],
+      attendees: normalizedAttendees,
       status: 'confirmed',
       startTime: new Date(saved.startDatetime),
       endTime: new Date(saved.endDatetime)
@@ -800,8 +875,9 @@ const confirmDeleteRoom = async () => {
     deleteRoomModalOpen.value = false
     deleteTargetRoomId.value = null
   } catch (error) {
-    console.error('회의실 삭제 실패:', error)
-    openErrorModal('회의실 삭제 실패', '회의실 삭제에 실패했습니다.')
+    const detail = toDeleteRoomErrorMessage(error)
+    console.error('회의실 삭제 실패:', detail, error)
+    openErrorModal('회의실 삭제 실패', detail)
   }
 }
 

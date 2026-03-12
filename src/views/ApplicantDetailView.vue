@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { applicantApi, extractResponseData } from '@/api/applicant'
+import { applicationBoardApi } from '@/api/applicationBoard'
+import { recruitmentApi } from '@/api/recruitment'
 
 const router = useRouter()
 const route = useRoute()
@@ -68,6 +69,15 @@ const formatDateTime = (value) => {
   return `${datePart} ${hour}:${minute}`
 }
 
+const parseJsonSafely = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
 const toAnswerList = (detail) => {
   const answerList = []
   const pushAnswer = (label, value) => {
@@ -86,6 +96,19 @@ const toAnswerList = (detail) => {
     })
   }
 
+  const parsedFormFields = parseJsonSafely(detail?.formFields)
+  if (Array.isArray(parsedFormFields)) {
+    parsedFormFields.forEach((item, index) => {
+      const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
+      const value = item?.value ?? item?.answer
+      pushAnswer(label, value)
+    })
+  } else if (parsedFormFields && typeof parsedFormFields === 'object') {
+    Object.entries(parsedFormFields).forEach(([label, value]) => {
+      pushAnswer(label, value)
+    })
+  }
+
   if (detail?.answerMap && typeof detail.answerMap === 'object') {
     Object.entries(detail.answerMap).forEach(([label, value]) => {
       pushAnswer(label, value)
@@ -95,9 +118,17 @@ const toAnswerList = (detail) => {
   return answerList
 }
 
-const toApplicantDetailModel = (detail) => {
-  const resumeUrl = detail?.resumeUrl ?? detail?.resumeDownloadUrl ?? detail?.resume?.url ?? null
-  const resumeName = detail?.resumeFileName ?? detail?.resumeName ?? detail?.resume?.name ?? '이력서 파일'
+const toApplicantDetailModel = (detail, recruitmentTitle = '-') => {
+  const files = Array.isArray(detail?.files) ? detail.files : []
+  const primaryFile = files[0] || null
+  const resumeUrl =
+    detail?.resumeUrl ?? detail?.resumeDownloadUrl ?? detail?.resume?.url ?? primaryFile?.downloadUrl ?? null
+  const resumeName =
+    detail?.resumeFileName ??
+    detail?.resumeName ??
+    detail?.resume?.name ??
+    primaryFile?.fileName ??
+    (primaryFile ? '이력서 파일' : null)
 
   return {
     id: detail?.applicationId ?? detail?.applicantId ?? detail?.id ?? detailId.value,
@@ -106,7 +137,7 @@ const toApplicantDetailModel = (detail) => {
     phone: detail?.phone ?? detail?.phoneNumber ?? '-',
     gender: normalizeGender(detail?.gender ?? detail?.sex),
     birthdate: formatDate(detail?.birthDate ?? detail?.birthdate),
-    job: detail?.recruitmentTitle ?? detail?.jobTitle ?? detail?.job ?? '-',
+    job: detail?.recruitmentTitle ?? detail?.jobTitle ?? detail?.job ?? recruitmentTitle,
     status: normalizeStatus(detail?.status ?? detail?.applicationStatus ?? detail?.progressStatus),
     nextSchedule: formatDateTime(detail?.nextSchedule ?? detail?.nextInterviewAt ?? detail?.nextScheduleAt),
     appliedDate: formatDate(detail?.appliedAt ?? detail?.appliedDate ?? detail?.createdAt),
@@ -135,9 +166,9 @@ const loadApplicant = async () => {
   loadError.value = ''
 
   try {
-    const response = await applicantApi.getApplicantDetailWithFallback(detailId.value)
-    const payload = extractResponseData(response)
-    const detail = payload?.applicant ?? payload?.application ?? payload?.item ?? payload
+    const response = await applicationBoardApi.getApplicationDetail(detailId.value)
+    const payload = applicationBoardApi.extractResponseData(response)
+    const detail = payload?.application ?? payload?.item ?? payload
 
     if (!detail || typeof detail !== 'object') {
       applicant.value = null
@@ -145,7 +176,17 @@ const loadApplicant = async () => {
       return
     }
 
-    applicant.value = toApplicantDetailModel(detail)
+    let recruitmentTitle = '-'
+    if (detail?.recruitmentId) {
+      try {
+        const recruitmentResponse = await recruitmentApi.getRecruitmentDetail(detail.recruitmentId)
+        recruitmentTitle = recruitmentResponse?.data?.data?.title || '-'
+      } catch {
+        recruitmentTitle = '-'
+      }
+    }
+
+    applicant.value = toApplicantDetailModel(detail, recruitmentTitle)
   } catch (error) {
     applicant.value = null
     loadError.value = getDetailErrorMessage(error)

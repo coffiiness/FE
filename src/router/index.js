@@ -121,7 +121,7 @@ const routes = [
       {
         path: 'recruitment/jobs/:id/edit',
         name: 'RecruitmentEdit',
-        component: () => import('@/views/RecruitmentEditView.vue')
+        component: () => import('@/views/RecruitmentCreateView.vue')
       },
       {
         path: 'recruitment/templates',
@@ -285,7 +285,7 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate') {
+  if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate' && to.name !== 'InvitationAccept') {
     next('/workspace/create')
     return
   }

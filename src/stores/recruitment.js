@@ -1,4 +1,4 @@
-﻿import { defineStore } from 'pinia'
+import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { recruitmentApi } from '@/api/recruitment'
 import { applicationTemplateApi } from '@/api/applicationTemplate'
@@ -15,12 +15,14 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     const status = err.response?.status
     const message = err.response?.data?.message
 
-    if (status === 400) return { type: 'VALIDATION', message: message || '?낅젰媛믪쓣 ?뺤씤??二쇱꽭??' }
-    if (status === 403 || (status === 400 && message?.includes('沅뚰븳'))) {
-      return { type: 'FORBIDDEN', message: '?대떦 ?붿껌???섑뻾??沅뚰븳???놁뒿?덈떎.' }
+    if (status === 400) {
+      return { type: 'VALIDATION', message: message || '입력값을 확인해주세요.' }
     }
-    if (status === 401) return { type: 'UNAUTHORIZED', message: '濡쒓렇?몄씠 ?꾩슂?⑸땲??' }
-    return { type: 'SERVER_ERROR', message: '?쇱떆?곸씤 ?ㅻ쪟媛 諛쒖깮?덉뒿?덈떎. ?좎떆 ???ㅼ떆 ?쒕룄??二쇱꽭??' }
+    if (status === 403 || (status === 400 && message?.includes('권한'))) {
+      return { type: 'FORBIDDEN', message: '접근 권한이 없습니다.' }
+    }
+    if (status === 401) return { type: 'UNAUTHORIZED', message: '로그인이 필요합니다.' }
+    return { type: 'SERVER_ERROR', message: '일시적 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' }
   }
 
   const parseCustomFields = (value) => {
@@ -149,6 +151,7 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     try {
       const res = await recruitmentApi.getRecruitments(params)
       jobs.value = res.data.data || []
+      return jobs.value
     } catch (err) {
       error.value = parseError(err)
       throw err
@@ -171,6 +174,41 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     }
   }
 
+  const updateRecruitment = async (recruitmentId, data) => {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await recruitmentApi.updateRecruitment(recruitmentId, data)
+      const updated = res.data.data || null
+      if (updated?.id) {
+        const index = jobs.value.findIndex((job) => Number(job.id) === Number(updated.id))
+        if (index !== -1) {
+          jobs.value[index] = { ...jobs.value[index], ...updated }
+        }
+      }
+      return updated
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const deleteRecruitment = async (recruitmentId) => {
+    loading.value = true
+    error.value = null
+    try {
+      await recruitmentApi.deleteRecruitment(recruitmentId)
+      jobs.value = jobs.value.filter((job) => Number(job.id) !== Number(recruitmentId))
+      return recruitmentId
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
   const fetchInterviewSchedules = async (recruitmentId, yearMonth) => {
     loading.value = true
     error.value = null
@@ -303,7 +341,6 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
   const deleteJob = (id) => {
     jobs.value = jobs.value.filter((job) => Number(job.id) !== Number(id))
   }
-
   return {
     jobs,
     loading,
@@ -312,6 +349,8 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     templates,
     fetchRecruitments,
     createRecruitment,
+    updateRecruitment,
+    deleteRecruitment,
     fetchInterviewSchedules,
     fetchTemplates,
     fetchApplicationTemplates,
@@ -324,4 +363,7 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     deleteJob
   }
 })
+
+
+
 

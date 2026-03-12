@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
@@ -263,6 +263,11 @@ const handleSubmit = async () => {
 
   if (!validateForm()) return
 
+  if (!applyForm.value) {
+    errorMsg.value = '지원서 양식을 불러오지 못했습니다. 페이지를 새로고침 해주세요.'
+    return
+  }
+
   submitting.value = true
   try {
     const applicantId = Number(applicant.value?.id ?? applicant.value?.applicantId ?? 0)
@@ -291,7 +296,8 @@ const handleSubmit = async () => {
       birthDate: formData.value.birthDate,
       phone: formData.value.phone.trim(),
       email: formData.value.email.trim(),
-      schema: schemaPayload
+      schema: schemaPayload,
+      formFields: schemaPayload
     }
 
     const createResponse = await applicantClient.post('/applications', payload)
@@ -357,6 +363,20 @@ const getValueLength = (value) => (value ? String(value).length : 0)
     </header>
 
     <div v-if="loading" class="max-w-2xl mx-auto px-6 py-12 text-center text-gray-500">로딩 중...</div>
+
+    <main v-else-if="!applyForm && errorMsg" class="max-w-2xl mx-auto px-6 py-12">
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+        <div class="text-red-500 text-4xl mb-4">!</div>
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">지원서 양식을 불러올 수 없습니다</h2>
+        <p class="text-gray-500 mb-6">{{ errorMsg }}</p>
+        <button
+          @click="$router.push(`/careers/${companySlug}`)"
+          class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold"
+        >
+          채용 공고 목록으로 돌아가기
+        </button>
+      </div>
+    </main>
 
     <main v-else class="max-w-2xl mx-auto px-6 py-8">
       <div v-if="!isAuthenticated" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
@@ -522,7 +542,7 @@ const getValueLength = (value) => (value ? String(value).length : 0)
             <button type="button" @click="handleCancel" class="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">취소</button>
             <button
               type="submit"
-              :disabled="submitting || !isAuthenticated"
+              :disabled="submitting || !isAuthenticated || !applyForm"
               class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {{ submitting ? '제출 중...' : '지원하기' }}
@@ -535,3 +555,4 @@ const getValueLength = (value) => (value ? String(value).length : 0)
     </main>
   </div>
 </template>
+

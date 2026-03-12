@@ -22,6 +22,8 @@ const onModalCancel  = () => { modal.value.show = false }
 const route = useRoute()
 const router = useRouter()
 const INTERVIEW_SLOT_TITLE_MAP_KEY = 'meetingRoomInterviewSlotTitles'
+const INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY = 'meetingRoomInterviewSlotInterviewers'
+const INTERVIEW_SLOT_APPLICANTS_MAP_KEY = 'meetingRoomInterviewSlotApplicants'
 
 const recruitmentId = Number(route.query.recruitmentId || 0)
 const recruitmentStageId = Number(route.query.recruitmentStageId || 0) || null
@@ -36,19 +38,13 @@ const safeParseJson = (value, fallback) => {
   }
 }
 
-const dummyInterviewers = [
-  { id: 1, name: '김기술' },
-  { id: 2, name: '정민수' },
-  { id: 3, name: '박상수' }
-]
-const dummyApplicants = [
-  { id: 101, name: '홍길동' },
-  { id: 102, name: '김하늘' },
-  { id: 103, name: '박민준' }
-]
+const interviewers = ref(safeParseJson(route.query.interviewers, []))
+const applicants = ref(safeParseJson(route.query.applicants, []))
 
-const interviewers = ref(safeParseJson(route.query.interviewers, dummyInterviewers))
-const applicants = ref(safeParseJson(route.query.applicants, dummyApplicants))
+const getUserId = (person) => {
+  const rawId = Number(person?.userId ?? person?.id ?? person?.memberId)
+  return Number.isFinite(rawId) && rawId > 0 ? rawId : null
+}
 
 const showModal = ref(false)
 const showAutoModal = ref(false)
@@ -165,6 +161,36 @@ const saveInterviewSlotTitle = (meetingRoomId, startDatetime, endDatetime) => {
   }
 }
 
+const saveInterviewSlotParticipants = (meetingRoomId, startDatetime, endDatetime) => {
+  const key = toDateTimeKey(meetingRoomId, startDatetime, endDatetime)
+  if (!key) return
+
+  const interviewerNames = interviewers.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+  const applicantNames = applicants.value.map((item) => String(item?.name || '').trim()).filter(Boolean)
+
+  try {
+    const rawInterviewers = localStorage.getItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY)
+    const parsedInterviewers = rawInterviewers ? JSON.parse(rawInterviewers) : {}
+    const nextInterviewers =
+      parsedInterviewers && typeof parsedInterviewers === 'object' ? parsedInterviewers : {}
+    nextInterviewers[key] = interviewerNames
+    localStorage.setItem(INTERVIEW_SLOT_INTERVIEWERS_MAP_KEY, JSON.stringify(nextInterviewers))
+  } catch {
+    // ignore storage errors
+  }
+
+  try {
+    const rawApplicants = localStorage.getItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY)
+    const parsedApplicants = rawApplicants ? JSON.parse(rawApplicants) : {}
+    const nextApplicants =
+      parsedApplicants && typeof parsedApplicants === 'object' ? parsedApplicants : {}
+    nextApplicants[key] = applicantNames
+    localStorage.setItem(INTERVIEW_SLOT_APPLICANTS_MAP_KEY, JSON.stringify(nextApplicants))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 const hasBusyOverlap = (date, time, slots, keyName, targetId = null) => {
   const cellStart = new Date(toApiDateTime(date, time))
   const cellEnd = new Date(cellStart)
@@ -265,7 +291,7 @@ const loadAvailability = async () => {
   const normalizedFrom = new Date(fromBase)
   normalizedFrom.setSeconds(0, 0)
   const from = `${normalizedFrom.getFullYear()}-${pad2(normalizedFrom.getMonth() + 1)}-${pad2(normalizedFrom.getDate())}T${pad2(normalizedFrom.getHours())}:${pad2(normalizedFrom.getMinutes())}:00`
-  const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const interviewerIds = interviewers.value.map((m) => getUserId(m)).filter((id) => Number.isFinite(id))
   const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   const meetingRoomIds = rooms.value.map((room) => Number(room.id)).filter((id) => Number.isFinite(id))
   const interviewResult = await interviewApi
@@ -499,7 +525,7 @@ const confirmSchedule = async (memo) => {
     openModal({ title: '일정 확정 실패', message: '최소 1개 이상의 시간을 선택해주세요.', type: 'warning' })
     return
   }
-  const interviewerIds = interviewers.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
+  const interviewerIds = interviewers.value.map((m) => getUserId(m)).filter((id) => Number.isFinite(id))
   const applicantIds = applicants.value.map((m) => Number(m.id)).filter((id) => Number.isFinite(id))
   if (!interviewerIds.length || !applicantIds.length) {
     openModal({ title: '일정 확정 실패', message: '면접관/지원자 정보를 확인해주세요.', type: 'warning' })
@@ -541,6 +567,11 @@ const confirmSchedule = async (memo) => {
         memo: mergedMemo
       })
       saveInterviewSlotTitle(
+        Number(selectedRoom.value.id),
+        `${slot.date}T${slot.start}:00`,
+        `${slot.date}T${slot.end}:00`
+      )
+      saveInterviewSlotParticipants(
         Number(selectedRoom.value.id),
         `${slot.date}T${slot.start}:00`,
         `${slot.date}T${slot.end}:00`
