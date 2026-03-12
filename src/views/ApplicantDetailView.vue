@@ -11,6 +11,7 @@ const detailId = computed(() => route.params.id)
 const loading = ref(true)
 const loadError = ref('')
 const applicant = ref(null)
+const downloadingFileId = ref(null)
 
 const statusLabelMap = {
   DOCUMENT_REVIEW: '서류 검토',
@@ -121,6 +122,12 @@ const toAnswerList = (detail) => {
 const toApplicantDetailModel = (detail, recruitmentTitle = '-') => {
   const files = Array.isArray(detail?.files) ? detail.files : []
   const primaryFile = files[0] || null
+  const resumeFileId =
+    detail?.resumeFileId ??
+    detail?.resume?.fileId ??
+    primaryFile?.fileId ??
+    primaryFile?.id ??
+    null
   const resumeUrl =
     detail?.resumeUrl ?? detail?.resumeDownloadUrl ?? detail?.resume?.url ?? primaryFile?.downloadUrl ?? null
   const resumeName =
@@ -142,7 +149,7 @@ const toApplicantDetailModel = (detail, recruitmentTitle = '-') => {
     nextSchedule: formatDateTime(detail?.nextSchedule ?? detail?.nextInterviewAt ?? detail?.nextScheduleAt),
     appliedDate: formatDate(detail?.appliedAt ?? detail?.appliedDate ?? detail?.createdAt),
     answers: toAnswerList(detail),
-    resume: resumeUrl || resumeName ? { name: resumeName, url: resumeUrl } : null
+    resume: resumeFileId || resumeUrl || resumeName ? { fileId: resumeFileId, name: resumeName, url: resumeUrl } : null
   }
 }
 
@@ -214,6 +221,41 @@ const getInitial = (name) => name?.charAt(0) || ''
 
 const goBack = () => {
   router.push('/recruitment/applicants')
+}
+
+const handleResumeDownload = async () => {
+  if (!applicant.value?.resume) return
+
+  const { resume } = applicant.value
+
+  if (!resume.fileId) {
+    if (resume.url) {
+      window.open(resume.url, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
+
+  downloadingFileId.value = resume.fileId
+
+  try {
+    const response = await applicationBoardApi.getApplicationFileDownloadPresign(resume.fileId)
+    const payload = applicationBoardApi.extractResponseData(response)
+    const downloadUrl = payload?.downloadUrl ?? payload?.url ?? payload?.presignedUrl ?? null
+
+    if (!downloadUrl) {
+      throw new Error('다운로드 URL을 받지 못했습니다.')
+    }
+
+    window.open(downloadUrl, '_blank', 'noopener,noreferrer')
+  } catch (error) {
+    loadError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      error?.message ||
+      '첨부 파일 다운로드에 실패했습니다.'
+  } finally {
+    downloadingFileId.value = null
+  }
 }
 </script>
 
@@ -296,11 +338,10 @@ const goBack = () => {
       <div v-if="applicant.resume" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">이력서</h3>
 
-        <a
-          v-if="applicant.resume.url"
-          :href="applicant.resume.url"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          @click="handleResumeDownload"
+          :disabled="downloadingFileId === applicant.resume.fileId || (!applicant.resume.fileId && !applicant.resume.url)"
           class="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
         >
           <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
@@ -310,23 +351,12 @@ const goBack = () => {
           </div>
           <div class="flex-1">
             <p class="font-medium text-gray-900">{{ applicant.resume.name }}</p>
-            <p class="text-sm text-gray-500">파일 다운로드</p>
+            <p class="text-sm text-gray-500">
+              {{ downloadingFileId === applicant.resume.fileId ? '다운로드 준비 중' : '파일 다운로드' }}
+            </p>
           </div>
-        </a>
+        </button>
 
-        <div
-          v-else
-          class="flex items-center gap-3 p-4 border border-gray-200 rounded-lg bg-gray-50"
-        >
-          <div class="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-            <svg class="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          </div>
-          <div class="flex-1">
-            <p class="font-medium text-gray-900">{{ applicant.resume.name }}</p>
-          </div>
-        </div>
       </div>
 
       <div v-if="applicant.answers.length > 0" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
