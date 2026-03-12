@@ -3,26 +3,35 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
-import { useScheduleStore } from '@/stores/schedule'
 import { useOrganizationStore } from '@/stores/organization'
+import { recruitmentApi } from '@/api/recruitment'
+import { useAuth } from '@/composables/useAuth'
 
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
 
 const router = useRouter()
 const store = useRecruitmentStore()
-const scheduleStore = useScheduleStore()
 const organizationStore = useOrganizationStore()
+const { user } = useAuth()
 const { jobs, loading } = storeToRefs(store)
-const { schedules } = storeToRefs(scheduleStore)
 const { organizations } = storeToRefs(organizationStore)
+
+const weeklyInterviewSchedules = ref([])
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
-  try {
-    await store.fetchRecruitments()
-  } catch (err) {
-    console.error('채용 공고 목록 조회 실패:', err)
+  const [recruitmentsResult, weeklySchedulesResult] = await Promise.allSettled([
+    store.fetchRecruitments(),
+    fetchWeeklyInterviewSchedules()
+  ])
+
+  if (recruitmentsResult.status === 'rejected') {
+    console.error('채용 공고 목록 조회 실패:', recruitmentsResult.reason)
+  }
+
+  if (weeklySchedulesResult.status === 'rejected') {
+    console.error('이번 주 면접 일정 조회 실패:', weeklySchedulesResult.reason)
   }
 })
 
@@ -127,6 +136,9 @@ const normalizeDisplayName = (value) => {
   return text
 }
 
+const currentUserId = computed(() => toPositiveNumber(user.value?.id))
+const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
+
 const resolveTeamName = (job) => {
   return (
     normalizeDisplayName(job.leadGroupName) ||
@@ -181,6 +193,97 @@ const resolveInterviewerNames = (job) => {
   return names
 }
 
+const formatDateParam = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const toYmd = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const toHm = (date) => {
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
+const splitNames = (value) => {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+// 이름 목록을 화면 표시용으로 정리하고 중복을 제거한다.
+const getUniqueNames = (values) => {
+  return values
+    .map((value) => normalizeDisplayName(value))
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+}
+
+// 현재 로그인 사용자가 이번 면접의 면접관인지 판단한다.
+const isCurrentUserInterviewer = (item, interviewerNames) => {
+  const interviewerUserId = toPositiveNumber(item?.interviewerUserId)
+  if (currentUserId.value && interviewerUserId && currentUserId.value === interviewerUserId) {
+    return true
+  }
+
+  if (!currentUserName.value) return false
+  return interviewerNames.includes(currentUserName.value)
+}
+
+const normalizeWeeklySchedule = (item) => {
+  const start = item?.startAt ? new Date(item.startAt) : null
+  if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
+    return null
+  }
+
+  const end = item?.endAt ? new Date(item.endAt) : new Date(start.getTime())
+  const interviewerNames = getUniqueNames(splitNames(item?.interviewerName))
+  const applicantNames = getUniqueNames(splitNames(item?.applicantName))
+  const showSelf = isCurrentUserInterviewer(item, interviewerNames)
+  const attendees = getUniqueNames([
+    ...interviewerNames.filter((name) => !showSelf || name !== currentUserName.value),
+    ...applicantNames
+  ])
+
+  const locationParts = [String(item?.location || '').trim(), String(item?.description || '').trim()]
+    .filter(Boolean)
+
+  return {
+    id: item.id,
+    recruitmentId: toPositiveNumber(item?.recruitmentId),
+    title: String(item?.title || '').trim() || '면접 일정',
+    applicantName: String(item?.applicantName || '').trim(),
+    date: toYmd(start),
+    startTime: toHm(start),
+    endTime: toHm(end),
+    time: `${toHm(start)} - ${toHm(end)}`,
+    location: locationParts.join(' · '),
+    description: String(item?.description || '').trim(),
+    showSelf,
+    attendees
+  }
+}
+
+const fetchWeeklyInterviewSchedules = async () => {
+  const today = new Date()
+  const response = await recruitmentApi.getWeeklyInterviewSchedules(formatDateParam(today))
+  const data = response?.data?.data || []
+
+  weeklyInterviewSchedules.value = Array.isArray(data)
+    ? data.map(normalizeWeeklySchedule).filter(Boolean)
+    : []
+
+  return weeklyInterviewSchedules.value
+}
+
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
 const showDeleteModal = ref(false) // 삭제 모달 상태
@@ -194,23 +297,7 @@ const showDetailModal = ref(false)
 const selectedInterview = ref(null)
 
 // --- 데이터 (Computed) ---
-const weeklySchedules = computed(() => {
-  const today = new Date()
-  const dayOfWeek = today.getDay()
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - dayOfWeek)
-  startOfWeek.setHours(0, 0, 0, 0)
-  
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6)
-  endOfWeek.setHours(23, 59, 59, 999)
-
-  return schedules.value.filter(s => {
-    if (!s.date) return false
-    const sDate = new Date(s.date)
-    return sDate >= startOfWeek && sDate <= endOfWeek && s.type === 'INTERVIEW'
-  })
-})
+const weeklySchedules = computed(() => weeklyInterviewSchedules.value)
 
 const stats = computed(() => {
   // 1. 진행 중인 공고 (active + urgent)
@@ -219,20 +306,32 @@ const stats = computed(() => {
   // 2. 이번 주 면접 예정 (일~토 기준)
   const interviewsThisWeek = weeklySchedules.value.length
 
-  // 3. 조율 대기 (병목) - 임시 로직
-  const bottleneckCount = 0 
+  // 3. 마감 임박 공고
+  const urgentJobsCount = jobs.value.filter((job) =>
+    getDisplayStatus(job.status, job.endDate) === 'urgent'
+  ).length
 
   return [
     { label: '진행 중인 공고', value: activeJobsCount, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
     { 
       label: '이번 주 면접 예정', 
       value: interviewsThisWeek, 
-      unit: '명', 
+      unit: '건', 
       color: 'text-brand-600', 
       bg: 'bg-brand-50/50 cursor-pointer hover:bg-brand-100 transition-colors', // Clickable style
       onClick: () => { showWeeklyModal.value = true } 
     },
-    { label: '조율 대기 (병목)', value: bottleneckCount, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
+    {
+      label: '마감 임박 공고',
+      value: urgentJobsCount,
+      unit: '건',
+      color: 'text-rose-600',
+      bg: 'bg-rose-50/50 cursor-pointer hover:bg-rose-100 transition-colors',
+      glow: true,
+      onClick: () => {
+        statusFilter.value = statusFilter.value === '마감 임박' ? '전체 상태' : '마감 임박'
+      }
+    },
   ]
 })
 
