@@ -39,6 +39,17 @@ export const recruitmentApi = {
     },
 
     /**
+     * 이번 주 면접 일정 조회
+     * GET /api/v1/recruitments/weekly-interview-schedules
+     * @param {string} date - "2026-03-12" 형식
+     */
+    getWeeklyInterviewSchedules(date) {
+        return api.get('/recruitments/weekly-interview-schedules', {
+            params: { date }
+        })
+    },
+
+    /**
      * 채용 공고 수정
      * PUT /api/v1/recruitments/{recruitmentId}
      */
