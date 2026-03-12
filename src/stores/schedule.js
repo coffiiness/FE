@@ -178,6 +178,81 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     return attendeeAvailabilities.map(normalizeAttendeeAvailability)
   }
 
+  const getAttendeeAvailabilityRange = async (startDate, endDate, attendeeIds = []) => {
+    await ensureWorkspaceId()
+
+    const normalizedAttendeeIds = [...new Set(
+      attendeeIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )]
+
+    if (!startDate || !endDate || normalizedAttendeeIds.length === 0) {
+      return []
+    }
+
+    const extractAvailability = (res) => {
+      const data = res.data?.data || res.data || null
+      const attendeeAvailabilities = Array.isArray(data?.attendeeAvailabilities)
+        ? data.attendeeAvailabilities
+        : []
+
+      return attendeeAvailabilities.map(normalizeAttendeeAvailability)
+    }
+
+    try {
+      const res = await scheduleApi.getAvailabilityRange({
+        startDate,
+        endDate,
+        attendeeIds: normalizedAttendeeIds
+      })
+
+      return extractAvailability(res)
+    } catch (error) {
+      const start = new Date(`${startDate}T00:00:00`)
+      const end = new Date(`${endDate}T00:00:00`)
+
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+        throw error
+      }
+
+      const merged = new Map()
+      const cursor = new Date(start)
+
+      while (cursor <= end) {
+        const year = cursor.getFullYear()
+        const month = String(cursor.getMonth() + 1).padStart(2, '0')
+        const day = String(cursor.getDate()).padStart(2, '0')
+        const date = `${year}-${month}-${day}`
+        const daily = await getAttendeeAvailability(date, normalizedAttendeeIds)
+
+        daily.forEach((attendee) => {
+          const current = merged.get(attendee.attendeeId) || {
+            attendeeId: attendee.attendeeId,
+            attendeeName: attendee.attendeeName,
+            busySchedules: []
+          }
+
+          current.busySchedules.push(...attendee.busySchedules)
+          merged.set(attendee.attendeeId, current)
+        })
+
+        cursor.setDate(cursor.getDate() + 1)
+      }
+
+      return [...merged.values()].map((attendee) => ({
+        ...attendee,
+        busySchedules: attendee.busySchedules.filter((schedule, index, schedules) =>
+          index === schedules.findIndex((candidate) =>
+            candidate.scheduleId === schedule.scheduleId &&
+            candidate.startDateTime === schedule.startDateTime &&
+            candidate.endDateTime === schedule.endDateTime
+          )
+        )
+      }))
+    }
+  }
+
   const getScheduleDetail = async (scheduleId) => {
     await ensureWorkspaceId()
     const res = await scheduleApi.getScheduleDetail(scheduleId)
@@ -214,6 +289,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     formatTime,
     fetchSchedules,
     getAttendeeAvailability,
+    getAttendeeAvailabilityRange,
     getScheduleDetail,
     createSchedule,
     updateSchedule,
