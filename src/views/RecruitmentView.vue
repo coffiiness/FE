@@ -136,6 +136,11 @@ const normalizeDisplayName = (value) => {
   return text
 }
 
+const isPipelineStage = (stage) => {
+  const stageName = String(stage?.stageName || stage?.step || '').trim()
+  return stageName !== '불합격' && stageName !== '탈락'
+}
+
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
 
@@ -416,7 +421,7 @@ const filteredJobs = computed(() => {
       displayStatus: getDisplayStatus(job.status, job.endDate),
       team: resolveTeamName(job),
       position: getCareerText(job),
-      funnel: (job.stages || []).map(s => ({
+      funnel: (job.stages || []).filter(isPipelineStage).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0

@@ -65,7 +65,6 @@ const stageTypes = [
   { label: '과제/테스트', value: 'TEST' },
   { label: '처우 협의', value: 'OFFER' },
   { label: '최종 합격', value: 'PASS' },
-  { label: '불합격', value: 'FAIL' },
 ]
 
 const templates = ref([])
@@ -239,6 +238,23 @@ const onDragEnd = () => {
   dragIndex.value = null
   dragOverIndex.value = null
 }
+
+let syncingProcesses = false
+
+watch(
+  processes,
+  (value) => {
+    if (syncingProcesses) return
+
+    const normalized = normalizeEditableProcesses(value)
+    if (JSON.stringify(value) === JSON.stringify(normalized)) return
+
+    syncingProcesses = true
+    processes.value = normalized
+    syncingProcesses = false
+  },
+  { deep: true }
+)
 
 
 const toDateTimeLocal = (value) => {
@@ -420,6 +436,45 @@ const normalizeStageType = (typeValue, stageName = '') => {
 
   return 'INTERVIEW'
 }
+
+const isVisibleStage = (stage) => {
+  return normalizeStageType(stage?.stageType ?? stage?.type ?? stage?.processType, stage?.stageName ?? stage?.name ?? stage?.stepName ?? stage?.step) !== 'FAIL'
+}
+
+const buildFinalPassStage = (stage = {}) => ({
+  stageName: firstFilledString(stage.stageName, stage.name, '최종 합격'),
+  stageType: 'PASS'
+})
+
+const normalizeEditableProcesses = (source = []) => {
+  const visibleStages = (Array.isArray(source) ? source : [])
+    .filter(isVisibleStage)
+    .map((stage) => ({
+      stageName: firstFilledString(
+        stage?.stageName,
+        stage?.name,
+        stage?.stepName,
+        stage?.step,
+        stage?.title,
+        stage?.processName,
+        '새 단계'
+      ),
+      stageType: normalizeStageType(
+        stage?.stageType ?? stage?.type ?? stage?.processType,
+        stage?.stageName ?? stage?.name ?? stage?.stepName ?? stage?.step
+      )
+    }))
+
+  const nonPassStages = visibleStages.filter((stage) => stage.stageType !== 'PASS')
+  const finalPassStage =
+    buildFinalPassStage(visibleStages.find((stage) => stage.stageType === 'PASS'))
+
+  return [...nonPassStages, finalPassStage].map((stage, index) => ({
+    ...stage,
+    stageStep: index + 1
+  }))
+}
+
 const normalizeStages = (job) => {
   const stageSources = [
     job.stages,
@@ -458,14 +513,11 @@ const normalizeStages = (job) => {
       .filter(Boolean)
 
     if (mapped.length > 0) {
-      return mapped.sort((a, b) => a.stageStep - b.stageStep)
+      return normalizeEditableProcesses(mapped.sort((a, b) => a.stageStep - b.stageStep))
     }
   }
 
-  return getDefaultProcesses().map((stage, index) => ({
-    ...stage,
-    stageStep: index + 1
-  }))
+  return normalizeEditableProcesses(getDefaultProcesses())
 }
 
 const looksLikeRecruitmentDetail = (candidate) => {
@@ -756,6 +808,9 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
+    const normalizedProcesses = normalizeEditableProcesses(processes.value)
+    processes.value = normalizedProcesses
+
     const payload = {
       title: form.value.title,
       targetCount: Number(form.value.targetCount || 1),
@@ -769,7 +824,7 @@ const handleSubmit = async () => {
       leadGroupId: Number(form.value.leadTeamId),
       referenceGroupIds: form.value.referenceTeamIds.map(Number),
       interviewerIds: form.value.interviewerIds.map(Number),
-      stages: processes.value.map((p, index) => ({
+      stages: normalizedProcesses.map((p, index) => ({
         stageName: p.stageName,
         stageType: p.stageType,
         stageStep: index + 1
