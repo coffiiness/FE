@@ -31,6 +31,14 @@ const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) =>
 
 // 만들기
 const openCreateAnnouncement = () => {
+  if (!canManageAnnouncements.value) {
+    openFeedbackModal({
+      type: 'warning',
+      title: '권한 없음',
+      message: '공지사항 등록은 인사담당자만 가능합니다.'
+    })
+    return
+  }
   announcementMode.value = 'create'
   selectedAnnouncementId.value = null
   showAnnouncementModal.value = true
@@ -57,6 +65,7 @@ const userRole = computed(() => {
   if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
 })
+const canManageAnnouncements = computed(() => memberType.value === 'HR')
 const stats = [
   { label: '오늘의 일정', value: 3, icon: 'calendar', color: 'text-orange-500 bg-orange-50' },
   { label: '진행 중 공고', value: 5, icon: 'briefcase', color: 'text-brand-600 bg-brand-50' },
@@ -169,6 +178,14 @@ const loadAnnouncements = async () => {
 }
 
 const handleSaveAnnouncement = async (data) => {
+  if (!canManageAnnouncements.value) {
+    openFeedbackModal({
+      type: 'warning',
+      title: '권한 없음',
+      message: '공지사항 등록은 인사담당자만 가능합니다.'
+    })
+    return
+  }
   try {
     const response = await announcementBoardApi.create({
       title: data.title,
@@ -187,10 +204,13 @@ const handleSaveAnnouncement = async (data) => {
     })
   } catch (error) {
     console.error('공지사항 생성 실패:', error)
+    const isUnauthorized = error?.response?.status === 401
     openFeedbackModal({
       type: 'warning',
-      title: '공지사항 등록 실패',
-      message: '공지사항 생성 중 문제가 발생했습니다.'
+      title: isUnauthorized ? '권한 없음' : '공지사항 등록 실패',
+      message: isUnauthorized
+        ? '공지사항 등록은 인사담당자만 가능합니다.'
+        : '공지사항 생성 중 문제가 발생했습니다.'
     })
   }
 }
@@ -461,6 +481,7 @@ onMounted(async () => {
             </h2>
             <div class="flex items-center gap-2">
               <button
+                  v-if="canManageAnnouncements"
                   @click="openCreateAnnouncement"
                   class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg"
               >
