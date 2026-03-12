@@ -272,6 +272,7 @@ const getEventStyle = (event, eventIndex = 0) => {
 
 const getEventClass = (type) => {
   switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
     case 'MEETING': return 'bg-amber-50 text-amber-700 border-amber-100'
     case 'BUSINESS': return 'bg-emerald-50 text-emerald-700 border-emerald-100'
     case 'VACATION': return 'bg-rose-50 text-rose-700 border-rose-100'
@@ -282,6 +283,7 @@ const getEventClass = (type) => {
 
 const getEventClassWeek = (type) => {
   switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-600 text-white border-indigo-800'
     case 'MEETING': return 'bg-amber-100 text-amber-800 border-amber-400'
     case 'BUSINESS': return 'bg-emerald-100 text-emerald-800 border-emerald-400'
     case 'VACATION': return 'bg-rose-100 text-rose-800 border-rose-400'
@@ -292,12 +294,25 @@ const getEventClassWeek = (type) => {
 
 const getEventClassList = (type) => {
   switch (type) {
+    case 'INTERVIEW': return 'bg-indigo-100 text-indigo-600'
     case 'MEETING': return 'bg-amber-100 text-amber-600'
     case 'BUSINESS': return 'bg-emerald-100 text-emerald-600'
     case 'VACATION': return 'bg-rose-100 text-rose-600'
     case 'OTHERS': return 'bg-slate-100 text-slate-600'
     default: return 'bg-indigo-100 text-indigo-600'
   }
+}
+
+const formatScheduleTypeLabel = (type) => {
+  const labels = {
+    INTERVIEW: '면접',
+    MEETING: '회의',
+    BUSINESS: '외근/출장',
+    VACATION: '휴가',
+    OTHERS: '기타'
+  }
+
+  return labels[type] || type
 }
 
 const DEFAULT_SAVE_ERROR_MESSAGE = '일정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.'
@@ -528,6 +543,10 @@ const openCreateForm = async (date = null) => {
 }
 
 const openEditForm = async (event) => {
+  if (event?.interviewScheduleId) {
+    return
+  }
+
   const loaded = await ensureMeetingRoomsLoaded()
   if (!loaded) {
     openAlertModal({
@@ -579,6 +598,11 @@ const handleSave = async (formData) => {
 }
 
 const openDeleteConfirm = (id) => {
+  const targetEvent = allSchedules.value.find((event) => event.id === id)
+  if (targetEvent?.interviewScheduleId) {
+    return
+  }
+
   isDetailModalOpen.value = false
   targetDeleteId.value = id
 
@@ -913,7 +937,7 @@ const confirmDisconnectGoogleCalendar = () => {
               <div class="flex-1 min-w-0">
                 <span class="inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-3"
                       :class="getEventClassList(evt.type)">
-                  {{ evt.type }}
+                  {{ formatScheduleTypeLabel(evt.type) }}
                 </span>
                 <h4 class="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">{{ evt.title }}</h4>
                 <p class="text-base text-slate-400 mt-2 font-medium">{{ evt.description }}</p>
@@ -932,7 +956,7 @@ const confirmDisconnectGoogleCalendar = () => {
                  @click="openDetailModal(event)"
                  class="group p-5 bg-slate-50/50 border border-slate-200 rounded-[24px] hover:border-indigo-300 hover:bg-white transition-all cursor-pointer shadow-sm">
               <div class="flex justify-between items-start mb-3">
-                <span class="text-[9px] px-2.5 py-1 bg-indigo-100 text-indigo-600 rounded-lg font-bold uppercase tracking-widest">{{ event.type }}</span>
+                <span class="text-[9px] px-2.5 py-1 bg-indigo-100 text-indigo-600 rounded-lg font-bold uppercase tracking-widest">{{ formatScheduleTypeLabel(event.type) }}</span>
                 <span class="text-[10px] text-slate-500 font-bold">{{ event.date }}</span>
               </div>
               <h4 class="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{{ event.title }}</h4>
@@ -989,6 +1013,7 @@ const confirmDisconnectGoogleCalendar = () => {
     <ScheduleDetailModal
         :isOpen="isDetailModalOpen"
         :event="selectedEventDetail || {}"
+        :showActions="!selectedEventDetail?.interviewScheduleId"
         @close="isDetailModalOpen = false"
         @edit="openEditForm"
         @delete="openDeleteConfirm"

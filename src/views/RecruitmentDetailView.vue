@@ -111,6 +111,19 @@ const normalizeDisplayName = (value) => {
   return text
 }
 
+const splitNames = (value) => {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const getUniqueNames = (values) => {
+  return values
+    .map((value) => normalizeDisplayName(value))
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+}
+
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
 
@@ -458,10 +471,34 @@ const toMonthRange = (date) => {
   }
 }
 
-const getBookingPrimaryText = (booking) => booking?.applicantName || booking?.title || ''
+const getBookingDisplayTitle = (booking) => {
+  const rawTitle = normalizeDisplayName(booking?.title) || '면접 일정'
+  const recruitmentTitle = normalizeDisplayName(recruitment.value?.title)
+  const prefix = recruitmentTitle ? `${recruitmentTitle} · ` : ''
+
+  if (prefix && rawTitle.startsWith(prefix)) {
+    return rawTitle.slice(prefix.length).trim() || rawTitle
+  }
+
+  return rawTitle
+}
+
+const getBookingPrimaryText = (booking) => booking?.applicantName || getBookingDisplayTitle(booking)
 const getBookingSecondaryText = (booking) => booking?.entryType === 'BUSY'
   ? booking?.interviewerName || getInterviewerName(booking?.interviewerId)
-  : booking?.title || ''
+  : getBookingDisplayTitle(booking)
+const getBookingApplicantText = (booking) => normalizeDisplayName(booking?.applicantName) || '지원자 미정'
+const getBookingInterviewerText = (booking) =>
+  normalizeDisplayName(booking?.interviewerName) || getInterviewerName(booking?.interviewerId)
+const getBookingSummaryText = (booking) => {
+  if (booking?.entryType === 'BUSY') {
+    return getBookingInterviewerText(booking)
+  }
+
+  return [`지원자: ${getBookingApplicantText(booking)}`, `면접관: ${getBookingInterviewerText(booking)}`]
+    .filter(Boolean)
+    .join(' · ')
+}
 const loadBusySchedulesByMonth = async (startDate, endDate, attendeeIds) => {
   const start = new Date(`${startDate}T00:00:00`)
   const end = new Date(`${endDate}T00:00:00`)
@@ -538,9 +575,10 @@ const openInterviewDetail = (booking) => {
 
   selectedInterview.value = {
     ...booking,
+    title: getBookingDisplayTitle(booking),
     host: booking.interviewerName || getInterviewerName(booking.interviewerId),
-    // Use store's attendees if available, otherwise allow modal to handle it or fallback
-    attendees: booking.attendees || (booking.applicantName ? [booking.applicantName] : []), 
+    attendees: booking.attendees || (booking.applicantName ? splitNames(booking.applicantName) : []),
+    showSelf: booking.showSelf === true
   }
   isInterviewDetailModalOpen.value = true
 }
@@ -1381,6 +1419,16 @@ const normalizeSchedule = (item) => {
     (Array.isArray(item?.applicants) && item.applicants[0]?.name) ||
     '-'
 
+  const interviewerNames = getUniqueNames(splitNames(interviewerName))
+  const applicantNames = getUniqueNames(splitNames(applicantName))
+  const showSelf =
+    !!currentUserName.value &&
+    interviewerNames.includes(currentUserName.value)
+  const attendees = getUniqueNames([
+    ...interviewerNames.filter((name) => !showSelf || name !== currentUserName.value),
+    ...applicantNames
+  ])
+
   return {
     id: item.id,
     recruitmentId: Number(item.recruitmentId || jobId),
@@ -1393,7 +1441,8 @@ const normalizeSchedule = (item) => {
     applicantName,
     title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
     description: item?.memo || item?.note || '',
-    attendees: Array.isArray(item?.applicants) ? item.applicants.map((a) => a?.name).filter(Boolean) : []
+    attendees,
+    showSelf
   }
 }
 
@@ -1419,7 +1468,9 @@ const normalizeBusyScheduleEntry = (attendee, schedule) => {
     description: '',
     attendees: [],
     entryType: 'BUSY',
-    isAllDay: schedule.isAllDay === true
+    isAllDay: schedule.isAllDay === true,
+    scheduleType: schedule.type || '',
+    interviewScheduleId: schedule.interviewScheduleId ?? null
   }
 }
 
@@ -1430,11 +1481,7 @@ const loadInterviewSchedules = async () => {
     const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
       : []
-
     const selectedIds = selectedInterviewerIds.value
-    const filteredInterviewSchedules = normalizedInterviewSchedules.filter((schedule) =>
-      selectedIds.includes(schedule.interviewerId)
-    )
 
     const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
     const availability = await loadBusySchedulesByMonth(
@@ -1444,11 +1491,12 @@ const loadInterviewSchedules = async () => {
     )
     const busySchedules = availability.flatMap((attendee) =>
       (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
+        .filter((schedule) => !(schedule.interviewScheduleId && schedule.type === 'INTERVIEW'))
         .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
         .filter(Boolean)
     )
 
-    apiSchedules.value = [...filteredInterviewSchedules, ...busySchedules]
+    apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
   } catch (error) {
     console.error('면접 일정 조회 실패:', error)
     apiSchedules.value = []
@@ -1827,8 +1875,8 @@ const getDayColor = (index) => {
                             }">
                         {{ evt.interviewerName || getInterviewerName(evt.interviewerId) }}
                       </span>
-                      <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ evt.title }}</h4>
-                      <p class="text-sm text-slate-500 mt-1 font-medium">{{ evt.description }}</p>
+                      <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ getBookingDisplayTitle(evt) }}</h4>
+                      <p class="text-sm text-slate-500 mt-1 font-medium">{{ getBookingSummaryText(evt) }}</p>
                     </div>
                   </div>
                 </div>
@@ -1860,7 +1908,7 @@ const getDayColor = (index) => {
                   backgroundColor: `${getInterviewerColor(booking.interviewerId)}0f`,
                   borderColor: `${getInterviewerColor(booking.interviewerId)}40`
                 }"
-                @click="toggleBooking(booking.id)"
+                @click="booking.entryType === 'BUSY' ? toggleBooking(booking.id) : openInterviewDetail(booking)"
               >
                 <div class="flex justify-between items-start mb-2">
                   <span class="text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest"
@@ -1872,16 +1920,13 @@ const getDayColor = (index) => {
                   </span>
                   <span class="text-[10px] text-slate-500 font-bold">{{ booking.time }}</span>
                 </div>
-                <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
-                <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}</p>
+                <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ getBookingDisplayTitle(booking) }}</h4>
+                <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ getBookingSummaryText(booking) }}</p>
 
-                <div v-if="expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
+                <div v-if="booking.entryType === 'BUSY' && expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
                   <div class="text-xs text-slate-600 mb-2">
                     {{ booking.description }}
                   </div>
-                  <button v-if="booking.entryType !== 'BUSY'" @click.stop="openInterviewDetail(booking)" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline">
-                    {{ labels.detail }}
-                  </button>
                 </div>
               </div>
             </div>
