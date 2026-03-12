@@ -306,8 +306,10 @@ const stats = computed(() => {
   // 2. 이번 주 면접 예정 (일~토 기준)
   const interviewsThisWeek = weeklySchedules.value.length
 
-  // 3. 조율 대기 (병목) - 임시 로직
-  const bottleneckCount = 0 
+  // 3. 마감 임박 공고
+  const urgentJobsCount = jobs.value.filter((job) =>
+    getDisplayStatus(job.status, job.endDate) === 'urgent'
+  ).length
 
   return [
     { label: '진행 중인 공고', value: activeJobsCount, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
@@ -319,7 +321,17 @@ const stats = computed(() => {
       bg: 'bg-brand-50/50 cursor-pointer hover:bg-brand-100 transition-colors', // Clickable style
       onClick: () => { showWeeklyModal.value = true } 
     },
-    { label: '조율 대기 (병목)', value: bottleneckCount, unit: '건', color: 'text-rose-600', bg: 'bg-rose-50/50', glow: true },
+    {
+      label: '마감 임박 공고',
+      value: urgentJobsCount,
+      unit: '건',
+      color: 'text-rose-600',
+      bg: 'bg-rose-50/50 cursor-pointer hover:bg-rose-100 transition-colors',
+      glow: true,
+      onClick: () => {
+        statusFilter.value = statusFilter.value === '마감 임박' ? '전체 상태' : '마감 임박'
+      }
+    },
   ]
 })
 
