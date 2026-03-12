@@ -52,7 +52,12 @@ const getSlotFillStyle = (roomId, hour) => {
 
 const calculateBookingWidth = (booking) => {
   const duration = (booking.endTime.getTime() - booking.startTime.getTime()) / (1000 * 60 * 60)
-  return duration * 100
+  const endsOnHourBoundary =
+    booking.endTime.getMinutes() === 0 &&
+    booking.endTime.getSeconds() === 0 &&
+    booking.endTime.getMilliseconds() === 0
+
+  return (duration + (endsOnHourBoundary ? 1 : 0)) * 100
 }
 
 const calculateBookingOffset = (booking) => {
