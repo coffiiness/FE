@@ -512,7 +512,7 @@ const submitTimeText = computed(() => {
     .join('\n')
 })
 
-const confirmSchedule = async (memo) => {
+const confirmSchedule = async () => {
   if (!recruitmentId) {
     openModal({ title: '일정 확정 실패', message: '채용 공고 정보가 없습니다.', type: 'warning' })
     return
@@ -547,12 +547,7 @@ const confirmSchedule = async (memo) => {
       ...interviewers.value.map((member) => String(member?.name || '').trim()),
       ...applicants.value.map((member) => String(member?.name || '').trim())
     ].filter(Boolean)
-    const mergedMemo = [
-      participantNames.length ? `참석자: ${participantNames.join(', ')}` : '',
-      String(memo || '').trim()
-    ]
-      .filter(Boolean)
-      .join('\n')
+    const mergedMemo = participantNames.length ? `참석자: ${participantNames.join(', ')}` : ''
 
     for (const slot of selectedRangePayloads.value) {
       await interviewApi.create({
