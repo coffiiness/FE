@@ -26,16 +26,30 @@ const isPastSlot = (hour) => {
   return target < new Date()
 }
 
+const rangesOverlap = (targetStart, targetEnd, slotStart, slotEnd) =>
+  targetStart < slotEnd && slotStart < targetEnd
+
 const getBookingsForRoomAndHour = (roomId, hour) => {
   return props.bookings.filter((booking) => {
     if (booking.roomId !== roomId) return false
     if (selectedDateObject.value && !isSameDate(booking.startTime, selectedDateObject.value)) {
       return false
     }
-    const startHour = booking.startTime.getHours()
-    const endHour = booking.endTime.getHours()
-    const endMinute = booking.endTime.getMinutes()
-    return hour >= startHour && (hour < endHour || (hour === endHour && endMinute === 0))
+    const slotStart = new Date(booking.startTime)
+    slotStart.setHours(hour, 0, 0, 0)
+    const slotEnd = new Date(slotStart)
+    slotEnd.setHours(slotEnd.getHours() + 1)
+    return rangesOverlap(slotStart, slotEnd, booking.startTime, booking.endTime)
+  })
+}
+
+const getBookingsForRoom = (roomId) => {
+  return props.bookings.filter((booking) => {
+    if (booking.roomId !== roomId) return false
+    if (selectedDateObject.value && !isSameDate(booking.startTime, selectedDateObject.value)) {
+      return false
+    }
+    return true
   })
 }
 
@@ -52,17 +66,14 @@ const getSlotFillStyle = (roomId, hour) => {
 
 const calculateBookingWidth = (booking) => {
   const duration = (booking.endTime.getTime() - booking.startTime.getTime()) / (1000 * 60 * 60)
-  const endsOnHourBoundary =
-    booking.endTime.getMinutes() === 0 &&
-    booking.endTime.getSeconds() === 0 &&
-    booking.endTime.getMilliseconds() === 0
-
-  return (duration + (endsOnHourBoundary ? 1 : 0)) * 100
+  return (duration / props.hours.length) * 100
 }
 
 const calculateBookingOffset = (booking) => {
+  const firstHour = Number(props.hours[0] || 0)
+  const startHourOffset = booking.startTime.getHours() - firstHour
   const startMinute = booking.startTime.getMinutes()
-  return (startMinute / 60) * 100
+  return ((startHourOffset + startMinute / 60) / props.hours.length) * 100
 }
 
 const formatTime = (date) => {
@@ -83,30 +94,56 @@ const goToPage = (page) => {
   if (page < 1 || page > totalPages.value) return
   currentPage.value = page
 }
+
+const getBoundaryStyle = (index) => ({
+  left: `${(index / props.hours.length) * 100}%`
+})
+
+const lastHourLabel = computed(() => {
+  if (!props.hours.length) return ''
+  const lastHour = Number(props.hours[props.hours.length - 1])
+  if (!Number.isFinite(lastHour)) return ''
+  return `${lastHour + 1}:00`
+})
 </script>
 
 <template>
   <div class="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
 
     <div class="flex flex-col">
-        <div class="flex border-b bg-white sticky top-0 z-10">
+        <div class="flex border-b bg-white sticky top-0 z-10 min-w-[1200px]">
           <div class="w-48 p-4 font-semibold border-r flex items-center gap-2 text-slate-800">
             <span class="w-2 h-2 rounded-full bg-slate-400"></span>
             <span>회의실</span>
           </div>
-          <div class="flex-1 flex">
+          <div class="relative flex-1 min-h-[52px] bg-white">
+            <div class="absolute inset-0 flex pointer-events-none z-0">
+              <div
+                v-for="hour in hours"
+                :key="`grid-${hour}`"
+                class="flex-1 border-r last:border-r-0 border-slate-200"
+              />
+            </div>
             <div
-              v-for="hour in hours"
+              v-for="(hour, index) in hours"
               :key="hour"
-              class="flex-1 p-2 text-center text-sm font-semibold border-r last:border-r-0 text-slate-700"
+              class="absolute top-0 bottom-0 w-0 border-l border-slate-200 z-[1] pointer-events-none"
+              :style="getBoundaryStyle(index)"
             >
-              {{ hour }}:00
+              <span class="absolute top-1/2 left-0 -translate-x-1/2 -translate-y-1/2 bg-white px-1 text-sm font-semibold text-slate-700 whitespace-nowrap z-[2]">
+                {{ hour }}:00
+              </span>
+            </div>
+            <div v-if="lastHourLabel" class="absolute top-0 bottom-0 right-0 w-0 border-l border-slate-200 z-[1] pointer-events-none">
+              <span class="absolute top-1/2 right-0 -translate-y-1/2 bg-white px-1 text-sm font-semibold text-slate-700 whitespace-nowrap z-[2]">
+                {{ lastHourLabel }}
+              </span>
             </div>
           </div>
         </div>
 
       <div class="flex-1 overflow-auto">
-        <div v-for="room in pagedRooms" :key="room.id" class="flex border-b hover:bg-slate-50/60 transition-colors">
+        <div v-for="room in pagedRooms" :key="room.id" class="flex border-b hover:bg-slate-50/60 transition-colors min-w-[1200px]">
           <div class="w-48 p-4 border-r bg-white sticky left-0 z-[5]">
             <div class="flex items-start gap-3">
               <div class="w-3 h-3 rounded-full mt-1 flex-shrink-0" :style="{ backgroundColor: room.color }" />
@@ -118,20 +155,22 @@ const goToPage = (page) => {
           </div>
 
           <div class="flex-1 flex relative">
-            <div
-              v-for="hour in hours"
-              :key="hour"
-              class="flex-1 border-r last:border-r-0 relative min-h-[80px]"
-              :class="getBookingsForRoomAndHour(room.id, hour).length === 0
-                ? (isPastSlot(hour) ? 'cursor-not-allowed bg-slate-100/70' : 'cursor-pointer hover:bg-emerald-50/50')
-                : 'bg-slate-50/40'"
-              :style="getSlotFillStyle(room.id, hour)"
-              @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && !isPastSlot(hour) && emit('timeSlotClick', room.id, hour)"
-            >
-              <template v-for="booking in getBookingsForRoomAndHour(room.id, hour)" :key="booking.id">
+            <div class="flex-1 flex relative">
+              <div
+                v-for="hour in hours"
+                :key="hour"
+                class="flex-1 border-r last:border-r-0 relative min-h-[80px] z-0"
+                :class="getBookingsForRoomAndHour(room.id, hour).length === 0
+                  ? (isPastSlot(hour) ? 'cursor-not-allowed bg-slate-100/70' : 'cursor-pointer hover:bg-emerald-50/50')
+                  : 'bg-slate-50/40'"
+                :style="getSlotFillStyle(room.id, hour)"
+                @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && !isPastSlot(hour) && emit('timeSlotClick', room.id, hour)"
+              />
+              <div class="absolute inset-0 z-10 pointer-events-none">
                 <div
-                  v-if="booking.startTime.getHours() === hour"
-                  class="absolute top-2 bottom-2 rounded-lg px-3 py-2 cursor-pointer group overflow-hidden shadow-sm hover:shadow-md transition-all"
+                  v-for="booking in getBookingsForRoom(room.id)"
+                  :key="booking.id"
+                  class="absolute top-2 bottom-2 rounded-lg px-3 py-2 cursor-pointer group overflow-hidden shadow-sm hover:shadow-md transition-all pointer-events-auto"
                   :style="{
                     backgroundColor: `${room.color}15`,
                     borderLeft: `3px solid ${room.color}`,
@@ -150,7 +189,7 @@ const goToPage = (page) => {
                     {{ booking.organizer }}
                   </div>
                 </div>
-              </template>
+              </div>
             </div>
           </div>
         </div>
