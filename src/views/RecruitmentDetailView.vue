@@ -1908,7 +1908,7 @@ const getDayColor = (index) => {
                   backgroundColor: `${getInterviewerColor(booking.interviewerId)}0f`,
                   borderColor: `${getInterviewerColor(booking.interviewerId)}40`
                 }"
-                @click="toggleBooking(booking.id)"
+                @click="booking.entryType === 'BUSY' ? toggleBooking(booking.id) : openInterviewDetail(booking)"
               >
                 <div class="flex justify-between items-start mb-2">
                   <span class="text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest"
@@ -1923,13 +1923,10 @@ const getDayColor = (index) => {
                 <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ getBookingDisplayTitle(booking) }}</h4>
                 <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ getBookingSummaryText(booking) }}</p>
 
-                <div v-if="expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
+                <div v-if="booking.entryType === 'BUSY' && expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
                   <div class="text-xs text-slate-600 mb-2">
                     {{ booking.description }}
                   </div>
-                  <button v-if="booking.entryType !== 'BUSY'" @click.stop="openInterviewDetail(booking)" class="text-xs text-brand-600 hover:text-brand-700 font-bold hover:underline">
-                    {{ labels.detail }}
-                  </button>
                 </div>
               </div>
             </div>
