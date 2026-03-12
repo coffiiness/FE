@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -11,6 +11,30 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'edit', 'delete'])
+
+const typeLabel = computed(() => {
+  const labels = {
+    INTERVIEW: '면접',
+    MEETING: '회의',
+    BUSINESS: '외근/출장',
+    VACATION: '휴가',
+    OTHERS: '기타'
+  }
+
+  return labels[props.event?.type] || props.event?.type || '일정'
+})
+
+const badgeClass = computed(() => {
+  if (props.event?.type === 'INTERVIEW') {
+    return 'bg-indigo-100 text-indigo-600'
+  }
+
+  return 'bg-amber-100 text-amber-600'
+})
+
+const canShowActions = computed(() => {
+  return props.showActions && !props.event?.interviewScheduleId
+})
 
 // 모달 외부 클릭 시 닫기
 const closeOnBackdrop = (e) => {
@@ -36,9 +60,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
           <div>
             <span
               class="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest mb-2"
-              :class="event.type === 'interview' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'"
+              :class="badgeClass"
             >
-              {{ event.type }}
+              {{ typeLabel }}
             </span>
             <h3 class="text-xl font-bold text-slate-800 leading-tight">{{ event.title }}</h3>
           </div>
@@ -66,6 +90,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
               <p class="text-sm font-bold text-slate-700">장소 및 메모</p>
               <p v-if="event.room" class="text-sm font-bold text-brand-600 mt-0.5">
                 {{ event.room.name }} ({{ event.room.floor }}층)
+              </p>
+              <p v-else-if="event.location" class="text-sm font-bold text-brand-600 mt-0.5">
+                {{ event.location }}
               </p>
               <p class="text-sm text-slate-600 mt-0.5 whitespace-pre-wrap">{{ event.description || '상세 내용이 없습니다.' }}</p>
             </div>
@@ -115,12 +142,18 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
                   {{ att }}
                 </div>
               </div>
+              <p v-if="event.applicantName" class="mt-3 text-sm font-bold text-slate-700">지원자</p>
+              <div v-if="event.applicantName" class="mt-1.5 flex flex-wrap gap-2">
+                <div class="px-2 py-1 rounded-md bg-violet-50 border border-violet-100 flex items-center justify-center text-xs font-medium text-violet-700">
+                  {{ event.applicantName }}
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div
-          v-if="showActions"
+          v-if="canShowActions"
           class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3"
         >
           <button

@@ -64,6 +64,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       type: item.type,
       description: item.description || '',
       roomId: item.roomId,
+      interviewScheduleId: item.interviewScheduleId ?? null,
       isAllDay,
       isBusy,
       time: isAllDay ? '종일' : `${formatTime(item.startTime)} - ${formatTime(item.endTime)}`
@@ -88,7 +89,9 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
     title: String(item?.title || '').trim() || '제목 없음',
     startDateTime: item?.startDateTime || '',
     endDateTime: item?.endDateTime || '',
-    isAllDay: item?.isAllDay === true
+    isAllDay: item?.isAllDay === true,
+    type: item?.type || '',
+    interviewScheduleId: item?.interviewScheduleId ?? null
   })
 
   const normalizeAttendeeAvailability = (item) => ({

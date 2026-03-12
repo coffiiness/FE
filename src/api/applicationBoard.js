@@ -15,6 +15,10 @@ export const applicationBoardApi = {
     return api.get(`/applications/${applicationId}`)
   },
 
+  getApplicationFileDownloadPresign(fileId) {
+    return api.get(`/application-files/${fileId}/presign-download`)
+  },
+
   getBoard(recruitmentId) {
     return api.get('/applications/board', {
       params: { recruitmentId }

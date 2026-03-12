@@ -17,6 +17,7 @@ const formattedDateTitle = computed(() => {
 
 const getEventStyle = (type) => {
   switch (type) {
+    case 'INTERVIEW': return { bg: 'bg-indigo-50', border: 'border-indigo-100', text: 'text-indigo-700', badge: 'bg-white border-indigo-200 text-indigo-700' }
     case 'MEETING': return { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700', badge: 'bg-white border-amber-200 text-amber-700' }
     case 'BUSINESS': return { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', badge: 'bg-white border-emerald-200 text-emerald-700' }
     case 'VACATION': return { bg: 'bg-rose-50', border: 'border-rose-100', text: 'text-rose-700', badge: 'bg-white border-rose-200 text-rose-700' }
@@ -27,6 +28,7 @@ const getEventStyle = (type) => {
 
 const typeLabel = (type) => {
   const labels = {
+    INTERVIEW: '면접',
     MEETING: '회의',
     BUSINESS: '외근/출장',
     VACATION: '휴가',
@@ -82,6 +84,7 @@ const typeLabel = (type) => {
             </div>
 
             <button
+                v-if="!evt.interviewScheduleId"
                 @click.stop="$emit('delete', evt.id)"
                 class="absolute right-3 top-3 p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all opacity-0 group-hover:opacity-100 z-10"
                 title="삭제"
