@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
 import { careerApi } from '@/api/career'
 import applicantClient from '@/api/applicantClient'
 import { useApplicantAuth } from '@/composables/useApplicantAuth'
@@ -122,6 +121,16 @@ const resolveApiData = (response) => {
   return body
 }
 
+const getExactUploadContentType = (file) => file?.type || 'application/octet-stream'
+
+const createUploadError = (stage, fieldLabel, message, cause, details = {}) => {
+  const error = new Error(`"${fieldLabel}" 파일 업로드 중 ${message}`)
+  error.stage = stage
+  error.cause = cause
+  error.details = details
+  return error
+}
+
 const uploadApplicationFiles = async (applicationId, applicantId) => {
   const fileFields = (applyForm.value?.parsedCustomFields || []).filter((field) => field.type === 'file')
 
@@ -131,50 +140,54 @@ const uploadApplicationFiles = async (applicationId, applicantId) => {
       continue
     }
 
+    const exactContentType = getExactUploadContentType(file)
+
     const requestBody = {
       applicationId,
       applicantId,
       fieldKey: field.id,
       originalFilename: file.name,
-      contentType: file.type || 'application/octet-stream'
+      contentType: exactContentType
     }
 
-    // 일부 환경에서 requesterUserId 쿼리 파라미터가 필요할 수 있어 4xx에만 fallback
-    let presignResponse
+    let presign
     try {
-      presignResponse = await applicantClient.post('/application-files/presign-upload', requestBody)
+      const presignResponse = await applicantClient.post('/application-files/presign-upload', requestBody)
+      presign = resolveApiData(presignResponse)
     } catch (error) {
-      const status = Number(error?.response?.status || 0)
-      const canFallback = status >= 400 && status < 500
-      if (!canFallback) throw error
+      throw createUploadError('presign', field.label, 'presign 발급에 실패했습니다.', error)
+    }
+    if (!presign?.uploadUrl || !presign?.fileId) {
+      throw createUploadError('presign', field.label, 'presign 정보를 받지 못했습니다.')
+    }
 
-      presignResponse = await applicantClient.post(
-        `/application-files/presign-upload?requesterUserId=${applicantId}`,
-        requestBody
+    const uploadResponse = await fetch(presign.uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': exactContentType
+      },
+      body: file
+    })
+
+    if (!uploadResponse.ok) {
+      const responseText = await uploadResponse.text().catch(() => '')
+      throw createUploadError(
+        'put',
+        field.label,
+        'S3 PUT에 실패했습니다.',
+        uploadResponse,
+        {
+          status: uploadResponse.status,
+          responseText,
+          requestContentType: exactContentType
+        }
       )
     }
-
-    const presign = resolveApiData(presignResponse)
-    if (!presign?.uploadUrl || !presign?.fileId) {
-      throw new Error('파일 업로드 URL을 받지 못했습니다.')
-    }
-
-    await axios.put(presign.uploadUrl, file, {
-      headers: {
-        'Content-Type': file.type || 'application/octet-stream'
-      }
-    })
 
     try {
       await applicantClient.post('/application-files/complete', { fileId: presign.fileId })
     } catch (error) {
-      const status = Number(error?.response?.status || 0)
-      const canFallback = status >= 400 && status < 500
-      if (!canFallback) throw error
-
-      await applicantClient.post(`/application-files/complete?requesterUserId=${applicantId}`, {
-        fileId: presign.fileId
-      })
+      throw createUploadError('complete', field.label, 'complete 처리에 실패했습니다.', error)
     }
   }
 }
@@ -296,7 +309,6 @@ const handleSubmit = async () => {
       birthDate: formData.value.birthDate,
       phone: formData.value.phone.trim(),
       email: formData.value.email.trim(),
-      schema: schemaPayload,
       formFields: schemaPayload
     }
 
@@ -315,17 +327,27 @@ const handleSubmit = async () => {
         await uploadApplicationFiles(applicationId, applicantId)
       } catch (uploadError) {
         fileUploadFailed = true
+        const responseText = String(uploadError?.details?.responseText || '')
+        if (uploadError?.stage === 'put' && responseText.includes('SignatureDoesNotMatch')) {
+          errorMsg.value = `${uploadError.message} S3 응답: SignatureDoesNotMatch`
+        } else if (uploadError?.stage === 'put' && responseText.includes('AccessDenied')) {
+          errorMsg.value = `${uploadError.message} S3 응답: AccessDenied`
+        } else {
+          errorMsg.value = uploadError?.message || '첨부 파일 업로드에 실패했습니다.'
+        }
         console.error('첨부파일 업로드 실패', uploadError)
       }
     }
 
     successMsg.value = fileUploadFailed
-      ? '지원서는 제출되었지만 첨부파일 업로드에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+      ? '지원서는 제출되었지만 첨부 파일은 완료 처리되지 않았습니다.'
       : '지원서가 성공적으로 제출되었습니다.'
 
-    setTimeout(() => {
-      router.push(`/careers/${companySlug.value}`)
-    }, 1500)
+    if (!fileUploadFailed) {
+      setTimeout(() => {
+        router.push(`/careers/${companySlug.value}`)
+      }, 1500)
+    }
   } catch (error) {
     const message = error.response?.data?.error?.message || error.response?.data?.message || error.message
     if (error.response?.status === 401) {
