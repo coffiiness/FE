@@ -240,7 +240,7 @@ const normalizeAttendeeNames = (raw) => {
   return []
 }
 
-const getParticipantBusyFromLocalReservations = (reservationRows) => {
+const getParticipantBusyFromReservations = (reservationRows) => {
   const selectedParticipantNames = new Set(
     [
       ...interviewers.value.map((item) => String(item?.name || '').trim()),
@@ -262,8 +262,12 @@ const getParticipantBusyFromLocalReservations = (reservationRows) => {
 
   return reservationRows
     .filter((reservation) => {
-      const attendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
-      return attendees.some((name) => selectedParticipantNames.has(name))
+      const attendees = normalizeAttendeeNames(reservation?.attendees)
+      const fallbackAttendees = normalizeAttendeeNames(attendeeMap[String(reservation?.id)])
+      const organizerName = String(reservation?.organizerName || '').trim()
+      return [...attendees, ...fallbackAttendees, organizerName].some((name) =>
+        selectedParticipantNames.has(name)
+      )
     })
     .map((reservation) => ({
       start: reservation?.startDatetime,
@@ -329,7 +333,7 @@ const fetchAvailabilitySnapshot = async ({ fromDatetime, toDatetime }) => {
   const roomBusyFromInterview = normalizeRoomBusySlots(interviewData?.meetingRoomBusySlots)
   const reservationRows = Array.isArray(reservationResult?.data?.data) ? reservationResult.data.data : []
   const roomBusyFromReservations = normalizeRoomBusySlots(reservationRows)
-  const nextParticipantBusySlots = getParticipantBusyFromLocalReservations(reservationRows)
+  const nextParticipantBusySlots = getParticipantBusyFromReservations(reservationRows)
 
   const mergedRoomBusy = [...roomBusyFromInterview, ...roomBusyFromReservations]
   const uniqueRoomBusy = new Map()
