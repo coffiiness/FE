@@ -84,6 +84,9 @@ const expandedTeams = ref(new Set())
 const leadExpandedDepts = ref(new Set())
 const refExpandedDepts = ref(new Set())
 const interviewerSearchQuery = ref('')
+const leadTeamFallbackMap = ref({})
+const referenceTeamFallbackMap = ref({})
+const interviewerFallbackMap = ref({})
 
 const toggleDept = (deptId) => {
   if (expandedDepts.value.has(deptId)) expandedDepts.value.delete(deptId)
@@ -125,7 +128,7 @@ const selectedInterviewerDetails = computed(() => {
   return form.value.interviewerIds.map(id => {
     const numericId = Number(id)
     const member = allMembers.value.find(m => getMemberUserId(m) === numericId)
-    return member || { id: numericId, userId: numericId, name: '? ? ??', position: '', teamName: '' }
+    return member || interviewerFallbackMap.value[numericId] || { id: numericId, userId: numericId, name: '알 수 없음', position: '', teamName: '' }
   })
 })
 
@@ -141,14 +144,19 @@ const allTeams = computed(() => {
 const selectedLeadTeamName = computed(() => {
   const leadTeamId = toPositiveNumber(form.value.leadTeamId)
   if (!leadTeamId) return ''
-  return allTeams.value.find((team) => Number(team.id) === leadTeamId)?.name || ""
+  return allTeams.value.find((team) => Number(team.id) === leadTeamId)?.name || leadTeamFallbackMap.value[leadTeamId] || ""
 })
 
 const selectedRefTeamNames = computed(() => {
   const referenceTeamIds = new Set((form.value.referenceTeamIds || [])
     .map((id) => Number(id))
     .filter((id) => Number.isFinite(id) && id > 0))
-  return allTeams.value.filter((team) => referenceTeamIds.has(Number(team.id)))
+  const knownTeams = allTeams.value.filter((team) => referenceTeamIds.has(Number(team.id)))
+  const knownTeamIds = new Set(knownTeams.map((team) => Number(team.id)))
+  const fallbackTeams = [...referenceTeamIds]
+    .filter((id) => !knownTeamIds.has(id) && referenceTeamFallbackMap.value[id])
+    .map((id) => ({ id, name: referenceTeamFallbackMap.value[id] }))
+  return [...knownTeams, ...fallbackTeams]
 })
 const toggleLeadDept = (deptId) => {
   if (leadExpandedDepts.value.has(deptId)) leadExpandedDepts.value.delete(deptId)
@@ -362,7 +370,7 @@ const toTeamIdFromUnknown = (value) => {
 
   if (typeof value === 'object') {
     const objectId = toPositiveNumber(value.id ?? value.groupId ?? value.teamId)
-    if (objectId && isKnownTeamId(objectId)) return objectId
+    if (objectId) return objectId
 
     const objectName = firstFilledString(value.name, value.groupName, value.teamName)
     const mapped = findTeamIdByName(objectName)
@@ -370,7 +378,7 @@ const toTeamIdFromUnknown = (value) => {
   }
 
   const directId = toPositiveNumber(value)
-  if (directId && isKnownTeamId(directId)) return directId
+  if (directId) return directId
 
   const mapped = findTeamIdByName(String(value))
   return mapped || null
@@ -601,7 +609,7 @@ const setFormFromJob = (job) => {
   )
 
   const leadTeamIdFromName = findTeamIdByName(leadTeamName)
-  const leadTeamIdFromApi = isKnownTeamId(leadTeamIdFromApiRaw) ? leadTeamIdFromApiRaw : null
+  const leadTeamIdFromApi = leadTeamIdFromApiRaw || null
   const leadTeamId = leadTeamIdFromApi || leadTeamIdFromName || ''
 
   const referenceTeamIds = uniquePositiveNumbers([
@@ -613,7 +621,7 @@ const setFormFromJob = (job) => {
     ...collectTeamIds(job.referenceTeamNames),
     ...collectTeamIds(job.referenceGroupName ? [job.referenceGroupName] : []),
     ...collectTeamIds(job.referenceTeamName ? [job.referenceTeamName] : [])
-  ]).filter((id) => id !== leadTeamId && isKnownTeamId(id))
+  ]).filter((id) => id !== leadTeamId)
 
   const memberNameMap = new Map()
   for (const member of allMembers.value) {
@@ -635,7 +643,51 @@ const setFormFromJob = (job) => {
     ...collectInterviewerIds(job.assigneeIds, memberNameMap),
     ...collectInterviewerIds(job.assignees, memberNameMap),
     ...collectInterviewerIds(job.interviewers, memberNameMap)
-  ]).filter((id) => knownMemberIds.has(id))
+  ]).filter((id) => knownMemberIds.size === 0 || knownMemberIds.has(id))
+
+  const nextLeadTeamFallbackMap = {}
+  if (leadTeamId && leadTeamName) {
+    nextLeadTeamFallbackMap[leadTeamId] = leadTeamName
+  }
+
+  const nextReferenceTeamFallbackMap = {}
+  ;(Array.isArray(job.referenceGroups) ? job.referenceGroups : []).forEach((group) => {
+    const groupId = toPositiveNumber(group?.id ?? group?.groupId ?? group?.teamId)
+    const groupName = firstFilledString(group?.name, group?.groupName, group?.teamName)
+    if (groupId && groupName) {
+      nextReferenceTeamFallbackMap[groupId] = groupName
+    }
+  })
+  ;(Array.isArray(job.referenceTeams) ? job.referenceTeams : []).forEach((team) => {
+    const teamId = toPositiveNumber(team?.id ?? team?.groupId ?? team?.teamId)
+    const teamName = firstFilledString(team?.name, team?.groupName, team?.teamName)
+    if (teamId && teamName) {
+      nextReferenceTeamFallbackMap[teamId] = teamName
+    }
+  })
+
+  const nextInterviewerFallbackMap = {}
+  ;(Array.isArray(job.assignees) ? job.assignees : []).forEach((assignee) => {
+    const userId = toPositiveNumber(assignee?.userId ?? assignee?.id ?? assignee?.memberId)
+    const name = firstFilledString(assignee?.name, assignee?.memberName, assignee?.interviewerName)
+    if (userId && name) {
+      nextInterviewerFallbackMap[userId] = { id: userId, userId, name, position: '', teamName: '' }
+    }
+  })
+  ;(Array.isArray(job.interviewers) ? job.interviewers : []).forEach((interviewer) => {
+    if (typeof interviewer !== 'object' || interviewer === null) return
+    const userId = toPositiveNumber(
+      interviewer?.userId ?? interviewer?.id ?? interviewer?.memberId ?? interviewer?.interviewerId
+    )
+    const name = firstFilledString(interviewer?.name, interviewer?.memberName, interviewer?.interviewerName)
+    if (userId && name) {
+      nextInterviewerFallbackMap[userId] = { id: userId, userId, name, position: '', teamName: '' }
+    }
+  })
+
+  leadTeamFallbackMap.value = nextLeadTeamFallbackMap
+  referenceTeamFallbackMap.value = nextReferenceTeamFallbackMap
+  interviewerFallbackMap.value = nextInterviewerFallbackMap
 
   const templateId = toPositiveNumber(
     job.applicationTemplateId ??
@@ -894,6 +946,9 @@ const resetToCreateDefaults = () => {
   processes.value = getDefaultProcesses()
 
   interviewerSearchQuery.value = ''
+  leadTeamFallbackMap.value = {}
+  referenceTeamFallbackMap.value = {}
+  interviewerFallbackMap.value = {}
   expandedDepts.value.clear()
   expandedTeams.value.clear()
   leadExpandedDepts.value.clear()
@@ -905,7 +960,7 @@ const applyRouteMode = async () => {
   closeNoticeModal()
 
   try {
-    await orgStore.loadOrganizations()
+    await orgStore.loadOrganizations({ force: true })
   } catch (_) {
   }
   try {

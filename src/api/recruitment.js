@@ -58,6 +58,16 @@ export const recruitmentApi = {
     },
 
     /**
+     * 채용 공고 면접관만 수정
+     * PATCH /api/v1/recruitments/{recruitmentId}/interviewers
+     */
+    updateRecruitmentInterviewers(recruitmentId, interviewerIds) {
+        return api.patch(`/recruitments/${recruitmentId}/interviewers`, {
+            interviewerIds
+        })
+    },
+
+    /**
      * 채용 공고 삭제
      * DELETE /api/v1/recruitments/{recruitmentId}
      */
