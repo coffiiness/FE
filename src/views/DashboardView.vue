@@ -112,7 +112,7 @@ const schedules = ref([
 
 // --- Announcement Pagination ---
 const currentPage = ref(1)
-const pageSize = 3 // 한 페이지에 3개씩
+const pageSize = 5 // 한 페이지에 5개씩
 
 const totalPages = computed(() => {
   return Math.ceil(sortedAnnouncements.value.length / pageSize)

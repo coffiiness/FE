@@ -39,6 +39,17 @@ const getBookingsForRoomAndHour = (roomId, hour) => {
   })
 }
 
+const getSlotFillStyle = (roomId, hour) => {
+  const bookings = getBookingsForRoomAndHour(roomId, hour)
+  if (!bookings.length) return null
+
+  const room = props.rooms.find((item) => item.id === roomId)
+  const color = room?.color || '#10b981'
+  return {
+    backgroundColor: `${color}12`
+  }
+}
+
 const calculateBookingWidth = (booking) => {
   const duration = (booking.endTime.getTime() - booking.startTime.getTime()) / (1000 * 60 * 60)
   return duration * 100
@@ -108,7 +119,8 @@ const goToPage = (page) => {
               class="flex-1 border-r last:border-r-0 relative min-h-[80px]"
               :class="getBookingsForRoomAndHour(room.id, hour).length === 0
                 ? (isPastSlot(hour) ? 'cursor-not-allowed bg-slate-100/70' : 'cursor-pointer hover:bg-emerald-50/50')
-                : ''"
+                : 'bg-slate-50/40'"
+              :style="getSlotFillStyle(room.id, hour)"
               @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && !isPastSlot(hour) && emit('timeSlotClick', room.id, hour)"
             >
               <template v-for="booking in getBookingsForRoomAndHour(room.id, hour)" :key="booking.id">
