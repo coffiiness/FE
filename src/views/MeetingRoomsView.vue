@@ -36,9 +36,9 @@ const toViewRoom = (room, index = 0) => ({
   name: room.name,
   capacity: parseCapacity(room.capacity),
   floor: parseFloor(room.location),
-  facilities: ['WiFi'],
-  description: '',
-  color: roomColors[index % roomColors.length]
+  facilities: Array.isArray(room.facilities) && room.facilities.length ? room.facilities : ['WiFi'],
+  description: room.description || '',
+  color: room.color || roomColors[index % roomColors.length]
 })
 
 const rooms = ref([...defaultRooms])
@@ -638,6 +638,11 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
   }
 }
 
+const isVisibleReservationStatus = (status) => {
+  const normalized = String(status || '').toUpperCase()
+  return normalized === 'RESERVED' || normalized === 'ACTIVE'
+}
+
 const loadRoomsFromApi = async () => {
   try {
     const response = await meetingRoomApi.list()
@@ -661,7 +666,9 @@ const loadBookingsFromApi = async (dateString = dateValue.value) => {
     const data = response?.data?.data
     const titleByReservationKey = await loadScheduleTitlesByReservationKey({ from, to })
     if (Array.isArray(data)) {
-      bookings.value = data.map((reservation) => toViewBookingFromApi(reservation, titleByReservationKey))
+      bookings.value = data
+        .filter((reservation) => isVisibleReservationStatus(reservation?.status))
+        .map((reservation) => toViewBookingFromApi(reservation, titleByReservationKey))
     }
   } catch (error) {
     const detail = toErrorText(error)
@@ -802,7 +809,10 @@ const handleCreateRoom = async (roomData) => {
     const response = await meetingRoomApi.create({
       name: roomData.name,
       location: roomData.floor,
-      capacity: roomData.capacity
+      capacity: roomData.capacity,
+      description: roomData.description,
+      facilities: roomData.facilities,
+      color: roomData.color
     })
     const created = response?.data?.data
     if (!created?.id) return
@@ -838,7 +848,11 @@ const handleUpdateRoom = async (roomData) => {
     if (target.serverId) {
       await meetingRoomApi.update(target.serverId, {
         name: roomData.name,
-        capacity: roomData.capacity
+        location: roomData.floor,
+        capacity: roomData.capacity,
+        description: roomData.description,
+        facilities: roomData.facilities,
+        color: roomData.color
       })
     }
     rooms.value[idx] = { ...rooms.value[idx], ...roomData }
