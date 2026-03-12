@@ -20,13 +20,25 @@ const buildAvailabilityParams = ({
   return params
 }
 
+const extractResponseData = (response) => {
+  const body = response?.data
+  if (body == null) return null
+  return body?.data ?? body
+}
+
 export const interviewApi = {
   getAvailability(payload) {
     return api.get('/interviews/availability', {
       params: buildAvailabilityParams(payload)
     })
   },
+  getPendingApplicants(recruitmentId) {
+    return api.get('/interviews/pending-applicants', {
+      params: { recruitmentId }
+    })
+  },
   create(payload) {
     return api.post('/interviews', payload)
-  }
+  },
+  extractResponseData
 }
