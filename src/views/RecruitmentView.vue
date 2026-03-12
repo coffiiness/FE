@@ -5,6 +5,7 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useOrganizationStore } from '@/stores/organization'
 import { recruitmentApi } from '@/api/recruitment'
+import { useAuth } from '@/composables/useAuth'
 
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
@@ -12,6 +13,7 @@ import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewLi
 const router = useRouter()
 const store = useRecruitmentStore()
 const organizationStore = useOrganizationStore()
+const { user } = useAuth()
 const { jobs, loading } = storeToRefs(store)
 const { organizations } = storeToRefs(organizationStore)
 
@@ -134,6 +136,9 @@ const normalizeDisplayName = (value) => {
   return text
 }
 
+const currentUserId = computed(() => toPositiveNumber(user.value?.id))
+const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
+
 const resolveTeamName = (job) => {
   return (
     normalizeDisplayName(job.leadGroupName) ||
@@ -215,6 +220,24 @@ const splitNames = (value) => {
     .filter(Boolean)
 }
 
+// 이름 목록을 화면 표시용으로 정리하고 중복을 제거한다.
+const getUniqueNames = (values) => {
+  return values
+    .map((value) => normalizeDisplayName(value))
+    .filter((name, index, names) => name && names.indexOf(name) === index)
+}
+
+// 현재 로그인 사용자가 이번 면접의 면접관인지 판단한다.
+const isCurrentUserInterviewer = (item, interviewerNames) => {
+  const interviewerUserId = toPositiveNumber(item?.interviewerUserId)
+  if (currentUserId.value && interviewerUserId && currentUserId.value === interviewerUserId) {
+    return true
+  }
+
+  if (!currentUserName.value) return false
+  return interviewerNames.includes(currentUserName.value)
+}
+
 const normalizeWeeklySchedule = (item) => {
   const start = item?.startAt ? new Date(item.startAt) : null
   if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
@@ -222,8 +245,13 @@ const normalizeWeeklySchedule = (item) => {
   }
 
   const end = item?.endAt ? new Date(item.endAt) : new Date(start.getTime())
-  const attendees = [...splitNames(item?.interviewerName), ...splitNames(item?.applicantName)]
-    .filter((name, index, names) => names.indexOf(name) === index)
+  const interviewerNames = getUniqueNames(splitNames(item?.interviewerName))
+  const applicantNames = getUniqueNames(splitNames(item?.applicantName))
+  const showSelf = isCurrentUserInterviewer(item, interviewerNames)
+  const attendees = getUniqueNames([
+    ...interviewerNames.filter((name) => !showSelf || name !== currentUserName.value),
+    ...applicantNames
+  ])
 
   const locationParts = [String(item?.location || '').trim(), String(item?.description || '').trim()]
     .filter(Boolean)
@@ -239,6 +267,7 @@ const normalizeWeeklySchedule = (item) => {
     time: `${toHm(start)} - ${toHm(end)}`,
     location: locationParts.join(' · '),
     description: String(item?.description || '').trim(),
+    showSelf,
     attendees
   }
 }

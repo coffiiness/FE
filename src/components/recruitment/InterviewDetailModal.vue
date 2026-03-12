@@ -32,6 +32,7 @@ const formattedDate = computed(() => {
 })
 
 const location = computed(() => props.event.location || '지정된 장소 없음')
+const showSelf = computed(() => Boolean(props.event.showSelf))
 const attendees = computed(() => props.event.attendees || [])
 </script>
 
@@ -96,7 +97,10 @@ const attendees = computed(() => props.event.attendees || [])
             <div>
               <p class="text-sm font-bold text-slate-800 mb-1.5">참석자</p>
               <div class="flex flex-wrap gap-2">
-                 <div class="px-2 py-1 rounded-md bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                 <div
+                   v-if="showSelf"
+                   class="px-2 py-1 rounded-md bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600"
+                 >
                    나
                  </div>
                 <div v-for="att in attendees" :key="att" 
