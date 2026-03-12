@@ -194,6 +194,20 @@ const scheduleTypes = [
 ]
 const isMeetingType = computed(() => form.value.type === 'MEETING')
 
+const sortedRoomOptions = computed(() => {
+  return [...props.roomOptions].sort((left, right) => {
+    const leftCapacity = Number(left?.capacity)
+    const rightCapacity = Number(right?.capacity)
+    const normalizedLeft = Number.isFinite(leftCapacity) && leftCapacity > 0 ? leftCapacity : Number.MAX_SAFE_INTEGER
+    const normalizedRight = Number.isFinite(rightCapacity) && rightCapacity > 0 ? rightCapacity : Number.MAX_SAFE_INTEGER
+    if (normalizedLeft !== normalizedRight) {
+      return normalizedLeft - normalizedRight
+    }
+
+    return String(left?.name || '').localeCompare(String(right?.name || ''), 'ko')
+  })
+})
+
 const toMinutes = (timeValue) => {
   if (!timeValue) return null
   const [hourText = '', minuteText = ''] = String(timeValue).split(':')
@@ -545,7 +559,7 @@ onMounted(() => {
             <label class="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">회의실 선택</label>
             <select v-model="form.roomId" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl text-slate-700 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none text-sm font-medium shadow-sm">
               <option :value="null">선택 안 함</option>
-              <option v-for="room in roomOptions" :key="room.id" :value="room.id">
+              <option v-for="room in sortedRoomOptions" :key="room.id" :value="room.id">
                 {{ room.name }} ({{ room.location ?? room.floor ?? '-' }}층 / {{ room.capacity }}명)
               </option>
             </select>

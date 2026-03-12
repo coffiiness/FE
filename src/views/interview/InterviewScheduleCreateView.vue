@@ -96,6 +96,11 @@ const selectedRoomId = ref('')
 const selectedRoom = computed(() => rooms.value.find((r) => Number(r.id) === Number(selectedRoomId.value)) || rooms.value[0])
 const skipRoomResetOnce = ref(false)
 
+const parseRoomCapacity = (capacityText) => {
+  const parsed = Number(String(capacityText || '').replace(/[^0-9]/g, ''))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.MAX_SAFE_INTEGER
+}
+
 const parseCapacityRange = (capacityText) => {
   const normalized = String(capacityText || '').replace('인실', '').trim()
   if (!normalized) return [1, Number.MAX_SAFE_INTEGER]
@@ -273,7 +278,13 @@ const loadMeetingRooms = async () => {
     const response = await meetingRoomApi.list()
     const data = response?.data?.data
     if (!Array.isArray(data)) return
-    rooms.value = data.map((room) => ({ id: room.id, name: room.name, capacity: `${room.capacity}인실`, blocked: [] }))
+    rooms.value = data
+      .map((room) => ({ id: room.id, name: room.name, capacity: `${room.capacity}인실`, blocked: [] }))
+      .sort((a, b) => {
+        const byCapacity = parseRoomCapacity(a.capacity) - parseRoomCapacity(b.capacity)
+        if (byCapacity !== 0) return byCapacity
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+      })
     if (rooms.value.length && !rooms.value.some((r) => Number(r.id) === Number(selectedRoomId.value))) {
       selectedRoomId.value = rooms.value[0].id
     }
