@@ -5,6 +5,7 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useOrganizationStore } from '@/stores/organization'
 import { recruitmentApi } from '@/api/recruitment'
+import { memberApi } from '@/api/member'
 import { useAuth } from '@/composables/useAuth'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
@@ -19,13 +20,15 @@ const { jobs, loading } = storeToRefs(store)
 const { organizations, allMembers } = storeToRefs(organizationStore)
 
 const weeklyInterviewSchedules = ref([])
+const memberType = ref('')
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
-  const [recruitmentsResult, weeklySchedulesResult, organizationsResult] = await Promise.allSettled([
+  const [recruitmentsResult, weeklySchedulesResult, organizationsResult, memberResult] = await Promise.allSettled([
     store.fetchRecruitments(),
     fetchWeeklyInterviewSchedules(),
-    organizationStore.loadOrganizations({ force: true })
+    organizationStore.loadOrganizations({ force: true }),
+    memberApi.getMyMember()
   ])
 
   if (recruitmentsResult.status === 'rejected') {
@@ -38,6 +41,12 @@ onMounted(async () => {
 
   if (organizationsResult.status === 'rejected') {
     console.error('조직도 조회 실패:', organizationsResult.reason)
+  }
+
+  if (memberResult.status === 'fulfilled') {
+    memberType.value = memberResult.value?.data?.data?.memberType || ''
+  } else {
+    console.error('멤버 정보 조회 실패:', memberResult.reason)
   }
 })
 
@@ -149,6 +158,7 @@ const isPipelineStage = (stage) => {
 
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
+const canManageRecruitment = computed(() => memberType.value === 'HR')
 
 const resolveTeamName = (job) => {
   return (
@@ -301,6 +311,7 @@ const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 const deleting = ref(false) // 삭제 진행 상태
+const publishingRecruitmentId = ref(null)
 const noticeModal = ref({
   show: false,
   title: '알림',
@@ -426,6 +437,47 @@ const openDeleteModal = (id) => {
 const closeDeleteModal = () => {
   showDeleteModal.value = false
   deleteTargetId.value = null
+}
+
+const requestPublishRecruitment = (job) => {
+  openNoticeModal({
+    title: '즉시 게시',
+    message: '이 공고를 지금 바로 게시하시겠습니까? 게시 후에는 기본 정보 수정이 제한됩니다.',
+    type: 'info',
+    confirmText: '즉시 게시',
+    showCancel: true,
+    onConfirm: async () => {
+      await publishRecruitment(job.id)
+    }
+  })
+  activeMenuId.value = null
+}
+
+const publishRecruitment = async (recruitmentId) => {
+  if (!recruitmentId || publishingRecruitmentId.value) return
+
+  publishingRecruitmentId.value = recruitmentId
+  try {
+    await store.publishRecruitment(recruitmentId)
+    await store.fetchRecruitments()
+    openNoticeModal({
+      title: '게시 완료',
+      message: '채용 공고가 즉시 게시되었습니다.',
+      type: 'success'
+    })
+  } catch (err) {
+    const message =
+      err?.response?.data?.error?.message ||
+      err?.response?.data?.message ||
+      '채용 공고 게시 중 오류가 발생했습니다.'
+    openNoticeModal({
+      title: '게시 실패',
+      message,
+      type: 'warning'
+    })
+  } finally {
+    publishingRecruitmentId.value = null
+  }
 }
 
 // 3. 실제 삭제 수행
@@ -832,6 +884,16 @@ const saveInterviewers = async () => {
 
             <div v-if="activeMenuId === job.id"
                  class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
+
+              <button
+                  v-if="canManageRecruitment && job.status === 'DRAFT'"
+                  @click.stop="requestPublishRecruitment(job)"
+                  :disabled="publishingRecruitmentId === job.id"
+                  class="w-full text-left px-4 py-2.5 text-sm text-brand-600 hover:bg-brand-50 flex items-center transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.868v4.264a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                {{ publishingRecruitmentId === job.id ? '게시 중...' : '즉시 게시' }}
+              </button>
 
               <button
                   @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"

@@ -68,6 +68,14 @@ export const recruitmentApi = {
     },
 
     /**
+     * DRAFT 채용 공고 즉시 게시
+     * PATCH /api/v1/recruitments/{recruitmentId}/publish
+     */
+    publishRecruitment(recruitmentId) {
+        return api.patch(`/recruitments/${recruitmentId}/publish`)
+    },
+
+    /**
      * 채용 공고 삭제
      * DELETE /api/v1/recruitments/{recruitmentId}
      */
