@@ -11,7 +11,9 @@ export const NOTIFICATION_FILTERS = [
 
 const DEFAULT_DROPDOWN_SIZE = 5
 const DEFAULT_PAGE_SIZE = 20
+const TOAST_PREVIEW_SIZE = 10
 const SSE_RETRY_DELAY = 3000
+const TOAST_DURATION = 5000
 
 const pad = (value) => String(value).padStart(2, '0')
 
@@ -147,10 +149,12 @@ export const useNotificationStore = defineStore('notification', () => {
   const isDropdownOpen = ref(false)
   const isNotificationPageActive = ref(false)
   const isStreamConnected = ref(false)
+  const realtimeToast = ref(null)
 
   let streamAbortController = null
   let streamReconnectTimer = null
   let streamStoppedManually = false
+  let toastTimer = null
 
   const unreadCount = computed(() => unreadCountValue.value)
 
@@ -242,12 +246,64 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
+  const fetchNotificationPreview = async (notificationId) => {
+    const response = await notificationApi.getUnreadList({
+      page: 0,
+      size: TOAST_PREVIEW_SIZE
+    })
+
+    const { contents } = extractContents(response)
+    return (
+      contents.find((item) => item.id === notificationId) ||
+      contents[0] ||
+      null
+    )
+  }
+
+  const clearToastTimer = () => {
+    if (!toastTimer) return
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+
+  const dismissRealtimeToast = () => {
+    clearToastTimer()
+    realtimeToast.value = null
+  }
+
+  const showRealtimeToast = (item) => {
+    if (!item?.id) return
+
+    realtimeToast.value = item
+    clearToastTimer()
+    toastTimer = setTimeout(() => {
+      realtimeToast.value = null
+      toastTimer = null
+    }, TOAST_DURATION)
+  }
+
   const handleStreamEvent = async (event) => {
     if (event.type === 'heartbeat' || event.type === 'connected') return
     if (event.type !== 'notification-created') return
 
     try {
+      let notificationId = null
+
+      try {
+        const parsed = JSON.parse(event.data || '{}')
+        notificationId = parsed?.notificationId ?? null
+      } catch {
+        notificationId = null
+      }
+
       await refreshVisibleData()
+
+      if (!isNotificationPageActive.value && !isDropdownOpen.value && notificationId != null) {
+        const preview = await fetchNotificationPreview(notificationId)
+        if (preview) {
+          showRealtimeToast(preview)
+        }
+      }
     } catch (error) {
       console.error('알림 SSE 후 재조회 실패:', error)
     }
@@ -255,6 +311,7 @@ export const useNotificationStore = defineStore('notification', () => {
 
   const stopNotificationStream = () => {
     streamStoppedManually = true
+    clearToastTimer()
 
     if (streamReconnectTimer) {
       clearTimeout(streamReconnectTimer)
@@ -436,6 +493,7 @@ export const useNotificationStore = defineStore('notification', () => {
     isMarkingAllRead,
     isRemovingAll,
     isStreamConnected,
+    realtimeToast,
     fetchUnreadCount,
     fetchDropdownNotifications,
     fetchNotifications,
@@ -445,6 +503,7 @@ export const useNotificationStore = defineStore('notification', () => {
     stopNotificationStream,
     setDropdownOpen,
     setNotificationPageActive,
+    dismissRealtimeToast,
     markRead,
     markAllRead,
     removeNotification,
