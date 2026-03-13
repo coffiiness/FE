@@ -195,6 +195,77 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     }
   }
 
+  const updateRecruitmentInterviewers = async (recruitmentId, interviewerIds) => {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await recruitmentApi.updateRecruitmentInterviewers(recruitmentId, interviewerIds)
+      const updated = res.data.data || null
+      if (updated?.id) {
+        const index = jobs.value.findIndex((job) => Number(job.id) === Number(updated.id))
+        if (index !== -1) {
+          const assignees = Array.isArray(updated.interviewers)
+            ? updated.interviewers.map((interviewer) => ({
+                userId: interviewer.userId,
+                name: interviewer.name
+              }))
+            : jobs.value[index].assignees
+          jobs.value[index] = {
+            ...jobs.value[index],
+            assignees,
+            interviewerIds: assignees.map((interviewer) => interviewer.userId)
+          }
+        }
+      }
+      return updated
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const publishRecruitment = async (recruitmentId) => {
+    loading.value = true
+    error.value = null
+    try {
+      const res = await recruitmentApi.publishRecruitment(recruitmentId)
+      const updated = res.data.data || null
+      if (updated?.id) {
+        const index = jobs.value.findIndex((job) => Number(job.id) === Number(updated.id))
+        if (index !== -1) {
+          const assignees = Array.isArray(updated.interviewers)
+            ? updated.interviewers.map((interviewer) => ({
+                userId: interviewer.userId,
+                name: interviewer.name
+              }))
+            : jobs.value[index].assignees
+
+          jobs.value[index] = {
+            ...jobs.value[index],
+            status: updated.recruitmentStatus || updated.status || jobs.value[index].status,
+            recruitmentStatus:
+              updated.recruitmentStatus || updated.status || jobs.value[index].recruitmentStatus,
+            startDate: updated.startDate || jobs.value[index].startDate,
+            endDate: updated.endDate || jobs.value[index].endDate,
+            leadGroupId: updated.leadGroupId ?? jobs.value[index].leadGroupId,
+            leadGroupName: updated.leadGroupName ?? jobs.value[index].leadGroupName,
+            referenceGroupIds: updated.referenceGroupIds ?? jobs.value[index].referenceGroupIds,
+            assignees,
+            interviewerIds: assignees.map((interviewer) => interviewer.userId)
+          }
+        }
+      }
+      return updated
+    } catch (err) {
+      error.value = parseError(err)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   const deleteRecruitment = async (recruitmentId) => {
     loading.value = true
     error.value = null
@@ -350,6 +421,8 @@ export const useRecruitmentStore = defineStore('recruitment', () => {
     fetchRecruitments,
     createRecruitment,
     updateRecruitment,
+    updateRecruitmentInterviewers,
+    publishRecruitment,
     deleteRecruitment,
     fetchInterviewSchedules,
     fetchTemplates,

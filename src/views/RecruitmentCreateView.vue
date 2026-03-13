@@ -5,6 +5,7 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { useOrganizationStore } from '@/stores/organization'
 import { storeToRefs } from 'pinia'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import RecruitmentDateTimeField from '@/components/recruitment/RecruitmentDateTimeField.vue'
 import { isTemplateInUse } from '@/utils/templateStatus'
 import { recruitmentApi } from '@/api/recruitment'
 
@@ -65,7 +66,6 @@ const stageTypes = [
   { label: '과제/테스트', value: 'TEST' },
   { label: '처우 협의', value: 'OFFER' },
   { label: '최종 합격', value: 'PASS' },
-  { label: '불합격', value: 'FAIL' },
 ]
 
 const templates = ref([])
@@ -85,6 +85,9 @@ const expandedTeams = ref(new Set())
 const leadExpandedDepts = ref(new Set())
 const refExpandedDepts = ref(new Set())
 const interviewerSearchQuery = ref('')
+const leadTeamFallbackMap = ref({})
+const referenceTeamFallbackMap = ref({})
+const interviewerFallbackMap = ref({})
 
 const toggleDept = (deptId) => {
   if (expandedDepts.value.has(deptId)) expandedDepts.value.delete(deptId)
@@ -126,7 +129,7 @@ const selectedInterviewerDetails = computed(() => {
   return form.value.interviewerIds.map(id => {
     const numericId = Number(id)
     const member = allMembers.value.find(m => getMemberUserId(m) === numericId)
-    return member || { id: numericId, userId: numericId, name: '? ? ??', position: '', teamName: '' }
+    return member || interviewerFallbackMap.value[numericId] || { id: numericId, userId: numericId, name: '알 수 없음', position: '', teamName: '' }
   })
 })
 
@@ -142,14 +145,19 @@ const allTeams = computed(() => {
 const selectedLeadTeamName = computed(() => {
   const leadTeamId = toPositiveNumber(form.value.leadTeamId)
   if (!leadTeamId) return ''
-  return allTeams.value.find((team) => Number(team.id) === leadTeamId)?.name || ""
+  return allTeams.value.find((team) => Number(team.id) === leadTeamId)?.name || leadTeamFallbackMap.value[leadTeamId] || ""
 })
 
 const selectedRefTeamNames = computed(() => {
   const referenceTeamIds = new Set((form.value.referenceTeamIds || [])
     .map((id) => Number(id))
     .filter((id) => Number.isFinite(id) && id > 0))
-  return allTeams.value.filter((team) => referenceTeamIds.has(Number(team.id)))
+  const knownTeams = allTeams.value.filter((team) => referenceTeamIds.has(Number(team.id)))
+  const knownTeamIds = new Set(knownTeams.map((team) => Number(team.id)))
+  const fallbackTeams = [...referenceTeamIds]
+    .filter((id) => !knownTeamIds.has(id) && referenceTeamFallbackMap.value[id])
+    .map((id) => ({ id, name: referenceTeamFallbackMap.value[id] }))
+  return [...knownTeams, ...fallbackTeams]
 })
 const toggleLeadDept = (deptId) => {
   if (leadExpandedDepts.value.has(deptId)) leadExpandedDepts.value.delete(deptId)
@@ -240,6 +248,23 @@ const onDragEnd = () => {
   dragOverIndex.value = null
 }
 
+let syncingProcesses = false
+
+watch(
+  processes,
+  (value) => {
+    if (syncingProcesses) return
+
+    const normalized = normalizeEditableProcesses(value)
+    if (JSON.stringify(value) === JSON.stringify(normalized)) return
+
+    syncingProcesses = true
+    processes.value = normalized
+    syncingProcesses = false
+  },
+  { deep: true }
+)
+
 
 const toDateTimeLocal = (value) => {
   if (!value) return ''
@@ -259,6 +284,39 @@ const toDateTimeLocal = (value) => {
   const hh = String(date.getHours()).padStart(2, '0')
   const mi = String(date.getMinutes()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
+const toDateInput = (value) => {
+  const normalized = toDateTimeLocal(value)
+  return normalized ? normalized.slice(0, 10) : ''
+}
+
+const getTimeInput = (value, fallback = '09:00') => {
+  const normalized = toDateTimeLocal(value)
+  return normalized ? normalized.slice(11, 16) : fallback
+}
+
+const addDaysToDateInput = (dateValue, days) => {
+  if (!dateValue) return ''
+  const date = new Date(`${dateValue}T00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  date.setDate(date.getDate() + days)
+  return toDateInput(date)
+}
+
+const todayDate = computed(() => toDateInput(new Date()))
+const endMinDate = computed(() => toDateInput(form.value.startDate) || todayDate.value)
+
+const applyDurationPreset = (days) => {
+  const baseDate = toDateInput(form.value.startDate) || todayDate.value
+  const startTime = getTimeInput(form.value.startDate, '09:00')
+  const endTime = getTimeInput(form.value.endDate, '18:00')
+
+  if (!form.value.startDate) {
+    form.value.startDate = `${baseDate}T${startTime}`
+  }
+
+  form.value.endDate = `${addDaysToDateInput(baseDate, days)}T${endTime}`
 }
 
 const normalizeText = (value = '') => {
@@ -346,7 +404,7 @@ const toTeamIdFromUnknown = (value) => {
 
   if (typeof value === 'object') {
     const objectId = toPositiveNumber(value.id ?? value.groupId ?? value.teamId)
-    if (objectId && isKnownTeamId(objectId)) return objectId
+    if (objectId) return objectId
 
     const objectName = firstFilledString(value.name, value.groupName, value.teamName)
     const mapped = findTeamIdByName(objectName)
@@ -354,7 +412,7 @@ const toTeamIdFromUnknown = (value) => {
   }
 
   const directId = toPositiveNumber(value)
-  if (directId && isKnownTeamId(directId)) return directId
+  if (directId) return directId
 
   const mapped = findTeamIdByName(String(value))
   return mapped || null
@@ -420,6 +478,45 @@ const normalizeStageType = (typeValue, stageName = '') => {
 
   return 'INTERVIEW'
 }
+
+const isVisibleStage = (stage) => {
+  return normalizeStageType(stage?.stageType ?? stage?.type ?? stage?.processType, stage?.stageName ?? stage?.name ?? stage?.stepName ?? stage?.step) !== 'FAIL'
+}
+
+const buildFinalPassStage = (stage = {}) => ({
+  stageName: firstFilledString(stage.stageName, stage.name, '최종 합격'),
+  stageType: 'PASS'
+})
+
+const normalizeEditableProcesses = (source = []) => {
+  const visibleStages = (Array.isArray(source) ? source : [])
+    .filter(isVisibleStage)
+    .map((stage) => ({
+      stageName: firstFilledString(
+        stage?.stageName,
+        stage?.name,
+        stage?.stepName,
+        stage?.step,
+        stage?.title,
+        stage?.processName,
+        '새 단계'
+      ),
+      stageType: normalizeStageType(
+        stage?.stageType ?? stage?.type ?? stage?.processType,
+        stage?.stageName ?? stage?.name ?? stage?.stepName ?? stage?.step
+      )
+    }))
+
+  const nonPassStages = visibleStages.filter((stage) => stage.stageType !== 'PASS')
+  const finalPassStage =
+    buildFinalPassStage(visibleStages.find((stage) => stage.stageType === 'PASS'))
+
+  return [...nonPassStages, finalPassStage].map((stage, index) => ({
+    ...stage,
+    stageStep: index + 1
+  }))
+}
+
 const normalizeStages = (job) => {
   const stageSources = [
     job.stages,
@@ -458,14 +555,11 @@ const normalizeStages = (job) => {
       .filter(Boolean)
 
     if (mapped.length > 0) {
-      return mapped.sort((a, b) => a.stageStep - b.stageStep)
+      return normalizeEditableProcesses(mapped.sort((a, b) => a.stageStep - b.stageStep))
     }
   }
 
-  return getDefaultProcesses().map((stage, index) => ({
-    ...stage,
-    stageStep: index + 1
-  }))
+  return normalizeEditableProcesses(getDefaultProcesses())
 }
 
 const looksLikeRecruitmentDetail = (candidate) => {
@@ -549,7 +643,7 @@ const setFormFromJob = (job) => {
   )
 
   const leadTeamIdFromName = findTeamIdByName(leadTeamName)
-  const leadTeamIdFromApi = isKnownTeamId(leadTeamIdFromApiRaw) ? leadTeamIdFromApiRaw : null
+  const leadTeamIdFromApi = leadTeamIdFromApiRaw || null
   const leadTeamId = leadTeamIdFromApi || leadTeamIdFromName || ''
 
   const referenceTeamIds = uniquePositiveNumbers([
@@ -561,7 +655,7 @@ const setFormFromJob = (job) => {
     ...collectTeamIds(job.referenceTeamNames),
     ...collectTeamIds(job.referenceGroupName ? [job.referenceGroupName] : []),
     ...collectTeamIds(job.referenceTeamName ? [job.referenceTeamName] : [])
-  ]).filter((id) => id !== leadTeamId && isKnownTeamId(id))
+  ]).filter((id) => id !== leadTeamId)
 
   const memberNameMap = new Map()
   for (const member of allMembers.value) {
@@ -583,7 +677,51 @@ const setFormFromJob = (job) => {
     ...collectInterviewerIds(job.assigneeIds, memberNameMap),
     ...collectInterviewerIds(job.assignees, memberNameMap),
     ...collectInterviewerIds(job.interviewers, memberNameMap)
-  ]).filter((id) => knownMemberIds.has(id))
+  ]).filter((id) => knownMemberIds.size === 0 || knownMemberIds.has(id))
+
+  const nextLeadTeamFallbackMap = {}
+  if (leadTeamId && leadTeamName) {
+    nextLeadTeamFallbackMap[leadTeamId] = leadTeamName
+  }
+
+  const nextReferenceTeamFallbackMap = {}
+  ;(Array.isArray(job.referenceGroups) ? job.referenceGroups : []).forEach((group) => {
+    const groupId = toPositiveNumber(group?.id ?? group?.groupId ?? group?.teamId)
+    const groupName = firstFilledString(group?.name, group?.groupName, group?.teamName)
+    if (groupId && groupName) {
+      nextReferenceTeamFallbackMap[groupId] = groupName
+    }
+  })
+  ;(Array.isArray(job.referenceTeams) ? job.referenceTeams : []).forEach((team) => {
+    const teamId = toPositiveNumber(team?.id ?? team?.groupId ?? team?.teamId)
+    const teamName = firstFilledString(team?.name, team?.groupName, team?.teamName)
+    if (teamId && teamName) {
+      nextReferenceTeamFallbackMap[teamId] = teamName
+    }
+  })
+
+  const nextInterviewerFallbackMap = {}
+  ;(Array.isArray(job.assignees) ? job.assignees : []).forEach((assignee) => {
+    const userId = toPositiveNumber(assignee?.userId ?? assignee?.id ?? assignee?.memberId)
+    const name = firstFilledString(assignee?.name, assignee?.memberName, assignee?.interviewerName)
+    if (userId && name) {
+      nextInterviewerFallbackMap[userId] = { id: userId, userId, name, position: '', teamName: '' }
+    }
+  })
+  ;(Array.isArray(job.interviewers) ? job.interviewers : []).forEach((interviewer) => {
+    if (typeof interviewer !== 'object' || interviewer === null) return
+    const userId = toPositiveNumber(
+      interviewer?.userId ?? interviewer?.id ?? interviewer?.memberId ?? interviewer?.interviewerId
+    )
+    const name = firstFilledString(interviewer?.name, interviewer?.memberName, interviewer?.interviewerName)
+    if (userId && name) {
+      nextInterviewerFallbackMap[userId] = { id: userId, userId, name, position: '', teamName: '' }
+    }
+  })
+
+  leadTeamFallbackMap.value = nextLeadTeamFallbackMap
+  referenceTeamFallbackMap.value = nextReferenceTeamFallbackMap
+  interviewerFallbackMap.value = nextInterviewerFallbackMap
 
   const templateId = toPositiveNumber(
     job.applicationTemplateId ??
@@ -756,6 +894,9 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
+    const normalizedProcesses = normalizeEditableProcesses(processes.value)
+    processes.value = normalizedProcesses
+
     const payload = {
       title: form.value.title,
       targetCount: Number(form.value.targetCount || 1),
@@ -769,7 +910,7 @@ const handleSubmit = async () => {
       leadGroupId: Number(form.value.leadTeamId),
       referenceGroupIds: form.value.referenceTeamIds.map(Number),
       interviewerIds: form.value.interviewerIds.map(Number),
-      stages: processes.value.map((p, index) => ({
+      stages: normalizedProcesses.map((p, index) => ({
         stageName: p.stageName,
         stageType: p.stageType,
         stageStep: index + 1
@@ -839,6 +980,9 @@ const resetToCreateDefaults = () => {
   processes.value = getDefaultProcesses()
 
   interviewerSearchQuery.value = ''
+  leadTeamFallbackMap.value = {}
+  referenceTeamFallbackMap.value = {}
+  interviewerFallbackMap.value = {}
   expandedDepts.value.clear()
   expandedTeams.value.clear()
   leadExpandedDepts.value.clear()
@@ -850,7 +994,7 @@ const applyRouteMode = async () => {
   closeNoticeModal()
 
   try {
-    await orgStore.loadOrganizations()
+    await orgStore.loadOrganizations({ force: true })
   } catch (_) {
   }
   try {
@@ -946,15 +1090,58 @@ watch(() => route.params.id, async () => {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label class="block text-sm font-bold text-slate-700 mb-2">시작일시 <span class="text-rose-500">*</span></label>
-                <input v-model="form.startDate" type="datetime-local"
-                       class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm">
-              </div>
-              <div>
-                <label class="block text-sm font-bold text-slate-700 mb-2">마감일시 <span class="text-rose-500">*</span></label>
-                <input v-model="form.endDate" type="datetime-local"
-                       class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm">
+              <RecruitmentDateTimeField
+                v-model="form.startDate"
+                label="시작일시"
+                description="공고가 열릴 날짜와 시간을 선택하세요."
+                :required="true"
+                :min-date="todayDate"
+                default-time="09:00"
+              />
+              <RecruitmentDateTimeField
+                v-model="form.endDate"
+                label="마감일시"
+                description="지원 접수가 끝나는 날짜와 시간을 빠르게 정할 수 있습니다."
+                :required="true"
+                :min-date="endMinDate"
+                default-time="18:00"
+                :date-presets="[
+                  { label: '오늘', offsetDays: 0 },
+                  { label: '내일', offsetDays: 1 },
+                  { label: '+14일', offsetDays: 14 }
+                ]"
+              />
+            </div>
+
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-sm font-bold text-slate-700">빠른 마감 설정</p>
+                  <p class="text-xs text-slate-500">시작일시를 기준으로 마감일시를 한 번에 채울 수 있습니다.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(7)"
+                  >
+                    시작 + 1주
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(14)"
+                  >
+                    시작 + 2주
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(30)"
+                  >
+                    시작 + 30일
+                  </button>
+                </div>
               </div>
             </div>
           </div>

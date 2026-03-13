@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { memberApi } from '@/api/member'
 import { groupApi } from '@/api/group'
+import { workspaceApi } from '@/api/workspace'
 
 const WORKSPACE_ID = '__workspace__'
 const WORKSPACE_NAME = '워크스페이스'
@@ -16,11 +17,57 @@ const toSearchText = (member, teamName) => {
   const position = toPosition(member?.memberType)
   return [name, position, teamName, WORKSPACE_NAME].join(' ').trim()
 }
+const hasRenderableTeams = (items = []) =>
+  items.some((dept) => Array.isArray(dept?.teams) && dept.teams.length > 0)
 
 export const useOrganizationStore = defineStore('organization', () => {
   const organizations = ref([])
   const loading = ref(false)
   const loaded = ref(false)
+  const loadedWorkspaceId = ref(null)
+
+  const ensureWorkspaceId = async () => {
+    const storedWorkspaceId = localStorage.getItem('workspaceId')
+
+    try {
+      const response = await workspaceApi.getMyWorkspace()
+      const workspaceId = response?.data?.data?.workspaceId || null
+      if (workspaceId) {
+        const normalizedWorkspaceId = String(workspaceId)
+        if (storedWorkspaceId !== normalizedWorkspaceId) {
+          localStorage.setItem('workspaceId', normalizedWorkspaceId)
+        }
+        return normalizedWorkspaceId
+      }
+    } catch (_) {
+      return storedWorkspaceId
+    }
+
+    return storedWorkspaceId
+  }
+
+  const mergeGroupsWithMemberFallback = (members = [], groups = []) => {
+    const groupMap = new Map()
+
+    groups.forEach((group) => {
+      const groupId = group?.id
+      if (groupId === null || groupId === undefined) return
+      groupMap.set(String(groupId), group)
+    })
+
+    members.forEach((member) => {
+      const groupId = member?.groupId
+      const groupName = String(member?.group ?? '').trim()
+      if (groupId === null || groupId === undefined || !groupName) return
+
+      const key = String(groupId)
+      if (!groupMap.has(key)) {
+        groupMap.set(key, { id: groupId, name: groupName, color: null })
+      }
+    })
+
+    return [...groupMap.values()]
+  }
 
   const buildOrganizations = (members = [], groups = []) => {
     const teams = groups.map((group) => ({
@@ -83,7 +130,18 @@ export const useOrganizationStore = defineStore('organization', () => {
 
   const loadOrganizations = async ({ force = false } = {}) => {
     if (loading.value) return organizations.value
-    if (loaded.value && !force) return organizations.value
+
+    const workspaceId = await ensureWorkspaceId()
+    const normalizedWorkspaceId = workspaceId ? String(workspaceId) : null
+
+    if (
+      loaded.value &&
+      !force &&
+      hasRenderableTeams(organizations.value) &&
+      loadedWorkspaceId.value === normalizedWorkspaceId
+    ) {
+      return organizations.value
+    }
 
     loading.value = true
     try {
@@ -93,13 +151,16 @@ export const useOrganizationStore = defineStore('organization', () => {
       ])
 
       const members = Array.isArray(memberResponse?.data?.data) ? memberResponse.data.data : []
-      const groups = Array.isArray(groupResponse?.data?.data) ? groupResponse.data.data : []
+      const rawGroups = Array.isArray(groupResponse?.data?.data) ? groupResponse.data.data : []
+      const groups = mergeGroupsWithMemberFallback(members, rawGroups)
       organizations.value = buildOrganizations(members, groups)
       loaded.value = true
+      loadedWorkspaceId.value = normalizedWorkspaceId
       return organizations.value
     } catch (error) {
       organizations.value = []
       loaded.value = false
+      loadedWorkspaceId.value = null
       throw error
     } finally {
       loading.value = false
