@@ -5,7 +5,9 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { useOrganizationStore } from '@/stores/organization'
 import { recruitmentApi } from '@/api/recruitment'
+import { memberApi } from '@/api/member'
 import { useAuth } from '@/composables/useAuth'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
 import WeeklyInterviewListModal from '@/components/recruitment/WeeklyInterviewListModal.vue'
@@ -15,15 +17,18 @@ const store = useRecruitmentStore()
 const organizationStore = useOrganizationStore()
 const { user } = useAuth()
 const { jobs, loading } = storeToRefs(store)
-const { organizations } = storeToRefs(organizationStore)
+const { organizations, allMembers } = storeToRefs(organizationStore)
 
 const weeklyInterviewSchedules = ref([])
+const memberType = ref('')
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
-  const [recruitmentsResult, weeklySchedulesResult] = await Promise.allSettled([
+  const [recruitmentsResult, weeklySchedulesResult, organizationsResult, memberResult] = await Promise.allSettled([
     store.fetchRecruitments(),
-    fetchWeeklyInterviewSchedules()
+    fetchWeeklyInterviewSchedules(),
+    organizationStore.loadOrganizations({ force: true }),
+    memberApi.getMyMember()
   ])
 
   if (recruitmentsResult.status === 'rejected') {
@@ -32,6 +37,16 @@ onMounted(async () => {
 
   if (weeklySchedulesResult.status === 'rejected') {
     console.error('이번 주 면접 일정 조회 실패:', weeklySchedulesResult.reason)
+  }
+
+  if (organizationsResult.status === 'rejected') {
+    console.error('조직도 조회 실패:', organizationsResult.reason)
+  }
+
+  if (memberResult.status === 'fulfilled') {
+    memberType.value = memberResult.value?.data?.data?.memberType || ''
+  } else {
+    console.error('멤버 정보 조회 실패:', memberResult.reason)
   }
 })
 
@@ -136,8 +151,14 @@ const normalizeDisplayName = (value) => {
   return text
 }
 
+const isPipelineStage = (stage) => {
+  const stageName = String(stage?.stageName || stage?.step || '').trim()
+  return stageName !== '불합격' && stageName !== '탈락'
+}
+
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
+const canManageRecruitment = computed(() => memberType.value === 'HR')
 
 const resolveTeamName = (job) => {
   return (
@@ -290,6 +311,16 @@ const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
 const deleting = ref(false) // 삭제 진행 상태
+const publishingRecruitmentId = ref(null)
+const noticeModal = ref({
+  show: false,
+  title: '알림',
+  message: '',
+  type: 'info',
+  confirmText: '확인',
+  showCancel: false,
+  onConfirm: null
+})
 
 // --- 면접 일정 관련 상태 ---
 const showWeeklyModal = ref(false)
@@ -348,6 +379,8 @@ const openInterviewDetail = (schedule) => {
 
 const isInterviewerModalOpen = ref(false)
 // ...
+const expandedDepts = ref(new Set())
+const expandedTeams = ref(new Set())
 
 // --- Helper Functions ---
 const getStatusColor = (status) => {
@@ -368,6 +401,27 @@ const toggleMenu = (id) => {
   }
 }
 
+const openNoticeModal = ({
+  title = '알림',
+  message = '',
+  type = 'info',
+  confirmText = '확인',
+  showCancel = false,
+  onConfirm = null
+} = {}) => {
+  noticeModal.value = { show: true, title, message, type, confirmText, showCancel, onConfirm }
+}
+
+const closeNoticeModal = () => {
+  noticeModal.value = { ...noticeModal.value, show: false, onConfirm: null }
+}
+
+const handleNoticeConfirm = () => {
+  const onConfirm = noticeModal.value.onConfirm
+  closeNoticeModal()
+  if (typeof onConfirm === 'function') onConfirm()
+}
+
 const goToDetail = (id) => {
   router.push(`/recruitment/jobs/${id}`)
 }
@@ -383,6 +437,47 @@ const openDeleteModal = (id) => {
 const closeDeleteModal = () => {
   showDeleteModal.value = false
   deleteTargetId.value = null
+}
+
+const requestPublishRecruitment = (job) => {
+  openNoticeModal({
+    title: '즉시 게시',
+    message: '이 공고를 지금 바로 게시하시겠습니까? 게시 후에는 기본 정보 수정이 제한됩니다.',
+    type: 'info',
+    confirmText: '즉시 게시',
+    showCancel: true,
+    onConfirm: async () => {
+      await publishRecruitment(job.id)
+    }
+  })
+  activeMenuId.value = null
+}
+
+const publishRecruitment = async (recruitmentId) => {
+  if (!recruitmentId || publishingRecruitmentId.value) return
+
+  publishingRecruitmentId.value = recruitmentId
+  try {
+    await store.publishRecruitment(recruitmentId)
+    await store.fetchRecruitments()
+    openNoticeModal({
+      title: '게시 완료',
+      message: '채용 공고가 즉시 게시되었습니다.',
+      type: 'success'
+    })
+  } catch (err) {
+    const message =
+      err?.response?.data?.error?.message ||
+      err?.response?.data?.message ||
+      '채용 공고 게시 중 오류가 발생했습니다.'
+    openNoticeModal({
+      title: '게시 실패',
+      message,
+      type: 'warning'
+    })
+  } finally {
+    publishingRecruitmentId.value = null
+  }
 }
 
 // 3. 실제 삭제 수행
@@ -416,7 +511,7 @@ const filteredJobs = computed(() => {
       displayStatus: getDisplayStatus(job.status, job.endDate),
       team: resolveTeamName(job),
       position: getCareerText(job),
-      funnel: (job.stages || []).map(s => ({
+      funnel: (job.stages || []).filter(isPipelineStage).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0
@@ -459,26 +554,54 @@ const filteredJobs = computed(() => {
 })
 
 // --- 링크 복사 및 면접관 설정 기능 ---
-const allInterviewers = [
-  { id: 1, name: '김기술', position: '백엔드 리드' },
-  { id: 2, name: '박팀장', position: '인사 팀장' },
-  { id: 105, name: '이디자인', position: '프로덕트 디자이너' },
-  { id: 106, name: '최프론트', position: '프론트엔드 개발자' },
-  { id: 107, name: 'Park', position: 'CTO' },
-  { id: 108, name: 'Lee', position: 'HR Manager' },
-  { id: 109, name: '정플랫폼', position: '인프라 엔지니어' },
-  { id: 110, name: '강인사', position: '인사 담당자' },
-]
-
 const editingJob = ref(null)
 const interviewerSearchQuery = ref('')
+const savingInterviewers = ref(false)
+const interviewerFallbackMap = ref({})
 
-const searchResultInterviewers = computed(() => {
+const toggleDept = (deptId) => {
+  if (expandedDepts.value.has(deptId)) expandedDepts.value.delete(deptId)
+  else expandedDepts.value.add(deptId)
+}
+
+const toggleTeam = (teamId) => {
+  if (expandedTeams.value.has(teamId)) expandedTeams.value.delete(teamId)
+  else expandedTeams.value.add(teamId)
+}
+
+const getMemberUserId = (member) => {
+  const id = toPositiveNumber(member?.userId ?? member?.id ?? member?.memberId)
+  return id || null
+}
+
+const filteredOrganizations = computed(() => {
   const query = interviewerSearchQuery.value.trim().toLowerCase()
-  if (!query) return allInterviewers
-  return allInterviewers.filter(i => 
-    i.name.toLowerCase().includes(query) || i.position.toLowerCase().includes(query)
-  )
+  if (!query) return organizations.value
+
+  return organizations.value
+    .map((dept) => ({
+      ...dept,
+      teams: (dept.teams || [])
+        .map((team) => ({
+          ...team,
+          members: (team.members || []).filter((member) =>
+            String(member?.name || '').toLowerCase().includes(query) ||
+            String(member?.position || '').toLowerCase().includes(query)
+          )
+        }))
+        .filter((team) => team.members.length > 0)
+    }))
+    .filter((dept) => dept.teams.length > 0)
+})
+
+const selectedInterviewerDetails = computed(() => {
+  if (!editingJob.value) return []
+
+  return editingJob.value.selectedInterviewerIds.map((id) => {
+    const numericId = Number(id)
+    const member = allMembers.value.find((item) => getMemberUserId(item) === numericId)
+    return member || interviewerFallbackMap.value[numericId] || { id: numericId, userId: numericId, name: '알 수 없음', position: '', teamName: '' }
+  })
 })
 
 const copyLink = () => {
@@ -507,8 +630,92 @@ const copyLink = () => {
   })
 }
 
-const openInterviewerModal = (job) => {
-  editingJob.value = JSON.parse(JSON.stringify(job))
+const addInterviewerId = (target, value) => {
+  const interviewerId = toPositiveNumber(value)
+  if (!interviewerId || target.includes(interviewerId)) return
+  target.push(interviewerId)
+}
+
+const resolveSelectedInterviewerIds = (job) => {
+  const interviewerIds = []
+
+  ;(Array.isArray(job?.interviewerIds) ? job.interviewerIds : []).forEach((id) =>
+    addInterviewerId(interviewerIds, id)
+  )
+
+  ;(Array.isArray(job?.assignees) ? job.assignees : []).forEach((assignee) =>
+    addInterviewerId(interviewerIds, assignee?.userId ?? assignee?.id)
+  )
+
+  ;(Array.isArray(job?.interviewers) ? job.interviewers : []).forEach((interviewer) => {
+    if (typeof interviewer === 'object') {
+      addInterviewerId(interviewerIds, interviewer?.userId ?? interviewer?.id)
+      return
+    }
+
+    const matchedInterviewer = allMembers.value.find(
+      (member) => member.name === normalizeDisplayName(interviewer)
+    )
+    addInterviewerId(interviewerIds, getMemberUserId(matchedInterviewer))
+  })
+
+  return interviewerIds
+}
+
+const buildInterviewerFallbackMap = (job) => {
+  const nextFallbackMap = {}
+  const setFallback = (candidate) => {
+    const userId = toPositiveNumber(candidate?.userId ?? candidate?.id ?? candidate?.memberId)
+    const name = normalizeDisplayName(candidate?.name ?? candidate?.memberName ?? candidate?.interviewerName)
+    if (!userId || !name) return
+    nextFallbackMap[userId] = {
+      id: userId,
+      userId,
+      name,
+      position: '',
+      teamName: ''
+    }
+  }
+
+  ;(Array.isArray(job?.assignees) ? job.assignees : []).forEach((assignee) => {
+    setFallback(assignee)
+  })
+
+  ;(Array.isArray(job?.interviewers) ? job.interviewers : []).forEach((interviewer) => {
+    if (typeof interviewer !== 'object' || interviewer === null) return
+    setFallback(interviewer)
+  })
+
+  return nextFallbackMap
+}
+
+const isSelectedInterviewer = (interviewerId) => {
+  const normalizedId = toPositiveNumber(interviewerId)
+  if (!normalizedId || !editingJob.value) return false
+  return editingJob.value.selectedInterviewerIds.includes(normalizedId)
+}
+
+const openInterviewerModal = async (job) => {
+  try {
+    await organizationStore.loadOrganizations({ force: true })
+  } catch (error) {
+    console.error('면접관 조직도 조회 실패:', error)
+    openNoticeModal({
+      title: '설정 오류',
+      message: '면접관 목록을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.',
+      type: 'warning'
+    })
+    return
+  }
+
+  interviewerFallbackMap.value = buildInterviewerFallbackMap(job)
+  editingJob.value = {
+    id: job.id,
+    title: job.title,
+    selectedInterviewerIds: resolveSelectedInterviewerIds(job)
+  }
+  expandedDepts.value = new Set()
+  expandedTeams.value = new Set()
   isInterviewerModalOpen.value = true
   interviewerSearchQuery.value = ''
   activeMenuId.value = null
@@ -517,23 +724,60 @@ const openInterviewerModal = (job) => {
 const closeInterviewerModal = () => {
   isInterviewerModalOpen.value = false
   editingJob.value = null
+  interviewerFallbackMap.value = {}
+  interviewerSearchQuery.value = ''
 }
 
-const toggleInterviewerAssignment = (name) => {
+const toggleInterviewerAssignment = (interviewerId) => {
   if (!editingJob.value) return
-  const index = editingJob.value.interviewers.indexOf(name)
+  const normalizedId = toPositiveNumber(interviewerId)
+  if (!normalizedId) return
+  const index = editingJob.value.selectedInterviewerIds.indexOf(normalizedId)
   if (index === -1) {
-    editingJob.value.interviewers.push(name)
+    editingJob.value.selectedInterviewerIds.push(normalizedId)
   } else {
-    editingJob.value.interviewers.splice(index, 1)
+    editingJob.value.selectedInterviewerIds.splice(index, 1)
   }
 }
 
-const saveInterviewers = () => {
-  if (editingJob.value) {
-    store.updateJob(editingJob.value)
+const removeInterviewer = (interviewerId) => {
+  if (!editingJob.value) return
+  const normalizedId = toPositiveNumber(interviewerId)
+  if (!normalizedId) return
+  const index = editingJob.value.selectedInterviewerIds.indexOf(normalizedId)
+  if (index !== -1) {
+    editingJob.value.selectedInterviewerIds.splice(index, 1)
   }
-  closeInterviewerModal()
+}
+
+const saveInterviewers = async () => {
+  if (!editingJob.value || savingInterviewers.value) return
+  if (editingJob.value.selectedInterviewerIds.length === 0) {
+    openNoticeModal({
+      title: '설정 확인',
+      message: '면접관은 최소 1명 이상 선택해주세요.',
+      type: 'warning'
+    })
+    return
+  }
+
+  savingInterviewers.value = true
+  try {
+    await store.updateRecruitmentInterviewers(
+      editingJob.value.id,
+      editingJob.value.selectedInterviewerIds
+    )
+    closeInterviewerModal()
+  } catch (err) {
+    const message = err?.response?.data?.message || '면접관 설정 저장 중 오류가 발생했습니다.'
+    openNoticeModal({
+      title: '설정 오류',
+      message,
+      type: 'warning'
+    })
+  } finally {
+    savingInterviewers.value = false
+  }
 }
 </script>
 
@@ -640,6 +884,16 @@ const saveInterviewers = () => {
 
             <div v-if="activeMenuId === job.id"
                  class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
+
+              <button
+                  v-if="canManageRecruitment && job.status === 'DRAFT'"
+                  @click.stop="requestPublishRecruitment(job)"
+                  :disabled="publishingRecruitmentId === job.id"
+                  class="w-full text-left px-4 py-2.5 text-sm text-brand-600 hover:bg-brand-50 flex items-center transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.868v4.264a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                {{ publishingRecruitmentId === job.id ? '게시 중...' : '즉시 게시' }}
+              </button>
 
               <button
                   @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
@@ -805,7 +1059,7 @@ const saveInterviewers = () => {
     <div v-if="isInterviewerModalOpen" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeInterviewerModal"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-[550px] max-w-[95%] overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up border border-slate-100">
+      <div class="relative bg-white rounded-2xl shadow-2xl w-[720px] max-w-[95%] overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up border border-slate-100">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
@@ -816,41 +1070,104 @@ const saveInterviewers = () => {
           </button>
         </div>
 
-        <!-- 검색창 (RecruitmentEditView 스타일) -->
-        <div class="px-6 pt-6">
-          <div class="relative mb-4">
+        <div class="px-6 pt-6 overflow-y-auto custom-scrollbar">
+          <div v-if="selectedInterviewerDetails.length > 0" class="flex flex-wrap gap-2 mb-4 p-3 bg-brand-50/50 rounded-xl border border-brand-100">
+            <div
+              v-for="member in selectedInterviewerDetails"
+              :key="getMemberUserId(member) ?? member.id"
+              class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-brand-200 text-sm text-slate-700 shadow-sm"
+            >
+              <span class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center text-[11px] font-bold">
+                {{ member.name.substring(0, 1) }}
+              </span>
+              <span class="font-medium">{{ member.name }}</span>
+              <button @click="removeInterviewer(getMemberUserId(member) ?? member.id)" type="button" class="ml-0.5 text-slate-400 hover:text-rose-500 transition-colors">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <span class="text-xs text-brand-600 font-bold self-center ml-1">{{ selectedInterviewerDetails.length }}명 선택</span>
+          </div>
+
+          <div class="relative mb-3">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </span>
-            <input v-model="interviewerSearchQuery" type="text" placeholder="이름 또는 직책으로 면접관 검색..."
-                   class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-brand-500 transition-all">
+            <input v-model="interviewerSearchQuery" type="text" placeholder="이름 또는 직책으로 검색..."
+                   class="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 shadow-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
           </div>
-        </div>
 
-        <div class="flex-1 overflow-y-auto p-6 pt-2 custom-scrollbar">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div v-for="intr in searchResultInterviewers" :key="intr.id"
-                 @click="toggleInterviewerAssignment(intr.name)"
-                 class="flex items-center p-3 rounded-xl border cursor-pointer transition-all"
-                 :class="editingJob?.interviewers.includes(intr.name) ? 'bg-brand-50 border-brand-500 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'">
-              <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-brand-600 font-bold mr-3 flex-shrink-0">
-                {{ intr.name[0] }}
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-bold text-slate-800 truncate">{{ intr.name }}</p>
-                <p class="text-xs text-slate-400 truncate">{{ intr.position }}</p>
-              </div>
-              <div v-if="editingJob?.interviewers.includes(intr.name)" class="text-brand-500 ml-2 flex-shrink-0">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+          <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm max-h-[400px] overflow-y-auto">
+            <div v-for="dept in filteredOrganizations" :key="dept.id">
+              <button @click="toggleDept(dept.id)" type="button"
+                      class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 border-b border-slate-200 transition-colors">
+                <div class="flex items-center gap-2">
+                  <svg :class="['w-4 h-4 text-slate-400 transition-transform duration-200', expandedDepts.has(dept.id) ? 'rotate-90' : '']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                  <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <span class="text-sm font-bold text-slate-700">{{ dept.name }}</span>
+                </div>
+                <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                  {{ dept.teams.reduce((sum, team) => sum + team.members.length, 0) }}명
+                </span>
+              </button>
+
+              <div v-if="expandedDepts.has(dept.id)">
+                <div v-for="team in dept.teams" :key="team.id">
+                  <button @click="toggleTeam(team.id)" type="button"
+                          class="w-full flex items-center justify-between pl-8 pr-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 transition-colors">
+                    <div class="flex items-center gap-2">
+                      <svg :class="['w-3.5 h-3.5 text-slate-400 transition-transform duration-200', expandedTeams.has(team.id) ? 'rotate-90' : '']" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <svg class="w-3.5 h-3.5 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span class="text-sm font-medium text-slate-600">{{ team.name }}</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400 font-medium">{{ team.members.length }}명</span>
+                  </button>
+
+                  <div v-if="expandedTeams.has(team.id)">
+                    <button
+                      v-for="member in team.members"
+                      :key="getMemberUserId(member) ?? member.id"
+                      @click="toggleInterviewerAssignment(getMemberUserId(member))"
+                      type="button"
+                      class="w-full flex items-center pl-14 pr-4 py-2.5 border-b border-slate-50 transition-all text-left"
+                      :class="isSelectedInterviewer(getMemberUserId(member)) ? 'bg-brand-50' : 'hover:bg-slate-50'"
+                    >
+                      <div
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold mr-3 transition-colors"
+                        :class="isSelectedInterviewer(getMemberUserId(member)) ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-600'"
+                      >
+                        {{ member.name.substring(0, 1) }}
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-700">{{ member.name }}</p>
+                        <p class="text-[11px] text-slate-400">{{ member.position }}</p>
+                      </div>
+                      <div v-if="isSelectedInterviewer(getMemberUserId(member))">
+                        <svg class="w-5 h-5 text-brand-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div v-if="searchResultInterviewers.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-400">
-            <svg class="w-12 h-12 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <p class="text-sm">검색 결과가 없습니다.</p>
+            <div v-if="filteredOrganizations.length === 0" class="p-8 text-center text-sm text-slate-400">
+              <svg class="w-8 h-8 mx-auto mb-2 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              검색 결과가 없습니다.
+            </div>
           </div>
         </div>
 
@@ -858,13 +1175,27 @@ const saveInterviewers = () => {
           <button @click="closeInterviewerModal" class="flex-1 py-2.5 px-4 bg-white border border-slate-300 rounded-xl text-slate-700 font-bold hover:bg-slate-50 transition-colors">
             취소
           </button>
-          <button @click="saveInterviewers" class="flex-1 bg-brand-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-brand-700 shadow-md transition-all">
-            저장하기
+          <button
+              @click="saveInterviewers"
+              :disabled="savingInterviewers"
+              class="flex-1 bg-brand-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-brand-700 shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+            {{ savingInterviewers ? '저장 중...' : '저장하기' }}
           </button>
         </div>
       </div>
     </div>
   </Transition>
+
+  <ConfirmModal
+    :show="noticeModal.show"
+    :title="noticeModal.title"
+    :message="noticeModal.message"
+    :confirm-text="noticeModal.confirmText"
+    :type="noticeModal.type"
+    :show-cancel="noticeModal.showCancel"
+    @confirm="handleNoticeConfirm"
+    @cancel="closeNoticeModal"
+  />
 </template>
 
 <style scoped>

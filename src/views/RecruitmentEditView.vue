@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { recruitmentApi } from '@/api/recruitment'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import RecruitmentDateTimeField from '@/components/recruitment/RecruitmentDateTimeField.vue'
 import { storeToRefs } from 'pinia'
 
 const route = useRoute()
@@ -133,6 +134,39 @@ const toDateTimeLocal = (value) => {
   const hh = String(date.getHours()).padStart(2, '0')
   const mi = String(date.getMinutes()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
+const toDateInput = (value) => {
+  const normalized = toDateTimeLocal(value)
+  return normalized ? normalized.slice(0, 10) : ''
+}
+
+const getTimeInput = (value, fallback = '09:00') => {
+  const normalized = toDateTimeLocal(value)
+  return normalized ? normalized.slice(11, 16) : fallback
+}
+
+const addDaysToDateInput = (dateValue, days) => {
+  if (!dateValue) return ''
+  const date = new Date(`${dateValue}T00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  date.setDate(date.getDate() + days)
+  return toDateInput(date)
+}
+
+const todayDate = computed(() => toDateInput(new Date()))
+const endMinDate = computed(() => toDateInput(form.value.startDate) || todayDate.value)
+
+const applyDurationPreset = (days) => {
+  const baseDate = toDateInput(form.value.startDate) || todayDate.value
+  const startTime = getTimeInput(form.value.startDate, '09:00')
+  const endTime = getTimeInput(form.value.endDate, '18:00')
+
+  if (!form.value.startDate) {
+    form.value.startDate = `${baseDate}T${startTime}`
+  }
+
+  form.value.endDate = `${addDaysToDateInput(baseDate, days)}T${endTime}`
 }
 
 // stage 타입이 비어 있어도 이름 기준으로 최대한 원래 타입을 복원한다.
@@ -489,13 +523,58 @@ onMounted(() => {
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label class="block text-sm font-bold text-slate-700 mb-2">시작일시</label>
-                <input v-model="form.startDate" type="datetime-local" class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-brand-500">
-              </div>
-              <div>
-                <label class="block text-sm font-bold text-slate-700 mb-2">마감일시</label>
-                <input v-model="form.endDate" type="datetime-local" class="w-full bg-white border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-900 font-medium focus:outline-none focus:border-brand-500">
+              <RecruitmentDateTimeField
+                v-model="form.startDate"
+                label="시작일시"
+                description="공고가 열릴 날짜와 시간을 선택하세요."
+                :required="true"
+                :min-date="todayDate"
+                default-time="09:00"
+              />
+              <RecruitmentDateTimeField
+                v-model="form.endDate"
+                label="마감일시"
+                description="지원 마감 시각을 빠르게 조정할 수 있습니다."
+                :required="true"
+                :min-date="endMinDate"
+                default-time="18:00"
+                :date-presets="[
+                  { label: '오늘', offsetDays: 0 },
+                  { label: '내일', offsetDays: 1 },
+                  { label: '+14일', offsetDays: 14 }
+                ]"
+              />
+            </div>
+
+            <div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-sm font-bold text-slate-700">빠른 마감 설정</p>
+                  <p class="text-xs text-slate-500">시작일시를 기준으로 마감일시를 바로 계산합니다.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(7)"
+                  >
+                    시작 + 1주
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(14)"
+                  >
+                    시작 + 2주
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+                    @click="applyDurationPreset(30)"
+                  >
+                    시작 + 30일
+                  </button>
+                </div>
               </div>
             </div>
           </div>
