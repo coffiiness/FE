@@ -583,6 +583,17 @@ const openInterviewDetail = (booking) => {
   isInterviewDetailModalOpen.value = true
 }
 
+const ensureHrMemberForInterviewCreate = async () => {
+  try {
+    const response = await memberApi.getMyMember()
+    return String(response?.data?.data?.memberType || '') === 'HR'
+  } catch (error) {
+    console.error('멤버 권한 조회 실패:', error)
+    alert('권한 정보를 확인할 수 없습니다. 다시 시도해 주세요.')
+    return false
+  }
+}
+
 // --- Computed ---
 
 const selectedDayTitle = computed(() => {
@@ -1275,7 +1286,13 @@ onBeforeUnmount(() => {
   stopBoardAutoScroll()
 })
 
-const goInterview = () => {
+const goInterview = async () => {
+  const isHrMember = await ensureHrMemberForInterviewCreate()
+  if (!isHrMember) {
+    alert('면접 일정 생성은 인사담당자만 가능합니다.')
+    return
+  }
+
   router.push({
     path: '/recruitment/interview/select',
     query: { jobId: recruitment.value.id }
