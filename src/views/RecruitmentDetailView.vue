@@ -1481,22 +1481,32 @@ const loadInterviewSchedules = async () => {
     const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
       : []
+    apiSchedules.value = normalizedInterviewSchedules
+
     const selectedIds = selectedInterviewerIds.value
+    if (selectedIds.length === 0) {
+      return
+    }
 
-    const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
-    const availability = await loadBusySchedulesByMonth(
-      startDate,
-      endDate,
-      selectedIds
-    )
-    const busySchedules = availability.flatMap((attendee) =>
-      (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
-        .filter((schedule) => !(schedule.interviewScheduleId && schedule.type === 'INTERVIEW'))
-        .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
-        .filter(Boolean)
-    )
+    try {
+      const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
+      const availability = await loadBusySchedulesByMonth(
+        startDate,
+        endDate,
+        selectedIds
+      )
+      const busySchedules = availability.flatMap((attendee) =>
+        (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
+          .filter((schedule) => !(schedule.interviewScheduleId && schedule.type === 'INTERVIEW'))
+          .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
+          .filter(Boolean)
+      )
 
-    apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
+      apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
+    } catch (availabilityError) {
+      // 면접관 개인 일정 조회에 실패해도 공고 면접 일정은 그대로 보여준다.
+      console.error('면접관 일정 조회 실패:', availabilityError)
+    }
   } catch (error) {
     console.error('면접 일정 조회 실패:', error)
     apiSchedules.value = []
