@@ -372,10 +372,9 @@ const toDeleteRoomErrorMessage = (error) => {
   return toErrorText(error) || '회의실 삭제에 실패했습니다.'
 }
 
-const getMonthRange = (dateString) => {
-  const [y, m] = dateString.split('-').map(Number)
-  const from = new Date(y, m - 1, 1, 0, 0, 0)
-  const to = new Date(y, m, 1, 0, 0, 0)
+const getFullReservationRange = () => {
+  const from = new Date(2000, 0, 1, 0, 0, 0)
+  const to = new Date(3000, 0, 1, 0, 0, 0)
   return { from, to }
 }
 
@@ -655,10 +654,10 @@ const loadRoomsFromApi = async () => {
   }
 }
 
-const loadBookingsFromApi = async (dateString = dateValue.value) => {
+const loadBookingsFromApi = async () => {
   try {
     loadInterviewSlotTitleMap()
-    const { from, to } = getMonthRange(dateString)
+    const { from, to } = getFullReservationRange()
     const response = await meetingRoomApi.listReservations({
       fromDatetime: toLocalDateTime(from),
       toDatetime: toLocalDateTime(to)

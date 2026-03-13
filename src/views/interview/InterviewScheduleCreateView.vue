@@ -6,6 +6,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { meetingRoomApi } from '@/api/meetingRoom'
 import { interviewApi } from '@/api/interview'
+import { memberApi } from '@/api/member'
 
 // ── 공통 알림 모달 ─────────────────────────────────────────────────────────
 const modal = ref({
@@ -49,6 +50,7 @@ const getUserId = (person) => {
 const showModal = ref(false)
 const showAutoModal = ref(false)
 const submitting = ref(false)
+const currentMemberType = ref('')
 
 const timeSlots = Array.from({ length: 10 }, (_, i) => `${String(i + 9).padStart(2, '0')}:00`)
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
@@ -135,6 +137,36 @@ const toErrorText = (error) => {
   } catch {
     return '알 수 없는 오류'
   }
+}
+
+const isHrMember = computed(() => currentMemberType.value === 'HR')
+
+const ensureHrAccess = async () => {
+  try {
+    const response = await memberApi.getMyMember()
+    currentMemberType.value = String(response?.data?.data?.memberType || '')
+  } catch (error) {
+    currentMemberType.value = ''
+    openModal({
+      title: '권한 확인 실패',
+      message: toErrorText(error) || '사용자 권한 정보를 확인할 수 없습니다.',
+      type: 'warning',
+      onConfirm: () => router.back()
+    })
+    return false
+  }
+
+  if (isHrMember.value) {
+    return true
+  }
+
+  openModal({
+    title: '접근 제한',
+    message: '면접 일정 생성은 인사담당자만 가능합니다.',
+    type: 'warning',
+    onConfirm: () => router.back()
+  })
+  return false
 }
 
 const toApiDateTime = (date, time = '00:00') => `${date}T${time}:00`
@@ -553,6 +585,14 @@ const submitTimeText = computed(() => {
 })
 
 const confirmSchedule = async () => {
+  if (!isHrMember.value) {
+    openModal({
+      title: '일정 확정 실패',
+      message: '면접 일정 생성은 인사담당자만 가능합니다.',
+      type: 'warning'
+    })
+    return
+  }
   if (!recruitmentId) {
     openModal({ title: '일정 확정 실패', message: '채용 공고 정보가 없습니다.', type: 'warning' })
     return
@@ -627,6 +667,10 @@ const confirmSchedule = async () => {
 }
 
 const goNext = () => {
+  if (!isHrMember.value) {
+    openModal({ title: '접근 제한', message: '면접 일정 생성은 인사담당자만 가능합니다.', type: 'warning' })
+    return
+  }
   if (!selectedKeys.value.length) {
     openModal({ title: '선택 확인', message: '최소 1개 이상의 시간을 선택해주세요.', type: 'warning' })
     return
@@ -651,6 +695,10 @@ const handleAutoAssign = async ({
   useDuration = false,
   durationHours = 1
 }) => {
+  if (!isHrMember.value) {
+    openModal({ title: '접근 제한', message: '면접 일정 생성은 인사담당자만 가능합니다.', type: 'warning' })
+    return
+  }
   selectedKeys.value = []
 
   const normalizedDuration = useDuration
@@ -745,6 +793,8 @@ watch([selectedRoomId, interviewers, applicants], async () => {
 
 onMounted(async () => {
   document.addEventListener('mouseup', handleMouseUp)
+  const hasAccess = await ensureHrAccess()
+  if (!hasAccess) return
   await loadMeetingRooms()
   await loadAvailability()
 })
@@ -825,6 +875,7 @@ onBeforeUnmount(() => {
       <button
           class="autoAssignBtn"
           title="모든 회의실 기준으로 자동 탐색"
+          :disabled="!isHrMember"
           @click="showAutoModal = true"
       >
         자동 배정
@@ -920,7 +971,7 @@ onBeforeUnmount(() => {
 
         <button
             class="stepBtn nextBtn"
-            :disabled="selectedKeys.length === 0"
+            :disabled="selectedKeys.length === 0 || !isHrMember"
             @click="goNext"
         >
           일정 확정
@@ -1409,6 +1460,11 @@ onBeforeUnmount(() => {
 
 .autoAssignBtn:hover {
   background: #1f2937;
+}
+
+.autoAssignBtn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
 }
 
 </style>
