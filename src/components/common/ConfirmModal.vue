@@ -69,7 +69,7 @@ const handleCancel = () => {
     <Transition name="modal">
       <div
         v-if="show"
-        class="fixed inset-0 z-[100] overflow-y-auto"
+        class="fixed inset-0 z-[200] overflow-y-auto"
         @click.self="handleCancel"
       >
         <!-- 배경 오버레이 -->
