@@ -150,6 +150,7 @@ export const useNotificationStore = defineStore('notification', () => {
   const isNotificationPageActive = ref(false)
   const isStreamConnected = ref(false)
   const realtimeToast = ref(null)
+  const streamListeners = new Set()
 
   let streamAbortController = null
   let streamReconnectTimer = null
@@ -283,18 +284,34 @@ export const useNotificationStore = defineStore('notification', () => {
   }
 
   const handleStreamEvent = async (event) => {
+    let payload = null
+
+    if (event.data) {
+      try {
+        payload = JSON.parse(event.data)
+      } catch {
+        payload = null
+      }
+    }
+
+    const normalizedEvent = {
+      ...event,
+      payload
+    }
+
+    streamListeners.forEach((listener) => {
+      try {
+        listener(normalizedEvent)
+      } catch (error) {
+        console.error('SSE 리스너 실행 실패:', error)
+      }
+    })
+
     if (event.type === 'heartbeat' || event.type === 'connected') return
     if (event.type !== 'notification-created') return
 
     try {
-      let notificationId = null
-
-      try {
-        const parsed = JSON.parse(event.data || '{}')
-        notificationId = parsed?.notificationId ?? null
-      } catch {
-        notificationId = null
-      }
+      const notificationId = payload?.notificationId ?? null
 
       await refreshVisibleData()
 
@@ -409,6 +426,17 @@ export const useNotificationStore = defineStore('notification', () => {
     isNotificationPageActive.value = Boolean(value)
   }
 
+  const addStreamListener = (listener) => {
+    if (typeof listener !== 'function') {
+      return () => {}
+    }
+
+    streamListeners.add(listener)
+    return () => {
+      streamListeners.delete(listener)
+    }
+  }
+
   const syncReadState = (id) => {
     notifications.value = notifications.value.map((item) =>
       item.id === id ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() } : item
@@ -501,6 +529,7 @@ export const useNotificationStore = defineStore('notification', () => {
     initialize,
     startNotificationStream,
     stopNotificationStream,
+    addStreamListener,
     setDropdownOpen,
     setNotificationPageActive,
     dismissRealtimeToast,
