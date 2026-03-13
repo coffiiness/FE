@@ -1440,7 +1440,8 @@ const normalizeSchedule = (item) => {
     interviewerName,
     applicantName,
     title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
-    description: item?.memo || item?.note || '',
+    description: item?.description || item?.memo || item?.note || '',
+    location: item?.location || '',
     attendees,
     showSelf
   }
