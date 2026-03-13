@@ -1482,6 +1482,11 @@ const loadInterviewSchedules = async () => {
     const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
       : []
+    const currentRecruitmentInterviewIds = new Set(
+      normalizedInterviewSchedules
+        .map((schedule) => Number(schedule.id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
     apiSchedules.value = normalizedInterviewSchedules
 
     const selectedIds = selectedInterviewerIds.value
@@ -1498,7 +1503,15 @@ const loadInterviewSchedules = async () => {
       )
       const busySchedules = availability.flatMap((attendee) =>
         (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
-          .filter((schedule) => !(schedule.interviewScheduleId && schedule.type === 'INTERVIEW'))
+          .filter((schedule) => {
+            const interviewScheduleId = Number(schedule.interviewScheduleId)
+            const isCurrentRecruitmentInterview =
+              Number.isFinite(interviewScheduleId) &&
+              interviewScheduleId > 0 &&
+              currentRecruitmentInterviewIds.has(interviewScheduleId)
+
+            return !isCurrentRecruitmentInterview
+          })
           .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
           .filter(Boolean)
       )
