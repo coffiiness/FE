@@ -7,10 +7,14 @@ const props = defineProps({
   show: Boolean,
   mode: String, // create | detail
   selectedId: Number,
-  announcements: Array
+  announcements: Array,
+  canManage: {
+    type: Boolean,
+    default: false
+  }
 })
 
-const emit = defineEmits(['close', 'create', 'update', 'remove'])
+const emit = defineEmits(['close', 'create', 'update', 'remove', 'forbidden'])
 
 const isEditMode = ref(false)
 const showDeleteConfirm = ref(false)
@@ -50,6 +54,10 @@ const resetForm = () => {
 }
 
 const save = () => {
+  if (!props.canManage) {
+    emit('forbidden')
+    return
+  }
   if (!form.value.title || !form.value.content) return
 
   if (props.mode === 'create') {
@@ -74,8 +82,19 @@ const save = () => {
 }
 
 const remove = () => {
+  if (!props.canManage) {
+    emit('forbidden')
+    return
+  }
   emit('remove', props.selectedId)
   showDeleteConfirm.value = false
+}
+const enableEdit = () => {
+  if (!props.canManage) {
+    emit('forbidden')
+    return
+  }
+  isEditMode.value = true
 }
 </script>
 
@@ -187,7 +206,7 @@ const remove = () => {
 
             <button
                 v-if="!isEditMode"
-                @click="isEditMode = true"
+                @click="enableEdit"
                 class="px-4 py-2 rounded-lg bg-slate-100"
             >
               수정

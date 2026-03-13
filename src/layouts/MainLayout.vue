@@ -6,7 +6,7 @@ import NotificationToast from '@/components/NotificationToast.vue'
 import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
 import { useAuth } from '@/composables/useAuth'
-import { memberApi } from '@/api/member'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,7 +14,10 @@ const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실 관리'])
 
 const { user, logout } = useAuth()
-const memberType = ref('')
+const {
+  memberType,
+  loadMemberType
+} = useHrAccessGuard()
 
 const userName = computed(() => user.value?.name || '사용자')
 const userInitial = computed(() => userName.value.charAt(0))
@@ -26,8 +29,7 @@ const userRoleLabel = computed(() => {
 
 onMounted(async () => {
   try {
-    const res = await memberApi.getMyMember()
-    memberType.value = res.data.data.memberType
+    await loadMemberType()
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
   }
@@ -108,6 +110,33 @@ const navigation = [
   { name: '요금제', href: '/billing', icon: 'credit-card' }
 ]
 
+const filteredNavigation = computed(() =>
+  navigation
+    .map((item) => {
+      if (!item.children) {
+        if (
+          memberType.value !== 'HR' &&
+          (item.href === '/reports' || item.href === '/billing')
+        ) {
+          return null
+        }
+        return item
+      }
+
+      if (item.name === '회의실') {
+        const children = item.children.filter((child) => {
+          if (memberType.value === 'HR') return true
+          return child.href !== '/meeting-rooms/manage'
+        })
+
+        return { ...item, children }
+      }
+
+      return item
+    })
+    .filter(Boolean)
+)
+
 const isActive = (item) =>
     item.children
         ? item.children.some(c => route.path.startsWith(c.href))
@@ -117,7 +146,7 @@ const isChildActive = (href) => route.path === href
 
 const currentTitle = computed(() => {
   if (route.meta?.title) return route.meta.title
-  for (const item of navigation) {
+  for (const item of filteredNavigation.value) {
     if (item.children) {
       const child = item.children.find(c => route.path === c.href)
       if (child) return child.name
@@ -164,7 +193,7 @@ watch(
       </div>
 
       <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-        <template v-for="item in navigation" :key="item.section || item.name">
+        <template v-for="item in filteredNavigation" :key="item.section || item.name">
           <p
               v-if="item.section"
               class="px-3 pt-5 pb-2 text-[10px] font-bold tracking-widest text-slate-500 uppercase"

@@ -1,12 +1,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { isTemplateInUse, normalizeTemplateStatus } from '@/utils/templateStatus'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const router = useRouter()
 const route = useRoute()
 const recruitmentStore = useRecruitmentStore()
+const {
+  modal,
+  loadMemberType,
+  ensureHrAccess,
+  onModalConfirm,
+  onModalCancel
+} = useHrAccessGuard()
 
 const templateId = computed(() => Number(route.params.id))
 const loading = ref(true)
@@ -34,6 +43,7 @@ const fieldTypeLabels = {
 
 onMounted(async () => {
   try {
+    await loadMemberType()
     await recruitmentStore.fetchApplicationTemplates()
   } catch (error) {
     console.error('템플릿 목록을 불러오지 못했습니다.', error)
@@ -57,7 +67,10 @@ const loadTemplate = async () => {
 }
 
 const getFieldTypeLabel = (type) => fieldTypeLabels[type] || type
-const goToEdit = () => router.push(`/recruitment/templates/${templateId.value}/edit`)
+const goToEdit = async () => {
+  if (!(await ensureHrAccess('지원서 템플릿 수정은 인사담당자만 가능합니다.'))) return
+  router.push(`/recruitment/templates/${templateId.value}/edit`)
+}
 const goBack = () => router.push('/recruitment/templates')
 </script>
 
@@ -168,4 +181,16 @@ const goBack = () => router.push('/recruitment/templates')
       </div>
     </template>
   </div>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    :cancel-text="modal.cancelText"
+    @confirm="onModalConfirm"
+    @cancel="onModalCancel"
+  />
 </template>

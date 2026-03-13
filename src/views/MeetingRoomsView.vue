@@ -8,6 +8,7 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
 import { scheduleApi } from '@/api/schedule'
 import { recruitmentApi } from '@/api/recruitment'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const handleRoomConfirm = (roomData) => {
   if (editingRoom.value) {
@@ -59,6 +60,10 @@ const successModalOpen = ref(false)
 const errorModalOpen = ref(false)
 const errorModalTitle = ref('')
 const errorModalMessage = ref('')
+const {
+  memberType,
+  loadMemberType
+} = useHrAccessGuard()
 
 const selectedRoom = ref(null)
 const selectedBooking = ref(null)
@@ -306,6 +311,33 @@ const getCurrentUser = () => {
   } catch {
     return null
   }
+}
+
+const getCurrentUserId = () => {
+  const currentUser = getCurrentUser()
+  const userId = Number(currentUser?.id)
+  return Number.isFinite(userId) ? userId : null
+}
+
+const ensureHrMeetingRoomAction = (message) => {
+  if (memberType.value === 'HR') {
+    return true
+  }
+
+  openErrorModal('권한 없음', message)
+  return false
+}
+
+const canDeleteBooking = (booking) => {
+  if (!booking) return false
+  const currentUserId = getCurrentUserId()
+  const bookingUserId = Number(booking.userId)
+  return (
+    Number.isFinite(currentUserId) &&
+    Number.isFinite(bookingUserId) &&
+    currentUserId === bookingUserId &&
+    !booking.interviewScheduleId
+  )
 }
 
 const resolveOrganizerName = (reservation) => {
@@ -625,6 +657,8 @@ const toViewBookingFromApi = (reservation, titleByReservationKey = {}) => {
     serverId: reservationId,
     roomId: `r-${reservation.meetingRoomId}`,
     roomServerId: reservation.meetingRoomId,
+    userId: Number(reservation?.userId),
+    interviewScheduleId: Number(reservation?.interviewScheduleId) || null,
     title: titleFromLocalInterview || titleFromInterview || titleFromSchedule || titleFromApi || titleFromLocal || '회의실 예약',
     description: reservation?.description || reservation?.memo || '',
     organizer,
@@ -676,6 +710,7 @@ const loadBookingsFromApi = async () => {
 }
 
 onMounted(async () => {
+  await loadMemberType().catch(() => {})
   loadReservationTitleMap()
   loadReservationAttendeeMap()
   loadInterviewSlotTitleMap()
@@ -751,6 +786,8 @@ const handleBookingConfirm = async (booking) => {
       serverId: saved.id,
       roomId: selectedRoom.value.id,
       roomServerId: selectedRoom.value.serverId,
+      userId: getCurrentUserId(),
+      interviewScheduleId: null,
       title: booking.title || '회의실 예약',
       description: booking.description || '',
       organizer: booking.organizer || getCurrentUser()?.name || '',
@@ -774,6 +811,11 @@ const deleteBookingModalOpen = ref(false)
 const deleteTargetBookingId = ref(null)
 
 const handleBookingDelete = (bookingId) => {
+  const target = bookings.value.find((booking) => booking.id === bookingId)
+  if (!canDeleteBooking(target)) {
+    openErrorModal('권한 없음', '본인이 생성한 수동 회의실 예약만 삭제할 수 있습니다.')
+    return
+  }
   deleteTargetBookingId.value = bookingId
   deleteBookingModalOpen.value = true
 }
@@ -782,6 +824,12 @@ const confirmDeleteBooking = async () => {
   const id = deleteTargetBookingId.value
   const target = bookings.value.find((b) => b.id === id)
   if (!target?.serverId || !target?.roomServerId) return
+  if (!canDeleteBooking(target)) {
+    openErrorModal('권한 없음', '본인이 생성한 수동 회의실 예약만 삭제할 수 있습니다.')
+    deleteBookingModalOpen.value = false
+    deleteTargetBookingId.value = null
+    return
+  }
   try {
     await meetingRoomApi.cancelReservation(target.roomServerId, target.serverId)
     const idx = bookings.value.findIndex((b) => b.id === id)
@@ -804,6 +852,9 @@ const roomCreatedModalOpen = ref(false)
 const createdRoomName = ref('')
 
 const handleCreateRoom = async (roomData) => {
+  if (!ensureHrMeetingRoomAction('회의실 생성은 인사담당자만 가능합니다.')) {
+    return
+  }
   try {
     const response = await meetingRoomApi.create({
       name: roomData.name,
@@ -831,6 +882,9 @@ const handleCreateRoom = async (roomData) => {
 }
 
 const handleEditRoom = (room) => {
+  if (!ensureHrMeetingRoomAction('회의실 수정은 인사담당자만 가능합니다.')) {
+    return
+  }
   editingRoom.value = room
   createRoomOpen.value = true
 }
@@ -870,11 +924,19 @@ const deleteRoomModalOpen = ref(false)
 const deleteTargetRoomId = ref(null)
 
 const handleDeleteRoom = (roomId) => {
+  if (!ensureHrMeetingRoomAction('회의실 삭제는 인사담당자만 가능합니다.')) {
+    return
+  }
   deleteTargetRoomId.value = roomId
   deleteRoomModalOpen.value = true
 }
 
 const confirmDeleteRoom = async () => {
+  if (!ensureHrMeetingRoomAction('회의실 삭제는 인사담당자만 가능합니다.')) {
+    deleteRoomModalOpen.value = false
+    deleteTargetRoomId.value = null
+    return
+  }
   const id = deleteTargetRoomId.value
   const idx = rooms.value.findIndex((r) => r.id === id)
   if (idx < 0) return
@@ -903,6 +965,9 @@ const setDateValue = (value) => {
 }
 
 const openCreateRoom = () => {
+  if (!ensureHrMeetingRoomAction('회의실 생성은 인사담당자만 가능합니다.')) {
+    return
+  }
   editingRoom.value = null
   createRoomOpen.value = true
 }

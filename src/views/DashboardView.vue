@@ -5,10 +5,14 @@ import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { announcementBoardApi } from '@/api/announcementBoard'
 import { useAuth } from '@/composables/useAuth'
-import { memberApi } from '@/api/member'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const { user } = useAuth()
-const memberType = ref('')
+const {
+  memberType,
+  loadMemberType,
+  ensureHrAccess
+} = useHrAccessGuard()
 
 const showAnnouncementModal = ref(false)
 const announcementMode = ref('list') // list | create | detail
@@ -19,6 +23,15 @@ const feedbackModal = ref({
   title: '',
   message: ''
 })
+
+const showAnnouncementForbiddenModal = () => {
+  feedbackModal.value = {
+    show: true,
+    type: 'warning',
+    title: '권한 없음',
+    message: '공지사항 수정 및 삭제는 인사담당자만 가능합니다.'
+  }
+}
 
 const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) => {
   feedbackModal.value = {
@@ -31,17 +44,12 @@ const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) =>
 
 // 만들기
 const openCreateAnnouncement = () => {
-  if (!canManageAnnouncements.value) {
-    openFeedbackModal({
-      type: 'warning',
-      title: '권한 없음',
-      message: '공지사항 등록은 인사담당자만 가능합니다.'
-    })
-    return
-  }
-  announcementMode.value = 'create'
-  selectedAnnouncementId.value = null
-  showAnnouncementModal.value = true
+  ensureHrAccess('공지사항 생성은 인사담당자만 가능합니다.').then((allowed) => {
+    if (!allowed) return
+    announcementMode.value = 'create'
+    selectedAnnouncementId.value = null
+    showAnnouncementModal.value = true
+  })
 }
 
 // 상세보기
@@ -65,7 +73,6 @@ const userRole = computed(() => {
   if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
 })
-const canManageAnnouncements = computed(() => memberType.value === 'HR')
 const stats = [
   { label: '오늘의 일정', value: 3, icon: 'calendar', color: 'text-orange-500 bg-orange-50' },
   { label: '진행 중 공고', value: 5, icon: 'briefcase', color: 'text-brand-600 bg-brand-50' },
@@ -178,12 +185,7 @@ const loadAnnouncements = async () => {
 }
 
 const handleSaveAnnouncement = async (data) => {
-  if (!canManageAnnouncements.value) {
-    openFeedbackModal({
-      type: 'warning',
-      title: '권한 없음',
-      message: '공지사항 등록은 인사담당자만 가능합니다.'
-    })
+  if (!(await ensureHrAccess('공지사항 생성은 인사담당자만 가능합니다.'))) {
     return
   }
   try {
@@ -204,18 +206,18 @@ const handleSaveAnnouncement = async (data) => {
     })
   } catch (error) {
     console.error('공지사항 생성 실패:', error)
-    const isUnauthorized = error?.response?.status === 401
     openFeedbackModal({
       type: 'warning',
-      title: isUnauthorized ? '권한 없음' : '공지사항 등록 실패',
-      message: isUnauthorized
-        ? '공지사항 등록은 인사담당자만 가능합니다.'
-        : '공지사항 생성 중 문제가 발생했습니다.'
+      title: '공지사항 등록 실패',
+      message: '공지사항 생성 중 문제가 발생했습니다.'
     })
   }
 }
 
 const handleUpdateAnnouncement = async (data) => {
+  if (!(await ensureHrAccess('공지사항 수정은 인사담당자만 가능합니다.'))) {
+    return
+  }
   try {
     await announcementBoardApi.update(data.id, {
       title: data.title,
@@ -249,6 +251,9 @@ const handleUpdateAnnouncement = async (data) => {
 }
 
 const handleRemoveAnnouncement = async (id) => {
+  if (!(await ensureHrAccess('공지사항 삭제는 인사담당자만 가능합니다.'))) {
+    return
+  }
   try {
     await announcementBoardApi.remove(id)
     announcements.value = announcements.value.filter((a) => a.id !== id)
@@ -339,8 +344,7 @@ const openScheduleDetail = (schedule) => {
 onMounted(async () => {
   loadAnnouncements()
   try {
-    const res = await memberApi.getMyMember()
-    memberType.value = res.data.data.memberType
+    await loadMemberType()
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
   }
@@ -481,7 +485,6 @@ onMounted(async () => {
             </h2>
             <div class="flex items-center gap-2">
               <button
-                  v-if="canManageAnnouncements"
                   @click="openCreateAnnouncement"
                   class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg"
               >
@@ -523,7 +526,9 @@ onMounted(async () => {
       :mode="announcementMode"
       :selected-id="selectedAnnouncementId"
       :announcements="announcements"
+      :can-manage="memberType === 'HR'"
       @close="closeAnnouncement"
+      @forbidden="showAnnouncementForbiddenModal"
       @create="handleSaveAnnouncement"
       @update="handleUpdateAnnouncement"
       @remove="handleRemoveAnnouncement"
