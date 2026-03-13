@@ -156,6 +156,19 @@ const isPipelineStage = (stage) => {
   return stageName !== '불합격' && stageName !== '탈락'
 }
 
+// 목록 단계 바에서 최종 합격 단계를 항상 마지막에 보이도록 정규화한다.
+const normalizePipelineStages = (stages) => {
+  const visibleStages = (Array.isArray(stages) ? stages : []).filter(isPipelineStage)
+  const passStage = visibleStages.find((stage) => String(stage?.stageName || stage?.step || '').trim() === '최종 합격')
+  const nonPassStages = visibleStages.filter((stage) => String(stage?.stageName || stage?.step || '').trim() !== '최종 합격')
+
+  if (passStage) {
+    return [...nonPassStages, passStage]
+  }
+
+  return [...nonPassStages, { stageName: '최종 합격', applicantCount: 0 }]
+}
+
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
 const canManageRecruitment = computed(() => memberType.value === 'HR')
@@ -511,7 +524,7 @@ const filteredJobs = computed(() => {
       displayStatus: getDisplayStatus(job.status, job.endDate),
       team: resolveTeamName(job),
       position: getCareerText(job),
-      funnel: (job.stages || []).filter(isPipelineStage).map(s => ({
+      funnel: normalizePipelineStages(job.stages).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0
