@@ -4,9 +4,17 @@ import { useRouter } from 'vue-router'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { isTemplateInUse, normalizeTemplateStatus } from '@/utils/templateStatus'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const router = useRouter()
 const recruitmentStore = useRecruitmentStore()
+const {
+  modal,
+  loadMemberType,
+  ensureHrAccess,
+  onModalConfirm,
+  onModalCancel
+} = useHrAccessGuard()
 
 const searchQuery = ref('')
 const showDeleteModal = ref(false)
@@ -19,11 +27,30 @@ const templates = computed(() => recruitmentStore.templates)
 
 onMounted(async () => {
   try {
+    await loadMemberType()
     await recruitmentStore.fetchApplicationTemplates()
   } catch (error) {
     console.error('템플릿 목록을 불러오지 못했습니다.', error)
   }
 })
+
+const goToCreate = async () => {
+  if (!(await ensureHrAccess('지원서 템플릿 생성은 인사담당자만 가능합니다.'))) return
+  router.push('/recruitment/templates/create')
+}
+
+const goToDetail = (templateId) => router.push(`/recruitment/templates/${templateId}`)
+
+const goToEdit = async (templateId) => {
+  if (!(await ensureHrAccess('지원서 템플릿 수정은 인사담당자만 가능합니다.'))) return
+  router.push(`/recruitment/templates/${templateId}/edit`)
+}
+
+const openDeleteModal = async (template) => {
+  if (!(await ensureHrAccess('지원서 템플릿 삭제는 인사담당자만 가능합니다.'))) return
+  deleteTarget.value = template
+  showDeleteModal.value = true
+}
 
 const filteredTemplates = computed(() => {
   const keyword = searchQuery.value.trim().toLowerCase()
@@ -67,15 +94,6 @@ const pageNumbers = computed(() => {
   if (current >= total - 2) return [1, '...', total - 2, total - 1, total]
   return [1, '...', current, '...', total]
 })
-
-const goToCreate = () => router.push('/recruitment/templates/create')
-const goToDetail = (templateId) => router.push(`/recruitment/templates/${templateId}`)
-const goToEdit = (templateId) => router.push(`/recruitment/templates/${templateId}/edit`)
-
-const openDeleteModal = (template) => {
-  deleteTarget.value = template
-  showDeleteModal.value = true
-}
 
 const handleDeleteConfirm = async () => {
   if (deleteTarget.value) {
@@ -225,6 +243,18 @@ const handleDeleteCancel = () => {
       type="danger"
       @confirm="handleDeleteConfirm"
       @cancel="handleDeleteCancel"
+    />
+
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :type="modal.type"
+      :show-cancel="modal.showCancel"
+      :confirm-text="modal.confirmText"
+      :cancel-text="modal.cancelText"
+      @confirm="onModalConfirm"
+      @cancel="onModalCancel"
     />
   </div>
 </template>

@@ -5,10 +5,14 @@ import AnnouncementModal from '@/components/announcement/AnnouncementModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { announcementBoardApi } from '@/api/announcementBoard'
 import { useAuth } from '@/composables/useAuth'
-import { memberApi } from '@/api/member'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const { user } = useAuth()
-const memberType = ref('')
+const {
+  memberType,
+  loadMemberType,
+  ensureHrAccess
+} = useHrAccessGuard()
 
 const showAnnouncementModal = ref(false)
 const announcementMode = ref('list') // list | create | detail
@@ -19,6 +23,15 @@ const feedbackModal = ref({
   title: '',
   message: ''
 })
+
+const showAnnouncementForbiddenModal = () => {
+  feedbackModal.value = {
+    show: true,
+    type: 'warning',
+    title: '권한 없음',
+    message: '공지사항 수정 및 삭제는 인사담당자만 가능합니다.'
+  }
+}
 
 const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) => {
   feedbackModal.value = {
@@ -31,9 +44,12 @@ const openFeedbackModal = ({ type = 'info', title = '안내', message = '' }) =>
 
 // 만들기
 const openCreateAnnouncement = () => {
-  announcementMode.value = 'create'
-  selectedAnnouncementId.value = null
-  showAnnouncementModal.value = true
+  ensureHrAccess('공지사항 생성은 인사담당자만 가능합니다.').then((allowed) => {
+    if (!allowed) return
+    announcementMode.value = 'create'
+    selectedAnnouncementId.value = null
+    showAnnouncementModal.value = true
+  })
 }
 
 // 상세보기
@@ -169,6 +185,9 @@ const loadAnnouncements = async () => {
 }
 
 const handleSaveAnnouncement = async (data) => {
+  if (!(await ensureHrAccess('공지사항 생성은 인사담당자만 가능합니다.'))) {
+    return
+  }
   try {
     const response = await announcementBoardApi.create({
       title: data.title,
@@ -196,6 +215,9 @@ const handleSaveAnnouncement = async (data) => {
 }
 
 const handleUpdateAnnouncement = async (data) => {
+  if (!(await ensureHrAccess('공지사항 수정은 인사담당자만 가능합니다.'))) {
+    return
+  }
   try {
     await announcementBoardApi.update(data.id, {
       title: data.title,
@@ -229,6 +251,9 @@ const handleUpdateAnnouncement = async (data) => {
 }
 
 const handleRemoveAnnouncement = async (id) => {
+  if (!(await ensureHrAccess('공지사항 삭제는 인사담당자만 가능합니다.'))) {
+    return
+  }
   try {
     await announcementBoardApi.remove(id)
     announcements.value = announcements.value.filter((a) => a.id !== id)
@@ -319,8 +344,7 @@ const openScheduleDetail = (schedule) => {
 onMounted(async () => {
   loadAnnouncements()
   try {
-    const res = await memberApi.getMyMember()
-    memberType.value = res.data.data.memberType
+    await loadMemberType()
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
   }
@@ -502,7 +526,9 @@ onMounted(async () => {
       :mode="announcementMode"
       :selected-id="selectedAnnouncementId"
       :announcements="announcements"
+      :can-manage="memberType === 'HR'"
       @close="closeAnnouncement"
+      @forbidden="showAnnouncementForbiddenModal"
       @create="handleSaveAnnouncement"
       @update="handleUpdateAnnouncement"
       @remove="handleRemoveAnnouncement"

@@ -335,6 +335,19 @@ const noticeModal = ref({
   onConfirm: null
 })
 
+const ensureHrRecruitmentAction = (message) => {
+  if (memberType.value === 'HR') {
+    return true
+  }
+
+  openNoticeModal({
+    title: '권한 없음',
+    message,
+    type: 'warning'
+  })
+  return false
+}
+
 // --- 면접 일정 관련 상태 ---
 const showWeeklyModal = ref(false)
 const showDetailModal = ref(false)
@@ -441,6 +454,9 @@ const goToDetail = (id) => {
 
 // 1. 삭제 버튼 클릭 시 모달 열기
 const openDeleteModal = (id) => {
+  if (!ensureHrRecruitmentAction('채용 공고 삭제는 인사담당자만 가능합니다.')) {
+    return
+  }
   deleteTargetId.value = id
   showDeleteModal.value = true
   activeMenuId.value = null // 열려있는 메뉴 닫기
@@ -453,6 +469,9 @@ const closeDeleteModal = () => {
 }
 
 const requestPublishRecruitment = (job) => {
+  if (!ensureHrRecruitmentAction('채용 공고 게시는 인사담당자만 가능합니다.')) {
+    return
+  }
   openNoticeModal({
     title: '즉시 게시',
     message: '이 공고를 지금 바로 게시하시겠습니까? 게시 후에는 기본 정보 수정이 제한됩니다.',
@@ -495,6 +514,9 @@ const publishRecruitment = async (recruitmentId) => {
 
 // 3. 실제 삭제 수행
 const confirmDelete = async () => {
+  if (!ensureHrRecruitmentAction('채용 공고 삭제는 인사담당자만 가능합니다.')) {
+    return
+  }
   if (!deleteTargetId.value || deleting.value) return
 
   deleting.value = true
@@ -709,6 +731,9 @@ const isSelectedInterviewer = (interviewerId) => {
 }
 
 const openInterviewerModal = async (job) => {
+  if (!ensureHrRecruitmentAction('면접관 설정은 인사담당자만 가능합니다.')) {
+    return
+  }
   try {
     await organizationStore.loadOrganizations({ force: true })
   } catch (error) {
@@ -764,6 +789,9 @@ const removeInterviewer = (interviewerId) => {
 }
 
 const saveInterviewers = async () => {
+  if (!ensureHrRecruitmentAction('면접관 설정은 인사담당자만 가능합니다.')) {
+    return
+  }
   if (!editingJob.value || savingInterviewers.value) return
   if (editingJob.value.selectedInterviewerIds.length === 0) {
     openNoticeModal({
@@ -805,7 +833,7 @@ const saveInterviewers = async () => {
 
     <div class="flex flex-col md:flex-row md:items-center justify-end gap-4 relative z-0">
       <button
-          @click="router.push('/recruitment/create')"
+          @click="goToCreateRecruitment"
           class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
       >
         <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -909,7 +937,7 @@ const saveInterviewers = async () => {
               </button>
 
               <button
-                  @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
+                  @click.stop="goToEditRecruitment(job.id)"
                   class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
               >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
@@ -1246,3 +1274,16 @@ const saveInterviewers = async () => {
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
 .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #94a3b8; }
 </style>
+const goToCreateRecruitment = () => {
+  if (!ensureHrRecruitmentAction('채용 공고 생성은 인사담당자만 가능합니다.')) {
+    return
+  }
+  router.push('/recruitment/create')
+}
+
+const goToEditRecruitment = (jobId) => {
+  if (!ensureHrRecruitmentAction('채용 공고 수정은 인사담당자만 가능합니다.')) {
+    return
+  }
+  router.push(`/recruitment/jobs/${jobId}/edit`)
+}
