@@ -69,7 +69,7 @@ const handleSubmit = async () => {
               v-model.trim="form.email"
               type="email"
               placeholder="you@email.com"
-              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
 
@@ -79,7 +79,7 @@ const handleSubmit = async () => {
               v-model.trim="form.password"
               type="password"
               placeholder="비밀번호를 입력해주세요"
-              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
             />
           </div>
 
