@@ -2,6 +2,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
+import NotificationToast from '@/components/NotificationToast.vue'
 import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
 import { useAuth } from '@/composables/useAuth'
@@ -40,7 +41,12 @@ onMounted(async () => {
 
 const isNotificationOpen = ref(false)
 const notificationStore = useNotificationStore()
-const { unreadCount } = storeToRefs(notificationStore)
+const { unreadCount, realtimeToast } = storeToRefs(notificationStore)
+
+const openRealtimeToastTarget = async (target) => {
+  notificationStore.dismissRealtimeToast()
+  await router.push(target)
+}
 
 const toggleNotification = async () => {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -314,6 +320,17 @@ watch(
         <div class="p-8 max-w-[1600px] mx-auto">
           <router-view />
         </div>
+      </div>
+
+      <div
+        v-if="realtimeToast && route.path !== '/notifications'"
+        class="pointer-events-none fixed right-8 top-20 z-[70]"
+      >
+        <NotificationToast
+          :item="realtimeToast"
+          @close="notificationStore.dismissRealtimeToast()"
+          @open="openRealtimeToastTarget"
+        />
       </div>
     </main>
   </div>
