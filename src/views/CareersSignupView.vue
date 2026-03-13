@@ -21,6 +21,10 @@ const form = ref({
 })
 const loading = ref(false)
 const serverError = ref('')
+const isPasswordMismatch = computed(() => {
+  if (!form.value.password || !form.value.passwordConfirm) return false
+  return form.value.password !== form.value.passwordConfirm
+})
 
 const handleSubmit = async () => {
   if (!form.value.name || !form.value.email || !form.value.password || !form.value.passwordConfirm) {
@@ -106,8 +110,16 @@ const handleSubmit = async () => {
               v-model.trim="form.passwordConfirm"
               type="password"
               placeholder="비밀번호를 다시 입력해주세요"
-              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+              :class="[
+                'w-full px-4 py-3 border rounded-lg text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:border-brand-500',
+                isPasswordMismatch
+                  ? 'border-red-400 focus:ring-red-200'
+                  : 'border-gray-300 focus:ring-brand-500'
+              ]"
             />
+            <p v-if="isPasswordMismatch" class="mt-2 text-sm font-medium text-red-600">
+              비밀번호가 일치하지 않습니다.
+            </p>
           </div>
 
           <div v-if="serverError" class="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-100">
