@@ -161,6 +161,10 @@ const currentMonth = computed(() => {
   return `${now.getFullYear()}년 ${now.getMonth() + 1}월`
 })
 
+const showGlobalMonthPill = computed(() =>
+  route.path !== '/schedule' && route.path !== '/dashboard'
+)
+
 watch(
     () => route.path,
     (path) => {
@@ -306,7 +310,10 @@ watch(
         </div>
 
         <div class="flex items-center space-x-3">
-          <div class="hidden sm:flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
+          <div
+            v-if="showGlobalMonthPill"
+            class="hidden sm:flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600"
+          >
             <svg class="w-4 h-4 mr-1.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
