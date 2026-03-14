@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
-import ScheduleDetailModal from '@/components/schedule/ScheduleDetailModal.vue'
+import ScheduleDetailDrawer from '@/components/schedule/ScheduleDetailDrawer.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
@@ -21,6 +21,7 @@ const viewOptions = [
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 const timeSlots = Array.from({ length: 12 }, (_, i) => `${i + 9 < 10 ? '0' : ''}${i + 9}:00`)
+const WEEK_SLOT_HEIGHT = 56
 
 const isListModalOpen = ref(false)
 const isFormModalOpen = ref(false)
@@ -74,7 +75,7 @@ const upcomingEvents = computed(() => {
   return allSchedules.value
       .filter(e => e.date >= today)
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
-      .slice(0, 3)
+      .slice(0, 5)
 })
 
 // [월간 뷰용] 동적 캘린더 데이터 생성
@@ -98,7 +99,7 @@ const calendarDays = computed(() => {
     const monthStr = (month + 1) < 10 ? `0${month + 1}` : `${month + 1}`
     const dateStr = `${year}-${monthStr}-${dayStr}`
 
-    const events = allSchedules.value.filter(e => e.date === dateStr)
+    const events = sortEvents(allSchedules.value.filter(e => e.date === dateStr))
 
     days.push({
       date: dateStr,
@@ -191,6 +192,12 @@ const weekViewTitle = computed(() => {
   return `${startMonth}월 ${start.dateNum}일 - ${endMonth}월 ${end.dateNum}일`
 })
 
+const currentCalendarTitle = computed(() => {
+  if (currentView.value === 'DAY') return dayViewTitle.value
+  if (currentView.value === 'WEEK') return currentMonthTitle.value
+  return currentMonthTitle.value
+})
+
 const isAllDayEvent = (event) => {
   if (!event) return false
   return event.isAllDay === true || (
@@ -238,7 +245,7 @@ const maxAllDayEventsInWeek = computed(() => {
 })
 
 const weekAllDayAreaHeight = computed(() => {
-  return maxAllDayEventsInWeek.value > 0 ? `${maxAllDayEventsInWeek.value * 44 + 8}px` : '0px'
+  return maxAllDayEventsInWeek.value > 0 ? `${maxAllDayEventsInWeek.value * 34 + 8}px` : '0px'
 })
 
 const getEventTimeLabel = (event) => isAllDayEvent(event) ? '종일' : event.startTime
@@ -252,7 +259,7 @@ const getEventMeridiemLabel = (event) => {
 
 const getEventStyle = (event, eventIndex = 0) => {
   const baseHour = 9
-  const slotHeight = 80
+  const slotHeight = WEEK_SLOT_HEIGHT
 
   const startHour = parseInt(event.startTime.split(':')[0])
   const startMin = parseInt(event.startTime.split(':')[1])
@@ -721,305 +728,330 @@ const confirmDisconnectGoogleCalendar = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 px-8 pb-8 pt-0 font-sans text-slate-600">
-    <header class="flex justify-end items-center mb-6">
-      <div class="flex items-center gap-3">
-        <div class="flex bg-slate-200/60 p-1 rounded-lg border border-slate-300">
-          <button
-              v-for="opt in viewOptions"
-              :key="opt.value"
-              @click="currentView = opt.value"
-              class="px-5 py-1.5 text-xs font-bold rounded-md transition-all"
-              :class="currentView === opt.value ? 'bg-white text-brand-600 shadow-sm ring-1 ring-black/5' : 'text-slate-500 hover:text-slate-700'"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <button
-            @click="goToToday"
-            class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold"
-        >
-          오늘로 이동
-        </button>
-        <button
-                      @click="openCreateForm(getToday())"
-                      class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-all flex items-center text-sm"
-            
-        >
-          <svg class="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
-          </svg>
-          일정 생성
-        </button>
-      </div>
-    </header>
-
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <div class="lg:col-span-3 bg-white border border-slate-300 rounded-[32px] overflow-hidden shadow-sm flex flex-col transition-all duration-300 min-h-[700px]">
-
-        <div v-if="currentView === 'MONTH'" class="flex flex-col flex-1">
-          <div class="p-6 border-b border-slate-300 flex items-center justify-center relative bg-white">
-            <div class="flex items-center gap-6">
-              <button @click="navigateDate(-1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" /></svg>
-              </button>
-              <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight w-40 text-center">{{ currentMonthTitle }}</h2>
-              <button @click="navigateDate(1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" /></svg>
-              </button>
-            </div>
+  <div class="schedule-workbench min-h-screen px-6 pb-8 pt-3 font-sans text-slate-600">
+    <div class="schedule-layout">
+      <section class="schedule-surface">
+        <div class="schedule-surface__head">
+          <div>
+            <h2 class="surface-title">{{ currentCalendarTitle }}</h2>
           </div>
 
-          <div class="grid grid-cols-7 text-center border-b border-slate-300 bg-slate-50/50">
-            <div v-for="(day, idx) in koDays" :key="day" class="py-4 text-[11px] font-black tracking-[0.15em]" :class="getDayColor(idx)">
+          <div class="surface-head-actions">
+            <div class="view-switch">
+              <button
+                v-for="opt in viewOptions"
+                :key="opt.value"
+                type="button"
+                class="view-switch__button"
+                :class="{ 'view-switch__button--active': currentView === opt.value }"
+                @click="currentView = opt.value"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+
+            <div class="surface-head-nav">
+              <button type="button" class="icon-button" @click="navigateDate(-1)">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button type="button" class="toolbar-button toolbar-button-subtle" @click="goToToday">오늘</button>
+              <button type="button" class="icon-button" @click="navigateDate(1)">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              class="toolbar-button toolbar-button-primary"
+              @click="openCreateForm(getToday())"
+            >
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+              </svg>
+              일정 생성
+            </button>
+          </div>
+        </div>
+
+        <div v-if="currentView === 'MONTH'" class="flex h-full flex-col">
+          <div class="month-weekdays">
+            <div
+              v-for="(day, idx) in koDays"
+              :key="day"
+              class="month-weekdays__item"
+              :class="getDayColor(idx)"
+            >
               {{ day }}
             </div>
           </div>
-          <div class="grid grid-cols-7 grid-rows-5 flex-1 bg-white">
-            <div v-for="(cell, index) in calendarDays" :key="index"
-                 class="border-r border-b border-slate-300 p-4 transition-all hover:bg-slate-50/50 relative group cursor-pointer"
-                 :class="{'bg-slate-50/20': !cell.isCurrentMonth, 'border-r-0': (index + 1) % 7 === 0}"
-                 @click="cell.isCurrentMonth && handleDateClick(cell.date)">
-              <div class="flex items-center justify-between">
-                 <span :class="[
-                     'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
-                     !cell.isCurrentMonth && 'opacity-0',
-                     cell.date === getToday() ? 'bg-brand-600 text-white shadow-md' : (cell.dayOfWeek === 0 ? 'text-rose-500' : cell.dayOfWeek === 6 ? 'text-blue-500' : 'text-slate-500')
-                 ]">
-                   {{ cell.dayDisplay }}
-                 </span>
-              </div>
-              <div v-if="cell.events.length" class="mt-2 space-y-1.5">
-                <div v-for="(evt) in cell.events.slice(0, 2)" :key="evt.id" class="truncate text-[10px] px-2 py-1.5 rounded-lg font-bold border shadow-sm" :class="getEventClass(evt.type)">
-                  {{ getEventTimeLabel(evt) }} {{ evt.title }}
-                </div>
-                <div v-if="cell.events.length > 2" class="text-[10px] font-bold text-slate-400 pl-1">+ {{ cell.events.length - 2 }}개</div>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <div v-else-if="currentView === 'WEEK'" class="flex-1 overflow-y-auto custom-scrollbar bg-white">
-          <div class="flex flex-col h-full">
-            <div class="flex items-center justify-center p-6 border-b border-slate-300 bg-white sticky top-0 z-40">
-              <div class="flex items-center gap-6">
-                <button @click="navigateDate(-1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                  <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" /></svg>
-                </button>
-                <div class="text-center min-w-[200px]">
-                  <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight">{{ currentMonthTitle }}</h2>
-                  <p class="text-sm font-bold text-slate-500 mt-1">{{ weekViewTitle }}</p>
-                </div>
-                <button @click="navigateDate(1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                  <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" /></svg>
-                </button>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-[80px_1fr] border-b border-slate-300 bg-slate-50/50 sticky top-[88px] z-30">
-              <div class="border-r border-slate-300"></div>
-              <div class="grid grid-cols-7">
-                <div v-for="(day, idx) in currentWeekDays" :key="day.fullDate"
-                     class="py-3 text-center border-r border-slate-300 last:border-0 flex flex-col items-center gap-1 group cursor-pointer hover:bg-slate-100 transition-colors"
-                     @click="handleDateClick(day.fullDate)">
-                  <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ day.dayName }}</span>
-                  <span class="text-xl font-display font-bold leading-none w-8 h-8 flex items-center justify-center rounded-lg transition-all"
-                        :class="{
-                          'bg-brand-600 text-white shadow-md': day.fullDate === getToday(),
-                          'ring-1 ring-brand-600 text-brand-600': day.fullDate === selectedDate && day.fullDate !== getToday(),
-                          'text-slate-700 group-hover:text-brand-600': day.fullDate !== getToday() && day.fullDate !== selectedDate
-                        }">
-                    {{ day.dateNum }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="maxAllDayEventsInWeek > 0" class="grid grid-cols-[80px_1fr] border-b border-slate-300 bg-white">
-              <div class="border-r border-slate-300 bg-slate-50/40 flex items-start justify-center pt-3 text-[11px] font-bold text-slate-500">
-                종일
-              </div>
-              <div class="grid grid-cols-7">
-                <div
-                  v-for="day in currentWeekDays"
-                  :key="`all-day-${day.fullDate}`"
-                  class="border-r border-slate-300 last:border-0 p-1.5 space-y-1.5"
-                  :style="{ minHeight: weekAllDayAreaHeight }"
+          <div class="month-grid">
+            <div
+              v-for="(cell, index) in calendarDays"
+              :key="index"
+              class="month-cell"
+              :class="{
+                'month-cell--muted': !cell.isCurrentMonth,
+                'month-cell--today': cell.date === getToday(),
+                'month-cell--last': (index + 1) % 7 === 0
+              }"
+              @click="cell.isCurrentMonth && handleDateClick(cell.date)"
+            >
+              <div class="month-cell__head">
+                <span
+                  class="month-cell__day"
+                :class="{
+                    'month-cell__day--today': cell.date === getToday(),
+                    'month-cell__day--sunday': cell.dayOfWeek === 0 && cell.date !== getToday(),
+                    'month-cell__day--saturday': cell.dayOfWeek === 6 && cell.date !== getToday(),
+                    'opacity-0': !cell.isCurrentMonth
+                  }"
                 >
-                  <div
-                    v-for="evt in getAllDayEventsForDate(day.fullDate)"
-                    :key="evt.id"
-                    @click.stop="openDetailModal(evt)"
-                    class="rounded-xl border-l-4 px-2 py-1.5 shadow-sm cursor-pointer hover:scale-[1.02] transition-transform"
-                    :class="getEventClassWeek(evt.type)"
-                  >
-                    <p class="text-[10px] font-bold opacity-90">종일</p>
-                    <p class="text-[11px] font-extrabold leading-4 break-words">{{ evt.title }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-1">
-              <div class="w-20 border-r border-slate-300 shrink-0 bg-slate-50/10">
-                <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 text-[11px] font-bold text-slate-500 flex items-start justify-center pt-2">
-                  {{ time }}
-                </div>
-              </div>
-              <div class="flex-1 grid grid-cols-7 relative">
-                <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="relative border-r border-slate-300 last:border-0 group">
-                  <div v-for="time in timeSlots" :key="time" class="h-20 border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
-
-                  <div v-for="(evt, eventIndex) in getTimedEventsForDate(day.fullDate)" :key="evt.id"
-                       @click.stop="openDetailModal(evt)"
-                       class="absolute left-1 right-1 p-2 rounded-xl shadow-md z-50 cursor-pointer hover:scale-[1.03] transition-transform overflow-hidden border-l-4"
-                       :class="getEventClassWeek(evt.type)"
-                       :style="getEventStyle(evt, eventIndex)">
-                    <p class="text-[10px] font-bold opacity-90">{{ getEventTimeLabel(evt) }}</p>
-                    <p class="text-[11px] font-extrabold truncate">{{ evt.title }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div v-else class="flex-1 bg-white p-10 overflow-y-auto custom-scrollbar">
-          <div class="flex justify-between items-center mb-10 border-b-2 border-slate-200 pb-8">
-            <div class="w-32 hidden lg:block"></div>
-            <div class="flex justify-center items-center gap-6 flex-1">
-              <button @click="navigateDate(-1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" /></svg>
-              </button>
-
-              <div class="text-center min-w-[240px]">
-                <h3 class="text-3xl font-display font-extrabold text-slate-900 tracking-tight">{{ dayViewTitle }}</h3>
-                <div class="flex items-center justify-center gap-2 mt-2">
-                  <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
-                  <p class="text-slate-500 font-semibold">{{ dayViewSubtitle }} · 총 {{ currentListEvents.length }}건의 업무</p>
-                </div>
-              </div>
-
-              <button @click="navigateDate(1)" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" /></svg>
-              </button>
-
-              <button @click="goToToday" class="ml-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all">
-                오늘
-              </button>
-            </div>
-            <div class="w-32 flex justify-end">
-              <button @click="openCreateForm(selectedDate)" class="text-xs font-bold text-brand-600 hover:text-brand-700 flex items-center gap-2 bg-brand-50 px-5 py-3 rounded-lg transition-all">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
-                일정 추가
-              </button>
-            </div>
-          </div>
-
-          <div class="space-y-6">
-            <div v-if="currentListEvents.length === 0" class="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[32px] border border-dashed border-slate-300">
-              <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-4">
-                <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              </div>
-              <p class="text-slate-400 font-bold">등록된 일정이 없습니다.</p>
-              <button @click="openCreateForm(selectedDate)" class="mt-2 text-sm text-brand-500 font-bold hover:underline">새 일정 만들기</button>
-            </div>
-
-            <div v-for="evt in currentListEvents" :key="evt.id"
-                 @click="openDetailModal(evt)"
-                 class="group p-8 rounded-[28px] border border-slate-200 bg-white hover:border-indigo-300 hover:shadow-2xl hover:shadow-indigo-500/10 transition-all cursor-pointer flex items-center gap-10">
-
-              <div class="w-24 text-center shrink-0 border-r-2 border-slate-100 pr-6">
-                <span class="block text-2xl font-black text-slate-800 tracking-tighter">{{ getEventTimeLabel(evt) }}</span>
-                <span class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{{ getEventMeridiemLabel(evt) }}</span>
-              </div>
-
-              <div class="flex-1 min-w-0">
-                <span class="inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-3"
-                      :class="getEventClassList(evt.type)">
-                  {{ formatScheduleTypeLabel(evt.type) }}
+                  {{ cell.dayDisplay }}
                 </span>
-                <h4 class="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors leading-snug">{{ evt.title }}</h4>
-                <p class="text-base text-slate-400 mt-2 font-medium">{{ evt.description }}</p>
+                <span v-if="cell.events.length" class="month-cell__count">{{ cell.events.length }}</span>
+              </div>
+
+              <div v-if="cell.events.length" class="month-cell__events">
+                <button
+                  v-for="evt in cell.events.slice(0, 3)"
+                  :key="evt.id"
+                  type="button"
+                  class="month-event-chip"
+                  :class="getEventClass(evt.type)"
+                  @click.stop="openDetailModal(evt)"
+                >
+                  <span class="month-event-chip__time">{{ getEventTimeLabel(evt) }}</span>
+                  <span class="month-event-chip__title truncate">{{ evt.title }}</span>
+                </button>
+                <div v-if="cell.events.length > 3" class="month-cell__more">
+                  +{{ cell.events.length - 3 }}개 더 보기
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-      </div>
+        <div v-else-if="currentView === 'WEEK'" class="week-shell custom-scrollbar">
+          <div class="week-header-grid">
+            <div class="week-header-grid__time"></div>
+            <button
+              v-for="(day, idx) in currentWeekDays"
+              :key="day.fullDate"
+              type="button"
+              class="week-day-button"
+              @click="handleDateClick(day.fullDate)"
+            >
+              <span class="week-day-button__label" :class="getDayColor(idx)">{{ day.dayName }}</span>
+              <span
+                class="week-day-button__date"
+                :class="{
+                  'week-day-button__date--today': day.fullDate === getToday(),
+                  'week-day-button__date--selected': day.fullDate === selectedDate && day.fullDate !== getToday()
+                }"
+              >
+                {{ day.dateNum }}
+              </span>
+            </button>
+          </div>
 
-      <div class="space-y-8">
-        <div class="bg-white border border-slate-300 p-8 rounded-[32px] shadow-sm">
-          <h3 class="text-lg font-display font-bold text-slate-800 mb-6 flex items-center justify-between">다가오는 일정</h3>
-          <div class="space-y-4">
-            <div v-for="event in upcomingEvents" :key="event.id"
-                 @click="openDetailModal(event)"
-                 class="group p-5 bg-slate-50/50 border border-slate-200 rounded-[24px] hover:border-indigo-300 hover:bg-white transition-all cursor-pointer shadow-sm">
-              <div class="flex justify-between items-start mb-3">
-                <span class="text-[9px] px-2.5 py-1 bg-indigo-100 text-indigo-600 rounded-lg font-bold uppercase tracking-widest">{{ formatScheduleTypeLabel(event.type) }}</span>
-                <span class="text-[10px] text-slate-500 font-bold">{{ event.date }}</span>
+          <div v-if="maxAllDayEventsInWeek > 0" class="week-all-day-grid">
+            <div class="week-all-day-grid__label">종일</div>
+            <div
+              v-for="day in currentWeekDays"
+              :key="`all-day-${day.fullDate}`"
+              class="week-all-day-grid__column"
+              :style="{ minHeight: weekAllDayAreaHeight }"
+            >
+              <button
+                v-for="evt in getAllDayEventsForDate(day.fullDate)"
+                :key="evt.id"
+                type="button"
+                class="week-all-day-chip"
+                :class="getEventClassWeek(evt.type)"
+                @click.stop="openDetailModal(evt)"
+              >
+                <span class="font-black opacity-85">종일</span>
+                <span class="truncate">{{ evt.title }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="week-time-grid">
+            <div class="week-time-grid__times">
+              <div v-for="time in timeSlots" :key="time" class="week-time-grid__time-label">
+                {{ time }}
               </div>
-              <h4 class="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{{ event.title }}</h4>
-              <p class="text-[11px] text-slate-500 mt-1.5 font-medium flex items-center gap-1.5"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{{ event.time }}</p>
+            </div>
+
+            <div class="week-time-grid__columns">
+              <div
+                v-for="(day, dayIdx) in currentWeekDays"
+                :key="dayIdx"
+                class="week-time-grid__day"
+              >
+                <div v-for="time in timeSlots" :key="time" class="week-time-grid__slot"></div>
+
+                <button
+                  v-for="(evt, eventIndex) in getTimedEventsForDate(day.fullDate)"
+                  :key="evt.id"
+                  type="button"
+                  class="week-event"
+                  :class="getEventClassWeek(evt.type)"
+                  :style="getEventStyle(evt, eventIndex)"
+                  @click.stop="openDetailModal(evt)"
+                >
+                  <span class="text-[10px] font-black opacity-85">{{ getEventTimeLabel(evt) }}</span>
+                  <span class="truncate text-[11px] font-black">{{ evt.title }}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="bg-white border border-slate-200 p-6 rounded-[32px] shadow-sm flex flex-col gap-4 relative overflow-hidden group">
-          <div class="absolute -right-6 -top-6 w-24 h-24 bg-blue-50 rounded-full blur-2xl group-hover:bg-blue-100 transition-colors"></div>
+        <div v-else class="day-agenda custom-scrollbar">
+          <div v-if="currentListEvents.length === 0" class="agenda-empty-state">
+            <div class="agenda-empty-state__icon">
+              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <p class="text-sm font-semibold text-slate-500">이 날짜에는 등록된 일정이 없습니다.</p>
+            <button type="button" class="toolbar-button toolbar-button-subtle mt-3" @click="openCreateForm(selectedDate)">
+              새 일정 만들기
+            </button>
+          </div>
 
-          <div class="relative z-10 flex justify-between items-start">
+          <div v-else class="agenda-list">
+            <button
+              v-for="evt in currentListEvents"
+              :key="evt.id"
+              type="button"
+              class="agenda-row"
+              @click="openDetailModal(evt)"
+            >
+              <div class="agenda-row__time">
+                <span class="agenda-row__time-main">{{ getEventTimeLabel(evt) }}</span>
+                <span class="agenda-row__time-sub">{{ getEventMeridiemLabel(evt) }}</span>
+              </div>
+              <div class="agenda-row__body">
+                <div class="agenda-row__topline">
+                  <span class="agenda-type-chip" :class="getEventClassList(evt.type)">
+                    {{ formatScheduleTypeLabel(evt.type) }}
+                  </span>
+                  <span class="text-[11px] text-slate-400">{{ evt.date }}</span>
+                </div>
+                <h4 class="truncate text-sm font-black text-slate-900">{{ evt.title }}</h4>
+                <p class="truncate text-xs text-slate-500">{{ evt.description || '설명이 없습니다.' }}</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="schedule-sidebar">
+        <section class="sidebar-card">
+          <div class="sidebar-card__head">
             <div>
-              <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Calendar Sync</h3>
-              <p class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google" class="w-5 h-5">
-                Google Calendar
-              </p>
-              <p v-if="isGoogleConnected && googleConnectedEmail" class="text-[11px] text-slate-500 font-medium mt-1 truncate max-w-[160px]">
+              <h3 class="text-lg font-black text-slate-950">다가오는 일정</h3>
+            </div>
+            <span class="sidebar-count-badge">{{ upcomingEvents.length }}</span>
+          </div>
+
+          <div class="sidebar-list custom-scrollbar">
+            <button
+              v-for="event in upcomingEvents"
+              :key="event.id"
+              type="button"
+              class="sidebar-event"
+              @click="openDetailModal(event)"
+            >
+              <div class="sidebar-event__head">
+                <span class="agenda-type-chip" :class="getEventClassList(event.type)">
+                  {{ formatScheduleTypeLabel(event.type) }}
+                </span>
+                <span class="text-[11px] text-slate-400">{{ event.date }}</span>
+              </div>
+              <p class="truncate text-sm font-black text-slate-900">{{ event.title }}</p>
+              <p class="mt-1 text-xs text-slate-500">{{ event.time }}</p>
+            </button>
+
+            <div v-if="upcomingEvents.length === 0" class="sidebar-empty">
+              다가오는 일정이 없습니다.
+            </div>
+          </div>
+        </section>
+
+        <section class="sidebar-card sidebar-card-sync">
+          <div class="sidebar-card__head items-start">
+            <div>
+              <div class="sync-title-row">
+                <span class="google-calendar-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="4" width="18" height="17" rx="4" fill="white" stroke="#D7E0EA" />
+                    <path d="M7 3.5V7" stroke="#4285F4" stroke-width="2" stroke-linecap="round" />
+                    <path d="M17 3.5V7" stroke="#34A853" stroke-width="2" stroke-linecap="round" />
+                    <path d="M4 9.5H20" stroke="#EA4335" stroke-width="2" />
+                    <rect x="6.5" y="11.5" width="11" height="7" rx="2" fill="#4285F4" />
+                    <text x="12" y="17" text-anchor="middle" font-size="6.5" font-weight="800" fill="white">31</text>
+                  </svg>
+                </span>
+                <h3 class="text-lg font-black text-slate-950">Google Calendar</h3>
+              </div>
+              <p v-if="isGoogleConnected && googleConnectedEmail" class="mt-1 truncate text-xs text-slate-500">
                 {{ googleConnectedEmail }}
               </p>
             </div>
-            <span v-if="isGoogleConnected" class="px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 text-[10px] font-bold border border-emerald-100 flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+
+            <span v-if="isGoogleConnected" class="sync-status sync-status--connected">
+              <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
               연동됨
             </span>
-            <span v-else class="px-2 py-1 rounded-md bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200 flex items-center gap-1">
+            <span v-else class="sync-status sync-status--idle">
               미연동
             </span>
           </div>
 
-          <div class="relative z-10">
-            <template v-if="isGoogleConnected">
-              <p class="text-xs text-slate-500 mb-4 font-medium">
-                일정이 구글 캘린더와<br>자동으로 동기화됩니다.
-              </p>
-              <button @click="disconnectGoogleCalendar" class="w-full py-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
-                연동 해제
-              </button>
-            </template>
-            <template v-else>
-              <p class="text-xs text-slate-500 mb-4 font-medium">
-                구글 캘린더와 연동하여<br>일정을 간편하게 관리하세요.
-              </p>
-              <button @click="connectGoogleCalendar" class="w-full py-3 rounded-lg bg-brand-50 hover:bg-brand-100 border border-brand-200 text-brand-600 text-xs font-bold transition-all flex items-center justify-center gap-2">
-                구글 캘린더 연동하기
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
+          <p class="sync-description text-sm leading-6 text-slate-500">
+            {{ isGoogleConnected
+              ? '연결된 캘린더와 일정이 자동으로 동기화됩니다.'
+              : '구글 캘린더와 연결해 외부 일정과 함께 관리할 수 있습니다.' }}
+          </p>
+
+          <button
+            type="button"
+            class="toolbar-button mt-1 w-full justify-center"
+            :class="isGoogleConnected ? 'toolbar-button-subtle' : 'toolbar-button-primary'"
+            @click="isGoogleConnected ? disconnectGoogleCalendar() : connectGoogleCalendar()"
+          >
+            {{ isGoogleConnected ? '연동 해제' : '구글 캘린더 연동하기' }}
+          </button>
+        </section>
+      </aside>
     </div>
 
-    <ScheduleDetailModal
-        :isOpen="isDetailModalOpen"
-        :event="selectedEventDetail || {}"
-        :showActions="!selectedEventDetail?.interviewScheduleId"
-        @close="isDetailModalOpen = false"
-        @edit="openEditForm"
-        @delete="openDeleteConfirm"
+    <ScheduleDetailDrawer
+      :is-open="isDetailModalOpen"
+      :event="selectedEventDetail || {}"
+      :show-actions="!selectedEventDetail?.interviewScheduleId"
+      @close="isDetailModalOpen = false"
+      @edit="openEditForm"
+      @delete="openDeleteConfirm"
     />
 
-    <ScheduleListModal :isOpen="isListModalOpen" :date="selectedDate" :events="currentListEvents" @close="isListModalOpen = false" @add="() => openCreateForm(selectedDate)" @edit="openDetailModal" @delete="openDeleteConfirm" />
+    <ScheduleListModal
+      :isOpen="isListModalOpen"
+      :date="selectedDate"
+      :events="currentListEvents"
+      @close="isListModalOpen = false"
+      @add="() => openCreateForm(selectedDate)"
+      @edit="openDetailModal"
+      @delete="openDeleteConfirm"
+    />
     <ScheduleCreateModal
       :isOpen="isFormModalOpen"
       :initialDate="selectedDate"
@@ -1042,12 +1074,682 @@ const confirmDisconnectGoogleCalendar = () => {
     />
   </div>
 </template>
+
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&display=swap');
-.font-display { font-family: 'Outfit', sans-serif; }
-.custom-scrollbar::-webkit-scrollbar { width: 5px; }
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+.schedule-workbench {
+  font-family: 'Pretendard Variable', 'Pretendard', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f7faf9;
+}
+
+.schedule-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.schedule-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.schedule-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 1280px) {
+  .schedule-layout {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+}
+
+.schedule-surface,
+.sidebar-card {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.schedule-surface {
+  min-height: 760px;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.schedule-surface__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+  padding: 0 0 0.25rem;
+}
+
+.surface-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: rgb(15, 23, 42);
+}
+
+.surface-head-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+  align-self: start;
+}
+
+.surface-head-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 1024px) {
+  .schedule-surface__head {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-head-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.view-switch__button {
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+  transition: all 0.18s ease;
+}
+
+.view-switch__button--active {
+  background: rgb(20, 184, 166);
+  color: white;
+}
+
+.toolbar-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  transition: all 0.18s ease;
+}
+
+.toolbar-button {
+  padding: 0.72rem 0.95rem;
+}
+
+.icon-button {
+  height: 2.1rem;
+  width: 2.1rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  color: rgb(71, 85, 105);
+}
+
+.icon-button:hover {
+  border-color: rgba(15, 118, 110, 0.28);
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-primary {
+  border: 1px solid rgba(15, 118, 110, 0.92);
+  background: rgb(15, 118, 110);
+  color: white;
+}
+
+.toolbar-button-subtle {
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  background: white;
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-primary:hover,
+.toolbar-button-subtle:hover {
+  filter: saturate(1.04);
+}
+
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.52);
+}
+
+.month-weekdays__item {
+  padding: 0.75rem 0;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(118px, 1fr));
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+  border-left: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.month-cell {
+  position: relative;
+  min-height: 118px;
+  border-right: 1px solid rgba(226, 232, 240, 0.84);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+  padding: 0.75rem 0.7rem 0.65rem;
+  transition: background 0.18s ease;
+  cursor: pointer;
+}
+
+.month-cell:hover {
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.month-cell--muted {
+  background: rgba(248, 250, 252, 0.42);
+  cursor: default;
+}
+
+.month-cell--today {
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.9));
+}
+
+.month-cell--last {
+  border-right: 0;
+}
+
+.month-cell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.month-cell__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: rgb(51, 65, 85);
+}
+
+.month-cell__day--today {
+  background: rgb(20, 184, 166);
+  border-radius: 9999px;
+  color: white;
+}
+
+.month-cell__day--sunday {
+  color: rgb(244, 63, 94);
+}
+
+.month-cell__day--saturday {
+  color: rgb(99, 102, 241);
+}
+
+.month-cell__count {
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+}
+
+.month-cell__events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.month-event-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  height: 1.75rem;
+  padding: 0 0.55rem;
+  border-radius: 4px;
+  border: 0;
+  border-left: 2px solid currentColor;
+  font-size: 0.68rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.month-event-chip__time {
+  flex-shrink: 0;
+  font-weight: 900;
+}
+
+.month-event-chip__title {
+  color: rgb(31, 41, 55);
+  font-weight: 700;
+}
+
+.month-cell__more {
+  padding-left: 0.15rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: rgb(100, 116, 139);
+}
+
+.week-shell {
+  height: 100%;
+  overflow: auto;
+}
+
+.week-header-grid,
+.week-all-day-grid,
+.week-time-grid {
+  display: grid;
+  grid-template-columns: 68px repeat(7, minmax(0, 1fr));
+}
+
+.week-header-grid {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.week-header-grid__time {
+  border-right: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.week-day-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.18rem;
+  border-right: 1px solid rgba(226, 232, 240, 0.88);
+  padding: 0.8rem 0 0.75rem;
+  transition: background 0.16s ease;
+}
+
+.week-day-button:last-child {
+  border-right: 0;
+}
+
+.week-day-button:hover {
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.week-day-button__label {
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.week-day-button__date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  min-width: 2rem;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 900;
+  color: rgb(51, 65, 85);
+}
+
+.week-day-button__date--today {
+  background: rgb(20, 184, 166);
+  color: white;
+}
+
+.week-day-button__date--selected {
+  border: 1px solid rgba(15, 118, 110, 0.3);
+  color: rgb(15, 118, 110);
+}
+
+.week-all-day-grid {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.week-all-day-grid__label {
+  border-right: 1px solid rgba(226, 232, 240, 0.88);
+  padding-top: 0.65rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.week-all-day-grid__column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-right: 1px solid rgba(226, 232, 240, 0.88);
+  padding: 0.35rem;
+}
+
+.week-all-day-grid__column:last-child {
+  border-right: 0;
+}
+
+.week-all-day-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  border-radius: 8px;
+  border-left-width: 3px;
+  padding: 0.4rem 0.45rem;
+  text-align: left;
+  font-size: 0.66rem;
+}
+
+.week-time-grid__times {
+  background: rgba(248, 250, 252, 0.52);
+  border-right: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.week-time-grid__time-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  height: 56px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+  padding-top: 0.4rem;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: rgb(100, 116, 139);
+}
+
+.week-time-grid__columns {
+  display: grid;
+  grid-column: span 7 / span 7;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.week-time-grid__day {
+  position: relative;
+  border-right: 1px solid rgba(226, 232, 240, 0.84);
+}
+
+.week-time-grid__day:last-child {
+  border-right: 0;
+}
+
+.week-time-grid__slot {
+  height: 56px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+}
+
+.week-event {
+  position: absolute;
+  left: 0.18rem;
+  right: 0.18rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  overflow: hidden;
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 0.35rem 0.42rem;
+  text-align: left;
+}
+
+.day-agenda {
+  height: 100%;
+  overflow: auto;
+  padding: 1rem 1.1rem 1.25rem;
+}
+
+.agenda-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.agenda-row {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  min-height: 74px;
+  padding: 0.75rem 0.35rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.72);
+  text-align: left;
+  transition: background 0.16s ease;
+}
+
+.agenda-row:hover {
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.agenda-row__time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-right: 0.5rem;
+  border-right: 1px solid rgba(226, 232, 240, 0.74);
+}
+
+.agenda-row__time-main {
+  font-size: 0.92rem;
+  font-weight: 900;
+  color: rgb(15, 23, 42);
+}
+
+.agenda-row__time-sub {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(100, 116, 139);
+}
+
+.agenda-row__body {
+  min-width: 0;
+}
+
+.agenda-row__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.agenda-type-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  padding: 0.34rem 0.65rem;
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.agenda-empty-state {
+  display: flex;
+  min-height: 240px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(203, 213, 225, 0.96);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.55);
+}
+
+.agenda-empty-state__icon {
+  display: inline-flex;
+  height: 3.1rem;
+  width: 3.1rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: rgba(241, 245, 249, 0.95);
+  color: rgb(148, 163, 184);
+  margin-bottom: 0.85rem;
+}
+
+.schedule-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-card {
+  padding: 1.2rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+}
+
+.sidebar-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.95rem;
+}
+
+.sidebar-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  min-width: 2rem;
+  border-radius: 9999px;
+  background: rgba(223, 247, 241, 0.95);
+  color: rgb(15, 118, 110);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.sidebar-list {
+  display: flex;
+  max-height: 360px;
+  flex-direction: column;
+  gap: 0.65rem;
+  overflow: auto;
+}
+
+.sidebar-event {
+  border: 0;
+  border-radius: 8px;
+  background: rgb(249, 250, 251);
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+  transition: all 0.16s ease;
+}
+
+.sidebar-event:hover {
+  background: rgb(243, 244, 246);
+}
+
+.sidebar-event__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.sidebar-empty {
+  display: flex;
+  min-height: 140px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(203, 213, 225, 0.9);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: rgb(100, 116, 139);
+}
+
+.sidebar-card-sync {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.sync-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.google-calendar-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex-shrink: 0;
+}
+
+.google-calendar-mark svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sync-description {
+  margin-top: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  padding: 0.34rem 0.65rem;
+  font-size: 0.66rem;
+  font-weight: 900;
+}
+
+.sync-status--connected {
+  background: rgba(220, 252, 231, 0.95);
+  color: rgb(22, 101, 52);
+}
+
+.sync-status--idle {
+  background: rgba(241, 245, 249, 0.95);
+  color: rgb(100, 116, 139);
+}
+
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background: #94a3b8; }
 </style>
 
 
