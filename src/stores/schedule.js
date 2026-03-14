@@ -63,6 +63,7 @@ export const useScheduleStore = defineStore('schedule_v2', () => {
       endTime: item.endTime,
       type: item.type,
       description: item.description || '',
+      location: item.location || '',
       roomId: item.roomId,
       interviewScheduleId: item.interviewScheduleId ?? null,
       isAllDay,
