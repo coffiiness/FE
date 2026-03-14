@@ -164,6 +164,11 @@ const formatScheduleSummary = (schedule) => {
   return schedule?.description || '세부 정보 없음'
 }
 
+const getScheduleLocationLabel = (schedule) => {
+  const location = String(schedule?.location || '').trim()
+  return location || '지정된 장소 없음'
+}
+
 const normalizeWeeklySchedule = (item) => {
   const start = item?.startAt ? new Date(item.startAt) : null
   if (!(start instanceof Date) || Number.isNaN(start.getTime())) return null
@@ -571,22 +576,12 @@ onMounted(async () => {
     <header class="grid grid-cols-1 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)] gap-3">
       <section class="hero-panel h-full min-h-[120px] rounded-2xl border px-4 py-3.5">
         <div class="flex items-center justify-between gap-4">
-          <div class="flex-1 space-y-2 pr-3">
+          <div class="flex-1 space-y-3 pr-3">
             <div class="flex flex-wrap items-center gap-3">
               <h1 class="text-[1.4rem] leading-tight font-display font-black text-slate-950">
                 안녕하세요, {{ userName }}님
               </h1>
               <span class="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-extrabold tracking-[0.04em] text-teal-700">{{ userRole }}</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-2.5 text-xs text-slate-500">
-              <span class="hero-status-chip">
-                <span class="h-2.5 w-2.5 rounded-full bg-teal-500"></span>
-                실시간 상태 반영
-              </span>
-              <span class="inline-flex items-center gap-2 font-medium text-slate-500/90">
-                <svg class="h-4 w-4 text-teal-700/70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                마지막 업데이트 기준으로 새로 고침됩니다
-              </span>
             </div>
             <p class="hero-next-line truncate">
               <span class="font-extrabold text-teal-700">다음 일정</span>
@@ -602,6 +597,9 @@ onMounted(async () => {
                 <span class="text-slate-300">·</span>
                 <span>예정된 일정이 없습니다.</span>
               </template>
+            </p>
+            <p v-if="nextUpcomingSchedule" class="hero-next-location truncate">
+              장소 · {{ getScheduleLocationLabel(nextUpcomingSchedule) }}
             </p>
           </div>
           <div class="hidden xl:flex min-w-[98px] items-center justify-end self-stretch">
@@ -906,17 +904,6 @@ onMounted(async () => {
     radial-gradient(circle at top right, rgba(20, 184, 166, 0.12), transparent 36%);
 }
 
-.hero-status-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid #dbe4e6;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.8);
-  padding: 0.3rem 0.6rem;
-  font-weight: 700;
-}
-
 .hero-date-badge {
   display: inline-flex;
   align-items: center;
@@ -933,8 +920,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  font-size: 0.8rem;
-  line-height: 1.25rem;
+  font-size: 0.92rem;
+  line-height: 1.4rem;
+  color: #475569;
+}
+
+.hero-next-location {
+  padding-left: 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.2rem;
   color: #64748b;
 }
 
