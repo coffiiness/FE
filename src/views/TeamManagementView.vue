@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { memberApi } from '@/api/member'
 import { groupApi } from '@/api/group'
@@ -8,6 +9,7 @@ import { useModal } from '@/composables/useModal'
 import { formatDate, getInitials, getApiError } from '@/utils/format'
 
 // ── 공통 모달 ─────────────────────────────────────────────────────────────────
+const router = useRouter()
 const { modal, openModal, onModalConfirm, onModalCancel } = useModal()
 
 // ── 상태 관리 ─────────────────────────────────────────────────────────────────
@@ -18,6 +20,13 @@ const isCreatingGroup = ref(false)
 
 const searchQuery = ref('')
 const activeFilterGroup = ref('All')
+
+// 현재 사용자 HR 여부
+const isHr = ref(false)
+
+// 페이지네이션
+const currentPage = ref(1)
+const itemsPerPage = 10
 
 // 초대 모달 상태
 const inviteEmailInput = ref('')
@@ -38,12 +47,19 @@ const members = ref([])
 const groups = ref([])  // { id, name, color, memberCount }
 
 // ── 계산된 값 ─────────────────────────────────────────────────────────────────
-const filteredMembers = computed(() => {
+const allFilteredMembers = computed(() => {
   return members.value.filter(member => {
     const matchesGroup = activeFilterGroup.value === 'All' || member.group === activeFilterGroup.value
     const matchesSearch = member.name.includes(searchQuery.value)
     return matchesGroup && matchesSearch
   })
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(allFilteredMembers.value.length / itemsPerPage)))
+
+const filteredMembers = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage
+  return allFilteredMembers.value.slice(start, start + itemsPerPage)
 })
 
 // ── 헬퍼 ──────────────────────────────────────────────────────────────────────
@@ -96,9 +112,19 @@ const loadGroups = async () => {
   }
 }
 
+const loadMyMember = async () => {
+  try {
+    const res = await memberApi.getMyMember()
+    isHr.value = res.data.data.memberType === 'HR'
+  } catch {
+    isHr.value = false
+  }
+}
+
 onMounted(() => {
   loadMembers()
   loadGroups()
+  loadMyMember()
 })
 
 const handleMemberTypeChange = async (member, newType) => {
@@ -106,6 +132,7 @@ const handleMemberTypeChange = async (member, newType) => {
   member.memberType = newType
   try {
     await memberApi.updateMember(member.id, newType)
+    await loadMembers()
   } catch (e) {
     member.memberType = prevType
     openModal({
@@ -126,6 +153,8 @@ const handleGroupChange = async (member, groupIdStr) => {
     } else {
       await memberApi.leaveGroup(member.id)
     }
+    await loadMembers()
+    await loadGroups()
   } catch (e) {
     member.group = prevGroup
     openModal({
@@ -151,6 +180,36 @@ const removeMember = (id) => {
         openModal({
           title: '오류',
           message: getApiError(e, '멤버 삭제에 실패했습니다.'),
+          type: 'warning',
+        })
+      }
+    },
+  })
+}
+
+const leaveWorkspace = () => {
+  openModal({
+    title: '워크스페이스 탈퇴',
+    message: '정말로 이 워크스페이스에서 탈퇴하시겠습니까?\n탈퇴 후에는 다시 초대를 받아야 참여할 수 있습니다.',
+    type: 'danger',
+    showCancel: true,
+    confirmText: '탈퇴하기',
+    onConfirm: async () => {
+      try {
+        await memberApi.leaveWorkspace()
+        localStorage.removeItem('workspaceId')
+        openModal({
+          title: '탈퇴 완료',
+          message: '워크스페이스에서 탈퇴했습니다.',
+          type: 'success',
+          onConfirm: () => {
+            router.push('/workspace/create')
+          },
+        })
+      } catch (e) {
+        openModal({
+          title: '탈퇴 실패',
+          message: getApiError(e, '워크스페이스 탈퇴에 실패했습니다.'),
           type: 'warning',
         })
       }
@@ -210,6 +269,8 @@ const confirmInvitations = async () => {
 
   isInviting.value = false
   closeInviteModal()
+
+  await loadMembers()
 
   if (errors.length > 0) {
     openModal({ title: '일부 실패', message: errors.join('\n'), type: 'warning' })
@@ -274,8 +335,9 @@ const deleteGroup = (group) => {
 
 <template>
   <div class="min-h-screen bg-slate-50 px-8 pt-2 pb-8 font-sans text-slate-700">
-    <header class="flex justify-end items-end mb-8">
-      <div class="flex gap-3">
+    <header class="flex justify-between items-end mb-8">
+      <button @click="leaveWorkspace" class="px-5 py-3 bg-white hover:bg-rose-50 text-rose-500 border border-rose-200 rounded-xl transition-all shadow-sm font-medium text-sm">워크스페이스 탈퇴</button>
+      <div v-if="isHr" class="flex gap-3">
         <button @click="openGroupModal" class="px-5 py-3 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl transition-all shadow-sm font-medium">+ 그룹 추가</button>
         <button @click="openInviteModal" class="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow-lg shadow-teal-600/20 transition-all">멤버 초대</button>
       </div>
@@ -289,7 +351,7 @@ const deleteGroup = (group) => {
             <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest">그룹 필터</h3>
             <button @click="activeFilterGroup = 'All'" class="text-xs text-teal-600 font-bold hover:underline">초기화</button>
           </div>
-          <div class="space-y-1">
+          <div class="space-y-1 max-h-[400px] overflow-y-auto">
             <div @click="activeFilterGroup = 'All'" :class="['flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-all', activeFilterGroup === 'All' ? 'bg-teal-50 text-teal-700 font-bold' : 'hover:bg-slate-50']">
               <div class="w-2 h-2 rounded-full bg-slate-400"></div>
               <span class="text-sm">전체 보기</span>
@@ -306,6 +368,7 @@ const deleteGroup = (group) => {
                 <span class="text-[10px] text-slate-400 flex-shrink-0">{{ group.memberCount }}</span>
               </div>
               <button
+                v-if="isHr"
                 @click.stop="deleteGroup(group)"
                 class="text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover/item:opacity-100 flex-shrink-0 ml-1"
               >
@@ -370,10 +433,12 @@ const deleteGroup = (group) => {
                   <select
                     :value="getCurrentGroupId(member)"
                     @change="handleGroupChange(member, $event.target.value)"
-                    class="appearance-none pl-3 pr-7 py-1.5 text-xs font-semibold rounded-lg outline-none cursor-pointer transition-all border"
-                    :class="member.group
-                      ? 'bg-white hover:shadow-sm'
-                      : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-teal-400 hover:text-teal-600'"
+                    :disabled="!isHr"
+                    class="appearance-none pl-3 pr-7 py-1.5 text-xs font-semibold rounded-lg outline-none transition-all border"
+                    :class="[
+                      member.group ? 'bg-white hover:shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-teal-400 hover:text-teal-600',
+                      isHr ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+                    ]"
                     :style="member.group ? { ...getGroupStyle(member.group), borderRadius: '0.5rem' } : {}"
                   >
                     <option value="">그룹 없음</option>
@@ -391,7 +456,9 @@ const deleteGroup = (group) => {
                   <select
                     :value="member.memberType"
                     @change="handleMemberTypeChange(member, $event.target.value)"
-                    class="appearance-none pl-3 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 outline-none cursor-pointer hover:border-teal-400 hover:text-teal-600 transition-all"
+                    :disabled="!isHr"
+                    class="appearance-none pl-3 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-500 outline-none transition-all"
+                    :class="isHr ? 'cursor-pointer hover:border-teal-400 hover:text-teal-600' : 'cursor-not-allowed opacity-60'"
                   >
                     <option v-for="mt in memberTypes" :key="mt" :value="mt">{{ memberTypeLabels[mt] }}</option>
                   </select>
@@ -404,13 +471,34 @@ const deleteGroup = (group) => {
               </div>
             </td>
             <td class="px-6 py-5 text-right">
-              <button @click="removeMember(member.id)" class="text-slate-300 hover:text-rose-500 transition-colors">
+              <button v-if="isHr" @click="removeMember(member.id)" class="text-slate-300 hover:text-rose-500 transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
               </button>
             </td>
           </tr>
           </tbody>
         </table>
+
+        <!-- 페이지네이션 -->
+        <div v-if="totalPages > 1" class="px-6 py-4 flex items-center justify-between border-t border-slate-100">
+          <p class="text-sm text-slate-400">{{ allFilteredMembers.length }}명 중 {{ (currentPage - 1) * itemsPerPage + 1 }}–{{ Math.min(currentPage * itemsPerPage, allFilteredMembers.length) }}명</p>
+          <div class="flex items-center gap-2">
+            <button
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              :class="currentPage > 1 ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'"
+              :disabled="currentPage <= 1"
+              @click="currentPage--"
+            >← 이전</button>
+            <span class="w-9 h-9 rounded-lg text-sm font-medium bg-slate-900 text-white flex items-center justify-center">{{ currentPage }}</span>
+            <span class="text-sm text-slate-400">/ {{ totalPages }}</span>
+            <button
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              :class="currentPage < totalPages ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 cursor-not-allowed'"
+              :disabled="currentPage >= totalPages"
+              @click="currentPage++"
+            >다음 →</button>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -468,7 +468,10 @@ const doDowngrade = async () => {
               <h3 class="text-lg font-bold text-gray-900">엔터프라이즈</h3>
               <p class="text-2xl font-bold text-gray-900 mb-0">
                 ₩19,900
-                <span class="text-sm font-normal text-gray-500">월</span>
+                <span class="text-sm font-normal text-gray-500">/ 인당 월</span>
+              </p>
+              <p v-if="subscription && subscription.monthlyAmount > 0" class="text-xs text-brand-600 mb-1">
+                현재 총 결제 예정액: {{ formatAmount(subscription.monthlyAmount) }}
               </p>
               <p class="text-xs text-brand-600 mb-4">모든 기능 무제한</p>
               <ul class="space-y-2 mb-6">
@@ -491,7 +494,7 @@ const doDowngrade = async () => {
           </div>
 
           <div class="px-8 pb-8">
-            <p class="text-xs text-gray-400">※ Enterprise 업그레이드 시 즉시 ₩19,900이 결제됩니다. 이후 매월 1일에 자동 결제됩니다.</p>
+            <p class="text-xs text-gray-400">※ Enterprise 업그레이드 시 현재 멤버 수 기준으로 인당 ₩19,900이 결제됩니다. 이후 매월 1일에 자동 결제됩니다.</p>
           </div>
         </div>
       </div>

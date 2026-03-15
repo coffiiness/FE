@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { adminApi } from '@/api/admin'
 
 const periodTab = ref('monthly')
@@ -30,12 +30,12 @@ const fetchAll = async () => {
   try {
     const [summaryRes, trendRes, planRes] = await Promise.all([
       adminApi.getDashboardSummary(),
-      adminApi.getRevenueCostTrend(),
+      adminApi.getRevenueCostTrend(periodTab.value),
       adminApi.getPlanDistribution()
     ])
     summary.value = summaryRes.data.data
     trendData.value = (trendRes.data.data.trend || []).map(d => ({
-      month: `${d.month}월`,
+      month: periodTab.value === 'quarterly' ? `${d.year} Q${d.month}` : `${d.month}월`,
       revenue: d.revenue,
       cost: d.cost
     }))
@@ -50,6 +50,7 @@ const fetchAll = async () => {
 }
 
 onMounted(fetchAll)
+watch(periodTab, fetchAll)
 
 const maxValue = computed(() =>
   Math.max(1, ...trendData.value.map(d => Math.max(d.revenue, d.cost)))
@@ -146,7 +147,7 @@ const growthIcon = (v) => v >= 0
       <!-- Revenue / Cost Trend -->
       <div class="xl:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-bold text-gray-800">매출 · 비용 추이 (최근 8개월)</h3>
+          <h3 class="text-lg font-bold text-gray-800">매출 · 비용 추이</h3>
           <div class="flex rounded-lg overflow-hidden border border-gray-200">
             <button
               class="px-4 py-1.5 text-sm font-medium transition-colors"
@@ -229,9 +230,5 @@ const growthIcon = (v) => v >= 0
       </div>
     </div>
 
-    <!-- Recent Changes — 구독 목록에서 최근 변동 확인 가능 -->
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center text-sm text-gray-400">
-      최근 구독 변동 내역은 <strong class="text-gray-600">구독 관리</strong> 메뉴에서 확인하세요.
-    </div>
   </div>
 </template>

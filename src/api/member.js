@@ -19,4 +19,7 @@ export const memberApi = {
   leaveGroup(memberId) {
     return api.delete(`/members/${memberId}/group`)
   },
+  leaveWorkspace() {
+    return api.post('/workspaces/leave')
+  },
 }
