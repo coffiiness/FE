@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
@@ -21,9 +21,19 @@ const { organizations, allMembers } = storeToRefs(organizationStore)
 
 const weeklyInterviewSchedules = ref([])
 const memberType = ref('')
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
+
+const handleViewportResize = () => {
+  if (typeof window !== 'undefined') {
+    viewportWidth.value = window.innerWidth
+  }
+}
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
+  handleViewportResize()
+  window.addEventListener('resize', handleViewportResize)
+
   const [recruitmentsResult, weeklySchedulesResult, organizationsResult, memberResult] = await Promise.allSettled([
     store.fetchRecruitments(),
     fetchWeeklyInterviewSchedules(),
@@ -47,6 +57,12 @@ onMounted(async () => {
     memberType.value = memberResult.value?.data?.data?.memberType || ''
   } else {
     console.error('멤버 정보 조회 실패:', memberResult.reason)
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', handleViewportResize)
   }
 })
 
@@ -320,7 +336,7 @@ const fetchWeeklyInterviewSchedules = async () => {
 
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
-const expandedRecruitmentIds = ref(new Set())
+const expandedRecruitmentId = ref(null)
 const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
@@ -463,18 +479,10 @@ const goToDetail = (id) => {
   router.push(`/recruitment/jobs/${id}`)
 }
 
-const isRecruitmentExpanded = (recruitmentId) => expandedRecruitmentIds.value.has(recruitmentId)
+const isRecruitmentExpanded = (recruitmentId) => expandedRecruitmentId.value === recruitmentId
 
 const toggleRecruitmentExpanded = (recruitmentId) => {
-  const nextExpandedIds = new Set(expandedRecruitmentIds.value)
-
-  if (nextExpandedIds.has(recruitmentId)) {
-    nextExpandedIds.delete(recruitmentId)
-  } else {
-    nextExpandedIds.add(recruitmentId)
-  }
-
-  expandedRecruitmentIds.value = nextExpandedIds
+  expandedRecruitmentId.value = expandedRecruitmentId.value === recruitmentId ? null : recruitmentId
 }
 
 // 1. 삭제 버튼 클릭 시 모달 열기
@@ -640,6 +648,22 @@ const filteredJobs = computed(() => {
   }
 
   return result
+})
+
+const recruitmentColumnCount = computed(() => {
+  if (viewportWidth.value >= 1280) return 3
+  if (viewportWidth.value >= 768) return 2
+  return 1
+})
+
+const recruitmentColumns = computed(() => {
+  const columns = Array.from({ length: recruitmentColumnCount.value }, () => [])
+
+  filteredJobs.value.forEach((job, index) => {
+    columns[index % recruitmentColumnCount.value].push(job)
+  })
+
+  return columns
 })
 
 const memberRoleLabel = computed(() => (canManageRecruitment.value ? '인사담당자' : '공고 참여자'))
@@ -1139,12 +1163,17 @@ const saveInterviewers = async () => {
       </div>
 
       <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <article
-          v-for="job in filteredJobs"
-          :key="job.id"
-          class="group relative rounded-[26px] border border-slate-200 bg-white p-5 transition-colors duration-200 hover:border-brand-300"
-          :class="{ 'z-20 border-brand-300 ring-1 ring-brand-100': activeMenuId === job.id }"
+        <div
+          v-for="(columnJobs, columnIndex) in recruitmentColumns"
+          :key="`recruitment-column-${columnIndex}`"
+          class="space-y-5"
         >
+          <article
+            v-for="job in columnJobs"
+            :key="job.id"
+            class="group relative rounded-[26px] border border-slate-200 bg-white p-5 transition-colors duration-200 hover:border-brand-300"
+            :class="{ 'z-20 border-brand-300 ring-1 ring-brand-100': activeMenuId === job.id }"
+          >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex-1 cursor-pointer" @click="goToDetail(job.id)">
               <div class="flex flex-wrap items-center gap-2">
@@ -1261,7 +1290,6 @@ const saveInterviewers = async () => {
               </button>
             </div>
           </div>
-
           <div v-if="isRecruitmentExpanded(job.id)" class="mt-4 space-y-3 border-t border-slate-100 pt-4">
             <div class="grid gap-3 sm:grid-cols-2">
               <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
@@ -1335,7 +1363,8 @@ const saveInterviewers = async () => {
               </button>
             </div>
           </div>
-        </article>
+          </article>
+        </div>
       </div>
     </div>
   </div>
