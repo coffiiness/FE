@@ -1440,7 +1440,8 @@ const normalizeSchedule = (item) => {
     interviewerName,
     applicantName,
     title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
-    description: item?.memo || item?.note || '',
+    description: item?.description || item?.memo || item?.note || '',
+    location: item?.location || '',
     attendees,
     showSelf
   }
@@ -1481,22 +1482,45 @@ const loadInterviewSchedules = async () => {
     const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
       : []
+    const currentRecruitmentInterviewIds = new Set(
+      normalizedInterviewSchedules
+        .map((schedule) => Number(schedule.id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    )
+    apiSchedules.value = normalizedInterviewSchedules
+
     const selectedIds = selectedInterviewerIds.value
+    if (selectedIds.length === 0) {
+      return
+    }
 
-    const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
-    const availability = await loadBusySchedulesByMonth(
-      startDate,
-      endDate,
-      selectedIds
-    )
-    const busySchedules = availability.flatMap((attendee) =>
-      (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
-        .filter((schedule) => !(schedule.interviewScheduleId && schedule.type === 'INTERVIEW'))
-        .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
-        .filter(Boolean)
-    )
+    try {
+      const { startDate, endDate } = toMonthRange(calendarState.currentMonth)
+      const availability = await loadBusySchedulesByMonth(
+        startDate,
+        endDate,
+        selectedIds
+      )
+      const busySchedules = availability.flatMap((attendee) =>
+        (Array.isArray(attendee.busySchedules) ? attendee.busySchedules : [])
+          .filter((schedule) => {
+            const interviewScheduleId = Number(schedule.interviewScheduleId)
+            const isCurrentRecruitmentInterview =
+              Number.isFinite(interviewScheduleId) &&
+              interviewScheduleId > 0 &&
+              currentRecruitmentInterviewIds.has(interviewScheduleId)
 
-    apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
+            return !isCurrentRecruitmentInterview
+          })
+          .map((schedule) => normalizeBusyScheduleEntry(attendee, schedule))
+          .filter(Boolean)
+      )
+
+      apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
+    } catch (availabilityError) {
+      // 면접관 개인 일정 조회에 실패해도 공고 면접 일정은 그대로 보여준다.
+      console.error('면접관 일정 조회 실패:', availabilityError)
+    }
   } catch (error) {
     console.error('면접 일정 조회 실패:', error)
     apiSchedules.value = []

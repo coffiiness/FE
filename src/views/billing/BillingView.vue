@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { loadTossPayments } from '@tosspayments/tosspayments-sdk'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import { memberApi } from '@/api/member'
 import {
   getTossConfig,
   registerBillingKey,
@@ -25,6 +26,7 @@ const closeModal = () => { modal.value.show = false }
 
 const loading = ref(false)
 const showSubscriptionModal = ref(false)
+const memberType = ref('')
 
 const plans = [
   {
@@ -119,6 +121,19 @@ const fetchData = async () => {
   }
 }
 
+const ensureHrBillingAccess = (message = '요금제 관리는 인사담당자만 가능합니다.') => {
+  if (memberType.value === 'HR') {
+    return true
+  }
+
+  openModal({
+    title: '권한 없음',
+    message,
+    type: 'warning'
+  })
+  return false
+}
+
 const handleTossCallback = async () => {
   const authKey = Array.isArray(route.query.authKey) ? route.query.authKey[0] : route.query.authKey
   const customerKey = Array.isArray(route.query.customerKey) ? route.query.customerKey[0] : route.query.customerKey
@@ -161,11 +176,20 @@ const handleTossCallback = async () => {
 }
 
 onMounted(async () => {
+  try {
+    const response = await memberApi.getMyMember()
+    memberType.value = response?.data?.data?.memberType || ''
+  } catch (error) {
+    console.error('멤버 정보 조회 실패:', error)
+  }
   await fetchData()
   await handleTossCallback()
 })
 
 const openTossBillingAuth = async () => {
+  if (!ensureHrBillingAccess('카드 등록 및 변경은 인사담당자만 가능합니다.')) {
+    return
+  }
   try {
     loading.value = true
     const res = await getTossConfig()
@@ -188,6 +212,9 @@ const openTossBillingAuth = async () => {
 }
 
 const handlePlanChange = async (planId) => {
+  if (!ensureHrBillingAccess('요금제 변경은 인사담당자만 가능합니다.')) {
+    return
+  }
   if (planId === currentPlanId.value) return
   showSubscriptionModal.value = false
 
@@ -302,7 +329,7 @@ const doDowngrade = async () => {
           </div>
           <button
             class="px-4 py-2 text-sm font-medium text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors shrink-0"
-            @click="showSubscriptionModal = true"
+            @click="ensureHrBillingAccess('요금제 변경은 인사담당자만 가능합니다.') && (showSubscriptionModal = true)"
           >
             구독 변경
           </button>
@@ -441,7 +468,10 @@ const doDowngrade = async () => {
               <h3 class="text-lg font-bold text-gray-900">엔터프라이즈</h3>
               <p class="text-2xl font-bold text-gray-900 mb-0">
                 ₩19,900
-                <span class="text-sm font-normal text-gray-500">월</span>
+                <span class="text-sm font-normal text-gray-500">/ 인당 월</span>
+              </p>
+              <p v-if="subscription && subscription.monthlyAmount > 0" class="text-xs text-brand-600 mb-1">
+                현재 총 결제 예정액: {{ formatAmount(subscription.monthlyAmount) }}
               </p>
               <p class="text-xs text-brand-600 mb-4">모든 기능 무제한</p>
               <ul class="space-y-2 mb-6">
@@ -464,7 +494,7 @@ const doDowngrade = async () => {
           </div>
 
           <div class="px-8 pb-8">
-            <p class="text-xs text-gray-400">※ Enterprise 업그레이드 시 즉시 ₩19,900이 결제됩니다. 이후 매월 1일에 자동 결제됩니다.</p>
+            <p class="text-xs text-gray-400">※ Enterprise 업그레이드 시 현재 멤버 수 기준으로 인당 ₩19,900이 결제됩니다. 이후 매월 1일에 자동 결제됩니다.</p>
           </div>
         </div>
       </div>

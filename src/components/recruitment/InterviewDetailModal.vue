@@ -83,7 +83,7 @@ const attendees = computed(() => props.event.attendees || [])
             </div>
             <div>
               <p class="text-sm font-bold text-slate-800 mb-0.5">장소 및 메모</p>
-              <p class="text-sm text-slate-500">{{ location }}</p>
+              <p class="text-sm font-bold text-brand-600 mt-0.5">{{ location }}</p>
             </div>
           </div>
 

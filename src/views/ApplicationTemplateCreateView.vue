@@ -1,12 +1,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { TEMPLATE_STATUS, normalizeTemplateStatus } from '@/utils/templateStatus'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
 
 const router = useRouter()
 const route = useRoute()
 const recruitmentStore = useRecruitmentStore()
+const {
+  modal,
+  loadMemberType,
+  ensureHrAccess,
+  onModalConfirm,
+  onModalCancel
+} = useHrAccessGuard()
 
 const templateId = computed(() => route.params.id)
 const isEditMode = computed(() => !!templateId.value)
@@ -115,6 +124,7 @@ const createFieldByType = (type, label) => {
 
 onMounted(async () => {
   try {
+    await loadMemberType()
     await recruitmentStore.fetchApplicationTemplates()
   } catch (error) {
     console.error('템플릿 목록을 불러오지 못했습니다.', error)
@@ -171,6 +181,11 @@ const handleCancel = () => {
 }
 
 const handleSave = async () => {
+  const actionLabel = isEditMode.value ? '지원서 템플릿 수정' : '지원서 템플릿 생성'
+  if (!(await ensureHrAccess(`${actionLabel}은 인사담당자만 가능합니다.`))) {
+    return
+  }
+
   const payload = {
     title: templateTitle.value,
     status: templateStatus.value,
@@ -422,4 +437,16 @@ const saveButtonText = computed(() => (isEditMode.value ? '수정' : '적용'))
       </div>
     </template>
   </div>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    :cancel-text="modal.cancelText"
+    @confirm="onModalConfirm"
+    @cancel="onModalCancel"
+  />
 </template>

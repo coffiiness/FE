@@ -2,19 +2,26 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
+import NotificationToast from '@/components/NotificationToast.vue'
 import { useNotificationStore } from '@/stores/notification'
 import { storeToRefs } from 'pinia'
 import { useAuth } from '@/composables/useAuth'
-import { memberApi } from '@/api/member'
+import { useHrAccessGuard } from '@/composables/useHrAccessGuard'
+import { workspaceApi } from '@/api/workspace'
 
 const route = useRoute()
 const router = useRouter()
 const sidebarOpen = ref(true)
-const openMenus = ref(['채용 관리', '회의실 관리'])
+const openMenus = ref(['채용 관리', '회의실'])
+const sidebarQuery = ref('')
 
 const { user, logout } = useAuth()
-const memberType = ref('')
+const {
+  memberType,
+  loadMemberType
+} = useHrAccessGuard()
 
+const workspaceName = ref(user.value?.workspace?.name || '')
 const userName = computed(() => user.value?.name || '사용자')
 const userInitial = computed(() => userName.value.charAt(0))
 const userRoleLabel = computed(() => {
@@ -22,13 +29,22 @@ const userRoleLabel = computed(() => {
   if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
 })
+const workspaceLabel = computed(() => workspaceName.value || '워크스페이스')
 
 onMounted(async () => {
   try {
-    const res = await memberApi.getMyMember()
-    memberType.value = res.data.data.memberType
+    await loadMemberType()
   } catch (e) {
     // 멤버 정보 조회 실패 시 기본값 유지
+  }
+
+  try {
+    const response = await workspaceApi.getMyWorkspace()
+    const currentWorkspace = response?.data?.data
+    workspaceName.value =
+      currentWorkspace?.name || workspaceName.value
+  } catch (e) {
+    // 워크스페이스 정보 조회 실패 시 기본값 유지
   }
 
   try {
@@ -40,7 +56,12 @@ onMounted(async () => {
 
 const isNotificationOpen = ref(false)
 const notificationStore = useNotificationStore()
-const { unreadCount } = storeToRefs(notificationStore)
+const { unreadCount, realtimeToast } = storeToRefs(notificationStore)
+
+const openRealtimeToastTarget = async (target) => {
+  notificationStore.dismissRealtimeToast()
+  await router.push(target)
+}
 
 const toggleNotification = async () => {
   isNotificationOpen.value = !isNotificationOpen.value
@@ -102,6 +123,78 @@ const navigation = [
   { name: '요금제', href: '/billing', icon: 'credit-card' }
 ]
 
+const availableNavigation = computed(() =>
+  navigation
+    .map((item) => {
+      if (!item.children) {
+        if (
+          memberType.value !== 'HR' &&
+          (item.href === '/reports' || item.href === '/billing')
+        ) {
+          return null
+        }
+        return item
+      }
+
+      if (item.name === '회의실') {
+        const children = item.children.filter((child) => {
+          if (memberType.value === 'HR') return true
+          return child.href !== '/meeting-rooms/manage'
+        })
+
+        return { ...item, children }
+      }
+
+      return item
+    })
+    .filter(Boolean)
+)
+
+const filteredNavigation = computed(() => {
+  const query = sidebarQuery.value.trim().toLowerCase()
+  if (!query) {
+    return availableNavigation.value
+  }
+
+  const results = []
+  let pendingSection = null
+
+  for (const item of availableNavigation.value) {
+    if (item.section) {
+      pendingSection = item
+      continue
+    }
+
+    if (!item.children) {
+      if (item.name.toLowerCase().includes(query)) {
+        if (pendingSection) {
+          results.push(pendingSection)
+          pendingSection = null
+        }
+        results.push(item)
+      }
+      continue
+    }
+
+    const matchedChildren = item.children.filter((child) =>
+      child.name.toLowerCase().includes(query)
+    )
+
+    if (item.name.toLowerCase().includes(query) || matchedChildren.length > 0) {
+      if (pendingSection) {
+        results.push(pendingSection)
+        pendingSection = null
+      }
+      results.push({
+        ...item,
+        children: matchedChildren.length > 0 ? matchedChildren : item.children
+      })
+    }
+  }
+
+  return results
+})
+
 const isActive = (item) =>
     item.children
         ? item.children.some(c => route.path.startsWith(c.href))
@@ -111,7 +204,7 @@ const isChildActive = (href) => route.path === href
 
 const currentTitle = computed(() => {
   if (route.meta?.title) return route.meta.title
-  for (const item of navigation) {
+  for (const item of availableNavigation.value) {
     if (item.children) {
       const child = item.children.find(c => route.path === c.href)
       if (child) return child.name
@@ -126,6 +219,10 @@ const currentMonth = computed(() => {
   return `${now.getFullYear()}년 ${now.getMonth() + 1}월`
 })
 
+const showGlobalMonthPill = computed(() =>
+  route.path !== '/schedule' && route.path !== '/dashboard'
+)
+
 watch(
     () => route.path,
     (path) => {
@@ -133,7 +230,7 @@ watch(
         if (!openMenus.value.includes('채용 관리')) openMenus.value.push('채용 관리')
       }
       if (path.startsWith('/meeting-rooms/')) {
-        if (!openMenus.value.includes('회의실 관리')) openMenus.value.push('회의실 관리')
+        if (!openMenus.value.includes('회의실')) openMenus.value.push('회의실')
       }
     }
 )
@@ -143,110 +240,136 @@ watch(
   <div class="flex h-screen bg-slate-50 font-sans overflow-hidden">
     <aside
         :class="[
-        'bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white transition-all duration-300 flex flex-col shadow-xl z-50',
-        sidebarOpen ? 'w-64' : 'w-20'
+        'bg-brand-900 border-r border-brand-950 text-slate-100 transition-all duration-300 flex flex-col z-50 shrink-0',
+        sidebarOpen ? 'w-72' : 'w-20'
       ]"
     >
-      <div class="flex items-center h-20 px-6 border-b border-slate-700/50 shrink-0">
-        <div class="h-9 w-9 bg-brand-500 rounded-lg flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-lg shadow-brand-500/20">
-          C
+      <div class="px-4 pt-4 pb-2 border-b border-white/10 shrink-0">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="h-10 w-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+            {{ userInitial }}
+          </div>
+          <div v-if="sidebarOpen" class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <p class="text-[15px] font-semibold text-white truncate">{{ workspaceLabel }}</p>
+              <span class="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-brand-100">
+                {{ userRoleLabel }}
+              </span>
+              <svg class="w-4 h-4 text-brand-100/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+            <p class="mt-0.5 text-[12px] text-slate-300 truncate">{{ userName }}</p>
+          </div>
         </div>
-        <div v-if="sidebarOpen" class="ml-3 transition-opacity duration-300">
-          <h1 class="text-lg font-bold tracking-tight text-white leading-tight">CalFit</h1>
-          <p class="text-[10px] text-brand-400 font-bold uppercase tracking-wider">Management</p>
+
+        <div v-if="sidebarOpen" class="mt-3 relative">
+          <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-100/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
+          </svg>
+          <input
+            v-model="sidebarQuery"
+            type="text"
+            placeholder="메뉴 찾기"
+            class="w-full rounded-xl border border-white/10 bg-white/10 py-2.5 pl-10 pr-12 text-sm text-white placeholder:text-slate-300 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-300/20"
+          />
+          <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-white/10 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-brand-100">F</span>
         </div>
       </div>
 
-      <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto custom-scrollbar">
-        <template v-for="item in navigation" :key="item.section || item.name">
-          <p
-              v-if="item.section"
-              class="px-3 pt-5 pb-2 text-[10px] font-bold tracking-widest text-slate-500 uppercase"
-              :class="{ 'hidden': !sidebarOpen }"
-          >
-            {{ item.section }}
-          </p>
+      <nav class="flex-1 px-3 pt-1 pb-3 space-y-1 overflow-y-auto custom-scrollbar">
+        <template v-for="(item, index) in filteredNavigation" :key="item.section || item.name">
+          <template v-if="item.section">
+            <div
+                v-if="index !== 0"
+                class="px-2 py-3"
+                :class="{ 'hidden': !sidebarOpen }"
+            >
+              <div class="border-t border-white/10"></div>
+            </div>
+          </template>
 
           <router-link
               v-else-if="!item.children"
               :to="item.href"
-              class="flex items-center px-3 py-2.5 rounded-lg transition-all duration-200 group relative"
-              :class="isActive(item) ? 'bg-brand-500/20 text-brand-300' : 'text-slate-300 hover:bg-slate-800 hover:text-white'"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-150 group relative border"
+              :class="isActive(item) ? 'bg-white/12 border-white/10 text-white' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'"
           >
-            <div v-if="isActive(item)" class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-brand-400 rounded-r"></div>
-
-            <svg v-if="item.icon === 'home'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            <svg v-if="item.icon === 'home'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
 
-            <svg v-else-if="item.icon === 'calendar'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <svg v-else-if="item.icon === 'calendar'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
 
-            <svg v-else-if="item.icon === 'bell'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <svg v-else-if="item.icon === 'chart-bar'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <svg v-else-if="item.icon === 'chart-bar'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <svg v-else-if="item.icon === 'user-group'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <svg v-else-if="item.icon === 'credit-card'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            <svg v-else-if="item.icon === 'bell'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
 
-            <span v-if="sidebarOpen" class="ml-3 text-sm font-medium whitespace-nowrap">{{ item.name }}</span>
+            <svg v-else-if="item.icon === 'chart-bar'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <svg v-else-if="item.icon === 'user-group'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <svg v-else-if="item.icon === 'credit-card'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+            </svg>
+
+            <span v-if="sidebarOpen" class="text-[15px] font-medium whitespace-nowrap" :class="isActive(item) ? 'text-white' : 'text-slate-300/80 group-hover:text-white'">{{ item.name }}</span>
           </router-link>
 
           <div v-else class="space-y-1">
             <button
                 @click="toggleSubMenu(item.name)"
-                class="flex items-center w-full px-3 py-2.5 rounded-lg transition-all duration-200 group text-slate-300 hover:bg-slate-800 hover:text-white"
-                :class="isActive(item) ? 'text-brand-300' : ''"
+                class="flex items-center w-full gap-3 px-3 py-2.5 rounded-xl transition-colors duration-150 group border"
+                :class="isActive(item) ? 'bg-white/12 border-white/10 text-white' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'"
             >
-              <svg v-if="item.icon === 'users'" class="w-5 h-5 shrink-0" :class="openMenus.includes(item.name) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              <svg v-if="item.icon === 'users'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
-              <svg v-else-if="item.icon === 'office'" class="w-5 h-5 shrink-0" :class="openMenus.includes(item.name) ? 'text-brand-400' : 'text-slate-400 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              <svg v-else-if="item.icon === 'office'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
 
-              <span v-if="sidebarOpen" class="ml-3 text-sm font-medium whitespace-nowrap flex-1 text-left">{{ item.name }}</span>
-              <svg v-if="sidebarOpen" class="w-4 h-4 transition-transform duration-200" :class="openMenus.includes(item.name) ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              <span v-if="sidebarOpen" class="text-[15px] font-medium whitespace-nowrap flex-1 text-left" :class="isActive(item) ? 'text-white' : 'text-slate-300/80 group-hover:text-white'">{{ item.name }}</span>
+              <svg
+                v-if="sidebarOpen"
+                class="w-4 h-4 transition-transform duration-200"
+                :class="[
+                  isActive(item) ? 'text-brand-100' : 'text-white/50',
+                  (openMenus.includes(item.name) || sidebarQuery.trim()) ? 'rotate-180' : ''
+                ]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 9l-7 7-7-7" />
               </svg>
             </button>
 
-            <div v-if="sidebarOpen && openMenus.includes(item.name)" class="pl-10 space-y-1">
+            <div v-if="sidebarOpen && (openMenus.includes(item.name) || sidebarQuery.trim())" class="pl-11 space-y-1">
               <router-link
                   v-for="child in item.children"
                   :key="child.href"
                   :to="child.href"
-                  class="block px-3 py-2 rounded-lg text-sm transition-all duration-200"
-                  :class="isChildActive(child.href) ? 'text-brand-300 bg-slate-800/60' : 'text-slate-400 hover:text-white hover:bg-slate-800/30'"
+                  class="block px-3 py-2 rounded-lg text-[13px] transition-colors duration-150 border"
+                  :class="isChildActive(child.href) ? 'text-white bg-white/12 border-white/10 font-semibold' : 'text-slate-400/90 border-transparent hover:text-white hover:bg-white/8 hover:border-white/10'"
               >
                 {{ child.name }}
               </router-link>
             </div>
           </div>
         </template>
-      </nav>
 
-      <div class="border-t border-slate-700/50 p-4 bg-slate-900/50">
-        <div class="flex items-center">
-          <div class="h-9 w-9 bg-brand-600 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ring-2 ring-slate-800">
-            {{ userInitial }}
-          </div>
-          <div v-if="sidebarOpen" class="ml-3 transition-opacity duration-300">
-            <p class="text-sm font-medium text-white">{{ userName }}</p>
-            <p class="text-[11px] text-slate-400 font-medium">{{ userRoleLabel }}</p>
-          </div>
+        <div
+          v-if="sidebarOpen && filteredNavigation.filter((item) => !item.section).length === 0"
+          class="px-3 py-10 text-center text-sm text-slate-300"
+        >
+          일치하는 메뉴가 없습니다.
         </div>
-      </div>
+      </nav>
     </aside>
 
     <main class="flex-1 flex flex-col min-w-0 bg-slate-50 overflow-hidden">
@@ -271,7 +394,10 @@ watch(
         </div>
 
         <div class="flex items-center space-x-3">
-          <div class="hidden sm:flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600">
+          <div
+            v-if="showGlobalMonthPill"
+            class="hidden sm:flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-bold text-slate-600"
+          >
             <svg class="w-4 h-4 mr-1.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
@@ -315,6 +441,17 @@ watch(
           <router-view />
         </div>
       </div>
+
+      <div
+        v-if="realtimeToast && route.path !== '/notifications'"
+        class="pointer-events-none fixed right-8 top-20 z-[70]"
+      >
+        <NotificationToast
+          :item="realtimeToast"
+          @close="notificationStore.dismissRealtimeToast()"
+          @open="openRealtimeToastTarget"
+        />
+      </div>
     </main>
   </div>
 </template>
@@ -329,10 +466,5 @@ watch(
 .custom-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
-}
-
-/* Sidebar item active effect */
-.router-link-active {
-  color: #5eead4 !important; /* brand-300 */
 }
 </style>

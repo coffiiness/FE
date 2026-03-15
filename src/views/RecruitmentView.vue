@@ -156,6 +156,19 @@ const isPipelineStage = (stage) => {
   return stageName !== '불합격' && stageName !== '탈락'
 }
 
+// 목록 단계 바에서 최종 합격 단계를 항상 마지막에 보이도록 정규화한다.
+const normalizePipelineStages = (stages) => {
+  const visibleStages = (Array.isArray(stages) ? stages : []).filter(isPipelineStage)
+  const passStage = visibleStages.find((stage) => String(stage?.stageName || stage?.step || '').trim() === '최종 합격')
+  const nonPassStages = visibleStages.filter((stage) => String(stage?.stageName || stage?.step || '').trim() !== '최종 합격')
+
+  if (passStage) {
+    return [...nonPassStages, passStage]
+  }
+
+  return [...nonPassStages, { stageName: '최종 합격', applicantCount: 0 }]
+}
+
 const currentUserId = computed(() => toPositiveNumber(user.value?.id))
 const currentUserName = computed(() => normalizeDisplayName(user.value?.name))
 const canManageRecruitment = computed(() => memberType.value === 'HR')
@@ -322,6 +335,19 @@ const noticeModal = ref({
   onConfirm: null
 })
 
+const ensureHrRecruitmentAction = (message) => {
+  if (memberType.value === 'HR') {
+    return true
+  }
+
+  openNoticeModal({
+    title: '권한 없음',
+    message,
+    type: 'warning'
+  })
+  return false
+}
+
 // --- 면접 일정 관련 상태 ---
 const showWeeklyModal = ref(false)
 const showDetailModal = ref(false)
@@ -428,6 +454,9 @@ const goToDetail = (id) => {
 
 // 1. 삭제 버튼 클릭 시 모달 열기
 const openDeleteModal = (id) => {
+  if (!ensureHrRecruitmentAction('채용 공고 삭제는 인사담당자만 가능합니다.')) {
+    return
+  }
   deleteTargetId.value = id
   showDeleteModal.value = true
   activeMenuId.value = null // 열려있는 메뉴 닫기
@@ -440,6 +469,9 @@ const closeDeleteModal = () => {
 }
 
 const requestPublishRecruitment = (job) => {
+  if (!ensureHrRecruitmentAction('채용 공고 게시는 인사담당자만 가능합니다.')) {
+    return
+  }
   openNoticeModal({
     title: '즉시 게시',
     message: '이 공고를 지금 바로 게시하시겠습니까? 게시 후에는 기본 정보 수정이 제한됩니다.',
@@ -482,6 +514,9 @@ const publishRecruitment = async (recruitmentId) => {
 
 // 3. 실제 삭제 수행
 const confirmDelete = async () => {
+  if (!ensureHrRecruitmentAction('채용 공고 삭제는 인사담당자만 가능합니다.')) {
+    return
+  }
   if (!deleteTargetId.value || deleting.value) return
 
   deleting.value = true
@@ -495,6 +530,27 @@ const confirmDelete = async () => {
     deleting.value = false
   }
 }
+
+const goToCreateRecruitment = () => {
+  if (!ensureHrRecruitmentAction('채용 공고 생성은 인사담당자만 가능합니다.')) {
+    return
+  }
+  router.push('/recruitment/create')
+}
+
+const goToEditRecruitment = (jobId) => {
+  if (!ensureHrRecruitmentAction('채용 공고 수정은 인사담당자만 가능합니다.')) {
+    return
+  }
+  router.push(`/recruitment/jobs/${jobId}/edit`)
+}
+
+const resetFilters = () => {
+  searchQuery.value = ''
+  statusFilter.value = '전체 상태'
+  sortBy.value = '최신순'
+}
+
 // --- 검색 및 필터링 로직 ---
 const searchQuery = ref('')
 const statusFilter = ref('전체 상태')
@@ -511,7 +567,7 @@ const filteredJobs = computed(() => {
       displayStatus: getDisplayStatus(job.status, job.endDate),
       team: resolveTeamName(job),
       position: getCareerText(job),
-      funnel: (job.stages || []).filter(isPipelineStage).map(s => ({
+      funnel: normalizePipelineStages(job.stages).map(s => ({
         step: s.stageName,
         count: s.applicantCount || 0,
         active: (s.applicantCount || 0) > 0
@@ -551,6 +607,41 @@ const filteredJobs = computed(() => {
   }
 
   return result
+})
+
+const isFilterApplied = computed(() => {
+  return Boolean(searchQuery.value.trim()) || statusFilter.value !== '전체 상태'
+})
+
+const showEmptyState = computed(() => !loading.value && filteredJobs.value.length === 0)
+
+const emptyState = computed(() => {
+  if (isFilterApplied.value) {
+    return {
+      title: '조건에 맞는 채용 공고가 없습니다.',
+      description: '검색어나 상태 필터를 다시 조정하면 다른 채용 공고를 확인할 수 있습니다.',
+      actionText: '필터 초기화',
+      action: resetFilters
+    }
+  }
+
+  if (canManageRecruitment.value) {
+    return {
+      title: '아직 등록된 채용 공고가 없습니다.',
+      description:
+        '첫 채용 공고를 등록하면 이 공간에서 공고 현황과 이번 주 면접 일정을 함께 관리할 수 있습니다.',
+      actionText: '새 공고 만들기',
+      action: goToCreateRecruitment
+    }
+  }
+
+  return {
+    title: '현재 확인할 수 있는 채용 공고가 없습니다.',
+    description:
+      '담당 조직, 참조 조직, 또는 등록된 면접관으로 연결된 채용 공고만 이 화면에 표시됩니다.',
+    actionText: '',
+    action: null
+  }
 })
 
 // --- 링크 복사 및 면접관 설정 기능 ---
@@ -696,6 +787,9 @@ const isSelectedInterviewer = (interviewerId) => {
 }
 
 const openInterviewerModal = async (job) => {
+  if (!ensureHrRecruitmentAction('면접관 설정은 인사담당자만 가능합니다.')) {
+    return
+  }
   try {
     await organizationStore.loadOrganizations({ force: true })
   } catch (error) {
@@ -751,6 +845,9 @@ const removeInterviewer = (interviewerId) => {
 }
 
 const saveInterviewers = async () => {
+  if (!ensureHrRecruitmentAction('면접관 설정은 인사담당자만 가능합니다.')) {
+    return
+  }
   if (!editingJob.value || savingInterviewers.value) return
   if (editingJob.value.selectedInterviewerIds.length === 0) {
     openNoticeModal({
@@ -792,7 +889,8 @@ const saveInterviewers = async () => {
 
     <div class="flex flex-col md:flex-row md:items-center justify-end gap-4 relative z-0">
       <button
-          @click="router.push('/recruitment/create')"
+          v-if="canManageRecruitment"
+          @click="goToCreateRecruitment"
           class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
       >
         <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -855,7 +953,27 @@ const saveInterviewers = async () => {
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+    <div v-if="showEmptyState"
+         class="bg-white border border-dashed border-slate-300 rounded-3xl px-8 py-16 text-center shadow-sm">
+      <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17v-6m3 6V7m3 10v-3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+      </div>
+      <h3 class="text-xl font-bold text-slate-900 mb-2">{{ emptyState.title }}</h3>
+      <p class="text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
+        {{ emptyState.description }}
+      </p>
+      <button
+        v-if="emptyState.action"
+        @click="emptyState.action && emptyState.action()"
+        class="mt-6 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-sm transition-colors"
+      >
+        {{ emptyState.actionText }}
+      </button>
+    </div>
+
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
       <div v-for="job in filteredJobs" :key="job.id"
            class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm"
            :class="{'relative z-20 border-brand-300 ring-2 ring-brand-100': activeMenuId === job.id}">
@@ -896,7 +1014,7 @@ const saveInterviewers = async () => {
               </button>
 
               <button
-                  @click.stop="router.push(`/recruitment/jobs/${job.id}/edit`)"
+                  @click.stop="goToEditRecruitment(job.id)"
                   class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
               >
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>

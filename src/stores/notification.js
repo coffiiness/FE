@@ -11,7 +11,9 @@ export const NOTIFICATION_FILTERS = [
 
 const DEFAULT_DROPDOWN_SIZE = 5
 const DEFAULT_PAGE_SIZE = 20
+const TOAST_PREVIEW_SIZE = 10
 const SSE_RETRY_DELAY = 3000
+const TOAST_DURATION = 5000
 
 const pad = (value) => String(value).padStart(2, '0')
 
@@ -147,10 +149,13 @@ export const useNotificationStore = defineStore('notification', () => {
   const isDropdownOpen = ref(false)
   const isNotificationPageActive = ref(false)
   const isStreamConnected = ref(false)
+  const realtimeToast = ref(null)
+  const streamListeners = new Set()
 
   let streamAbortController = null
   let streamReconnectTimer = null
   let streamStoppedManually = false
+  let toastTimer = null
 
   const unreadCount = computed(() => unreadCountValue.value)
 
@@ -242,12 +247,80 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
+  const fetchNotificationPreview = async (notificationId) => {
+    const response = await notificationApi.getUnreadList({
+      page: 0,
+      size: TOAST_PREVIEW_SIZE
+    })
+
+    const { contents } = extractContents(response)
+    return (
+      contents.find((item) => item.id === notificationId) ||
+      contents[0] ||
+      null
+    )
+  }
+
+  const clearToastTimer = () => {
+    if (!toastTimer) return
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+
+  const dismissRealtimeToast = () => {
+    clearToastTimer()
+    realtimeToast.value = null
+  }
+
+  const showRealtimeToast = (item) => {
+    if (!item?.id) return
+
+    realtimeToast.value = item
+    clearToastTimer()
+    toastTimer = setTimeout(() => {
+      realtimeToast.value = null
+      toastTimer = null
+    }, TOAST_DURATION)
+  }
+
   const handleStreamEvent = async (event) => {
+    let payload = null
+
+    if (event.data) {
+      try {
+        payload = JSON.parse(event.data)
+      } catch {
+        payload = null
+      }
+    }
+
+    const normalizedEvent = {
+      ...event,
+      payload
+    }
+
+    streamListeners.forEach((listener) => {
+      try {
+        listener(normalizedEvent)
+      } catch (error) {
+        console.error('SSE 리스너 실행 실패:', error)
+      }
+    })
+
     if (event.type === 'heartbeat' || event.type === 'connected') return
     if (event.type !== 'notification-created') return
 
     try {
+      const notificationId = payload?.notificationId ?? null
+
       await refreshVisibleData()
+
+      if (!isNotificationPageActive.value && !isDropdownOpen.value && notificationId != null) {
+        const preview = await fetchNotificationPreview(notificationId)
+        if (preview) {
+          showRealtimeToast(preview)
+        }
+      }
     } catch (error) {
       console.error('알림 SSE 후 재조회 실패:', error)
     }
@@ -255,6 +328,7 @@ export const useNotificationStore = defineStore('notification', () => {
 
   const stopNotificationStream = () => {
     streamStoppedManually = true
+    clearToastTimer()
 
     if (streamReconnectTimer) {
       clearTimeout(streamReconnectTimer)
@@ -352,6 +426,17 @@ export const useNotificationStore = defineStore('notification', () => {
     isNotificationPageActive.value = Boolean(value)
   }
 
+  const addStreamListener = (listener) => {
+    if (typeof listener !== 'function') {
+      return () => {}
+    }
+
+    streamListeners.add(listener)
+    return () => {
+      streamListeners.delete(listener)
+    }
+  }
+
   const syncReadState = (id) => {
     notifications.value = notifications.value.map((item) =>
       item.id === id ? { ...item, isRead: true, readAt: item.readAt || new Date().toISOString() } : item
@@ -436,6 +521,7 @@ export const useNotificationStore = defineStore('notification', () => {
     isMarkingAllRead,
     isRemovingAll,
     isStreamConnected,
+    realtimeToast,
     fetchUnreadCount,
     fetchDropdownNotifications,
     fetchNotifications,
@@ -443,8 +529,10 @@ export const useNotificationStore = defineStore('notification', () => {
     initialize,
     startNotificationStream,
     stopNotificationStream,
+    addStreamListener,
     setDropdownOpen,
     setNotificationPageActive,
+    dismissRealtimeToast,
     markRead,
     markAllRead,
     removeNotification,

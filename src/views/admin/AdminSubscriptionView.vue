@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { adminApi } from '@/api/admin'
 
-const PLAN_LABEL = { ENTERPRISE: '엔터프라이즈', BUSINESS: '비즈니스', STARTER: '스타터' }
-const PLAN_COLOR = { ENTERPRISE: 'bg-brand-100 text-brand-700', BUSINESS: 'bg-blue-100 text-blue-700', STARTER: 'bg-gray-100 text-gray-700' }
+const PLAN_LABEL = { ENTERPRISE: '엔터프라이즈', BUSINESS: '비즈니스' }
+const PLAN_COLOR = { ENTERPRISE: 'bg-brand-100 text-brand-700', BUSINESS: 'bg-blue-100 text-blue-700' }
 const STATUS_LABEL = { ACTIVE: '활성', TRIAL: '체험 중', CANCELLED: '해지' }
 const STATUS_COLOR = { ACTIVE: 'text-brand-600', TRIAL: 'text-amber-600', CANCELLED: 'text-rose-500' }
 const TAB_STATUS = { '전체': null, '활성': 'ACTIVE', '체험 중': 'TRIAL', '해지': 'CANCELLED' }
