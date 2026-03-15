@@ -486,13 +486,10 @@ const handleSaveAnnouncement = async (data) => {
     })
   } catch (error) {
     console.error('공지사항 생성 실패:', error)
-    const isUnauthorized = error?.response?.status === 401
     openFeedbackModal({
       type: 'warning',
-      title: isUnauthorized ? '권한 없음' : '공지사항 등록 실패',
-      message: isUnauthorized
-        ? '공지사항 등록은 인사담당자만 가능합니다.'
-        : '공지사항 생성 중 문제가 발생했습니다.'
+      title: '공지사항 등록 실패',
+      message: '공지사항 생성 중 문제가 발생했습니다.'
     })
   }
 }

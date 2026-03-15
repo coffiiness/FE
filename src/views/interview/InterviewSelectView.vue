@@ -5,6 +5,7 @@ import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
 import { recruitmentApi } from '@/api/recruitment'
 import { interviewApi } from '@/api/interview'
+import { memberApi } from '@/api/member'
 
 const router = useRouter()
 const route = useRoute()
@@ -243,11 +244,28 @@ const canProceed = computed(() => {
   return false
 })
 
-const goNext = () => {
+const ensureHrMember = async () => {
+  try {
+    const response = await memberApi.getMyMember()
+    return String(response?.data?.data?.memberType || '') === 'HR'
+  } catch (error) {
+    console.error('멤버 권한 조회 실패:', error)
+    alert('권한 정보를 확인할 수 없습니다. 다시 시도해 주세요.')
+    return false
+  }
+}
+
+const goNext = async () => {
   if (!canProceed.value) return
 
   if (currentStep.value < 3) {
     currentStep.value += 1
+    return
+  }
+
+  const isHrMember = await ensureHrMember()
+  if (!isHrMember) {
+    alert('면접 일정 생성은 인사담당자만 가능합니다.')
     return
   }
 
