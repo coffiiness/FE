@@ -83,8 +83,14 @@ const closeCancelledScheduleModal = () => {
 
 function isScheduleNotification(item) {
   const targetType = String(item?.targetType || '').toUpperCase()
+  const type = String(item?.type || '').toUpperCase()
   const actionUrl = String(item?.actionUrl || '')
-  return Boolean(item?.targetId) && (targetType === 'SCHEDULE' || /\/schedule(?:\?|$|\/)/i.test(actionUrl))
+  return Boolean(item?.targetId) && (
+    targetType === 'SCHEDULE' ||
+    targetType.startsWith('INTERVIEW') ||
+    type.startsWith('INTERVIEW') ||
+    /\/schedule(?:\?|$|\/)/i.test(actionUrl)
+  )
 }
 
 function isCancelledScheduleNotification(item) {
