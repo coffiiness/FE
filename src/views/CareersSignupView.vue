@@ -65,16 +65,13 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="auth-shell min-h-screen overflow-hidden text-slate-900">
+  <div class="auth-shell min-h-screen text-slate-900">
     <div class="pointer-events-none absolute inset-0">
-      <div class="beam beam-left"></div>
-      <div class="beam beam-right"></div>
-      <div class="beam beam-bottom"></div>
       <div class="paper-grid"></div>
     </div>
 
     <header class="relative z-10">
-      <div class="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+      <div class="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
         <button type="button" class="text-left" @click="goToCareers">
           <span class="font-display text-2xl font-semibold tracking-[0.16em] text-slate-900">CAREERS</span>
         </button>
@@ -89,7 +86,7 @@ const handleSubmit = async () => {
       </div>
     </header>
 
-    <main class="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center px-6 pb-8 pt-2">
+    <main class="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center px-6 pb-8 pt-2">
       <section class="w-full max-w-lg">
         <div class="auth-card">
           <div class="card-heading">
@@ -171,58 +168,25 @@ const handleSubmit = async () => {
 .auth-shell {
   position: relative;
   background:
-    radial-gradient(circle at top right, rgba(45, 212, 191, 0.18), transparent 24%),
-    radial-gradient(circle at 14% 18%, rgba(20, 184, 166, 0.14), transparent 20%),
-    linear-gradient(180deg, #f6fbfa 0%, #eef8f6 48%, #edf4f3 100%);
-}
-
-.beam {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(64px);
-}
-
-.beam-left {
-  top: 4rem;
-  left: -4rem;
-  width: 16rem;
-  height: 16rem;
-  background: rgba(45, 212, 191, 0.18);
-}
-
-.beam-right {
-  right: -3rem;
-  top: 6rem;
-  width: 18rem;
-  height: 18rem;
-  background: rgba(13, 148, 136, 0.14);
-}
-
-.beam-bottom {
-  bottom: 4rem;
-  left: 30%;
-  width: 20rem;
-  height: 12rem;
-  background: rgba(153, 246, 228, 0.18);
+    linear-gradient(180deg, #f8fafc 0%, #f3f8f7 100%);
 }
 
 .paper-grid {
   position: absolute;
   inset: 0;
-  opacity: 0.16;
+  opacity: 0.08;
   background-image:
     linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
-  background-size: 26px 26px;
+  background-size: 32px 32px;
 }
 
 .auth-card {
-  border-radius: 2rem;
-  border: 1px solid rgba(20, 184, 166, 0.14);
-  background: rgba(255, 255, 255, 0.78);
+  border-radius: 1.5rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
   padding: 1.5rem;
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 60px rgba(20, 184, 166, 0.12);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
 }
 
 .card-heading {
@@ -239,9 +203,9 @@ const handleSubmit = async () => {
 
 .field-input {
   width: 100%;
-  border-radius: 1rem;
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  background: rgba(255, 255, 255, 0.88);
+  border-radius: 0.9rem;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: #ffffff;
   padding: 0.82rem 0.95rem;
   color: #0f172a;
   outline: none;
@@ -282,7 +246,7 @@ const handleSubmit = async () => {
   font-size: 0.95rem;
   font-weight: 700;
   transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
-  box-shadow: 0 18px 34px rgba(20, 184, 166, 0.24);
+  box-shadow: 0 10px 18px rgba(20, 184, 166, 0.18);
 }
 
 .submit-button:hover:not(:disabled) {
@@ -296,8 +260,8 @@ const handleSubmit = async () => {
 
 .ghost-button {
   border-radius: 9999px;
-  border: 1px solid rgba(20, 184, 166, 0.18);
-  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 600;
@@ -307,7 +271,7 @@ const handleSubmit = async () => {
 
 .ghost-button:hover {
   border-color: rgba(20, 184, 166, 0.42);
-  background: rgba(255, 255, 255, 0.88);
+  background: #ffffff;
   color: #0f172a;
 }
 
