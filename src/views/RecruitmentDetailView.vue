@@ -1667,86 +1667,8 @@ const getDayColor = (index) => {
   </div>
 
   <div v-else class="relative flex min-h-[calc(100vh-4rem)] gap-4 overflow-hidden bg-[#f7faf9] px-4 pb-4 pt-0">
-    
-    <!-- Sidebar -->
-    <aside v-if="activeTab !== 'CALENDAR'" class="z-20 flex w-[320px] flex-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div class="space-y-5 overflow-y-auto p-5">
-        <button @click="router.push('/recruitment/home')" class="flex items-center text-sm font-bold text-slate-500 transition-colors hover:text-brand-600">
-          <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
-          목록으로
-        </button>
-
-        <section class="rounded-xl border border-brand-100 bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.12),_transparent_44%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(240,253,250,0.92))] p-5">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-[11px] font-semibold text-slate-600">
-              공고 상세
-            </span>
-            <span class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-[11px] font-semibold text-slate-600">
-              {{ recruitment.leadGroupName }}
-            </span>
-          </div>
-
-          <div class="mt-4">
-            <h1 class="text-[1.7rem] font-black leading-tight tracking-tight text-slate-950">{{ recruitment.title }}</h1>
-            <div class="mt-3 flex flex-wrap items-center gap-2">
-              <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{{ recruitment.position }}</span>
-              <span class="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">{{ recruitment.dday }}</span>
-            </div>
-            <p class="mt-3 text-xs font-medium text-slate-500">{{ recruitment.period }}</p>
-          </div>
-
-          <div class="mt-4 grid grid-cols-3 gap-2">
-            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
-              <p class="text-[11px] font-semibold text-slate-500">지원자</p>
-              <p class="mt-1 text-xl font-black text-slate-950">{{ recruitment.totalApplicants }}<span class="ml-1 text-sm font-semibold text-slate-400">명</span></p>
-            </div>
-            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
-              <p class="text-[11px] font-semibold text-slate-500">진행 중 면접</p>
-              <p class="mt-1 text-xl font-black text-brand-700">{{ recruitment.ongoingInterviews }}<span class="ml-1 text-sm font-semibold text-slate-400">건</span></p>
-            </div>
-            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
-              <p class="text-[11px] font-semibold text-slate-500">면접관</p>
-              <p class="mt-1 text-xl font-black text-slate-950">{{ interviewers.length }}<span class="ml-1 text-sm font-semibold text-slate-400">명</span></p>
-            </div>
-          </div>
-
-          <div class="mt-4 grid grid-cols-2 gap-2">
-            <button @click="copyRecruitmentLink" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-colors hover:border-brand-200 hover:text-brand-700">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-              링크 복사
-            </button>
-            <button @click="goInterview" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100">
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-              일정 생성
-            </button>
-          </div>
-        </section>
-
-        <section class="rounded-xl border border-slate-200 bg-white p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h5 class="text-xs font-bold text-slate-500">담당 면접관</h5>
-            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{{ interviewers.length }}명</span>
-          </div>
-          <div class="space-y-2.5">
-            <div v-for="member in interviewers" :key="getMemberUserId(member) ?? member.id" class="flex items-center rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-              <div class="flex-1"><p class="text-sm font-semibold text-slate-800">{{ member.displayName || getInterviewerLabel(member) }}</p></div>
-              <label class="flex items-center cursor-pointer">
-                <input type="checkbox" v-model="member.checked" class="hidden">
-                <div class="flex h-5 w-5 items-center justify-center rounded border transition-colors"
-                     :class="member.checked ? member.bgClass + ' border-transparent' : 'bg-white border-slate-300'">
-                  <svg v-if="member.checked" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </label>
-            </div>
-          </div>
-        </section>
-      </div>
-    </aside>
-
     <main class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <section v-if="activeTab === 'CALENDAR'" class="border-b border-slate-200 bg-white px-5 py-4">
+      <section class="border-b border-slate-200 bg-white px-5 py-4">
         <div class="flex flex-wrap items-start justify-between gap-4">
           <div class="min-w-0">
             <button @click="router.push('/recruitment/home')" class="flex items-center text-sm font-bold text-slate-500 transition-colors hover:text-brand-600">
@@ -1791,16 +1713,6 @@ const getDayColor = (index) => {
         <div class="flex space-x-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
           <button @click="activeTab = 'CALENDAR'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'CALENDAR' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-700'">면접 일정</button>
           <button @click="activeTab = 'APPLICANTS'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'APPLICANTS' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-700'">지원자 관리</button>
-        </div>
-        
-        <div v-if="activeTab === 'APPLICANTS'" class="flex items-center gap-3">
-          <div class="relative">
-            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            </span>
-            <input v-model="applicantSearchQuery" type="text" placeholder="지원자 이름/이메일 검색" 
-                   class="bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-1.5 text-xs focus:outline-none focus:border-brand-500 w-64 transition-all">
-          </div>
         </div>
       </header>
 
@@ -2016,11 +1928,39 @@ const getDayColor = (index) => {
       <!-- Applicants List View (Existing) -->
       <div
         v-else
-        ref="applicantBoardScrollRef"
-        class="flex-1 p-6 bg-slate-50 overflow-x-auto overflow-y-auto"
-        @dragover.prevent="handleBoardDragOver"
+        class="flex-1 overflow-hidden p-5"
       >
-        <div v-if="applicantBoardLoading" class="flex h-full items-center justify-center rounded-xl border border-slate-200 bg-white px-10">
+        <div
+          ref="applicantBoardScrollRef"
+          class="applicant-surface flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-4"
+          @dragover.prevent="handleBoardDragOver"
+        >
+        <div class="schedule-surface__head applicant-surface__head">
+          <div>
+            <h2 class="surface-title">지원자 관리</h2>
+            <p class="mt-1 text-[11px] font-bold text-brand-600">
+              총 {{ applicants.length }}명 · {{ processes.length }}단계
+            </p>
+          </div>
+
+          <div class="surface-head-actions">
+            <div class="applicant-search-field">
+              <span class="applicant-search-field__icon">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+              <input
+                v-model="applicantSearchQuery"
+                type="text"
+                placeholder="지원자 이름/이메일 검색"
+                class="applicant-search-field__input"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div v-if="applicantBoardLoading" class="flex h-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50/70 px-10">
           <p class="text-sm font-bold text-slate-500">지원자 보드를 불러오는 중입니다.</p>
         </div>
 
@@ -2028,19 +1968,19 @@ const getDayColor = (index) => {
           <p class="text-sm font-bold text-rose-600">{{ applicantBoardError }}</p>
         </div>
 
-        <div v-else-if="processes.length === 0" class="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-10">
+        <div v-else-if="processes.length === 0" class="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-10">
           <p class="text-sm font-bold text-slate-500">표시할 전형 프로세스가 없습니다.</p>
         </div>
 
-        <div v-else class="flex gap-6 min-w-max w-max">
+        <div v-else class="applicant-board-scroll flex h-full gap-5 min-w-max w-max overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
           <div 
             v-for="process in processes" :key="process.id"
-            class="flex w-80 flex-col rounded-xl border"
+            class="flex w-80 flex-col rounded-2xl border border-slate-200 bg-slate-50/55"
             @dragover.prevent="handleColumnDragOver($event, process.id)"
             @drop="onDrop($event, process.id)"
             :class="[getStageTypeMeta(process.stageType).column, {'ring-2 ring-brand-300': draggingOverColumnId === process.id}]"
           >
-            <div class="flex-none rounded-t-xl border-b border-slate-200 bg-white p-4 flex items-center justify-between">
+            <div class="flex-none rounded-t-2xl border-b border-slate-200 bg-white px-4 py-3.5 flex items-center justify-between">
               <div>
                 <div class="flex items-center gap-2 mb-1">
                   <h3 class="font-bold text-slate-700">{{ process.stageName }}</h3>
@@ -2055,16 +1995,16 @@ const getDayColor = (index) => {
                 <button
                   v-if="canMoveApplicants"
                   type="button"
-                  class="w-7 h-7 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center"
+                  class="w-8 h-8 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-brand-700 hover:border-brand-200 flex items-center justify-center"
                   @click.stop="openProcessMenuId = openProcessMenuId === process.id ? null : process.id"
                 >
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3Zm0 5.5A1.5 1.5 0 1110 8a1.5 1.5 0 010 3.5Zm0 5.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3Z" />
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6" d="M12 5v14m7-7H5" />
                   </svg>
                 </button>
                 <div
                   v-if="openProcessMenuId === process.id"
-                  class="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1"
+                  class="absolute right-0 top-10 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.35)]"
                 >
                   <button
                     type="button"
@@ -2079,7 +2019,7 @@ const getDayColor = (index) => {
             <div class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               <div v-for="app in getApplicantsByProcess(process.id)" :key="app.id"
                    :draggable="canMoveApplicants && movingApplicationId !== app.applicationId" @dragstart="onDragStart($event, app.applicationId)" @dragend="onDragEnd"
-                   class="cursor-grab rounded-xl border border-slate-200 bg-white p-4 transition-all active:cursor-grabbing hover:border-brand-400"
+                   class="cursor-grab rounded-2xl border border-slate-200 bg-white p-4 transition-all active:cursor-grabbing hover:border-brand-300 hover:shadow-[0_16px_30px_-24px_rgba(15,23,42,0.45)]"
                    :class="{
                      'opacity-50 border-dashed': draggingCardId === app.applicationId,
                      'cursor-not-allowed opacity-70': !canMoveApplicants,
@@ -2134,6 +2074,7 @@ const getDayColor = (index) => {
             </div>
           </div>
         </div>
+        </div>
 
         <div
           v-if="canMoveApplicants && selectedApplicantCount > 0"
@@ -2158,7 +2099,7 @@ const getDayColor = (index) => {
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <select
                   v-model="bulkTargetProcessId"
-                  class="min-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"
+                  class="min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800"
                 >
                   <option value="">이동할 단계 선택</option>
                   <option v-for="option in bulkProcessOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
@@ -2298,7 +2239,7 @@ const getDayColor = (index) => {
 
     <!-- 모달: 면접관 수정 -->
     <div v-if="ruleModalProcessId" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="closeRuleModal">
-      <div class="bg-white rounded-xl w-[760px] max-w-[96vw] max-h-[85vh] overflow-hidden flex flex-col border border-slate-200">
+      <div class="bg-white rounded-2xl w-[760px] max-w-[96vw] max-h-[85vh] overflow-hidden flex flex-col border border-slate-200 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.5)]">
         <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
             <p class="text-xs font-bold text-slate-500 mb-1">AUTOMATION</p>
@@ -2313,29 +2254,29 @@ const getDayColor = (index) => {
         </div>
 
         <div class="flex-1 overflow-y-auto p-6 grid gap-6 lg:grid-cols-[320px_1fr]">
-          <form class="space-y-3" @submit.prevent="submitAutomationRule">
+          <form class="space-y-3 automation-form" @submit.prevent="submitAutomationRule">
             <div>
               <label class="block text-xs font-bold text-slate-600 mb-1">프로세스</label>
-              <select v-model="automationForm.recruitmentProcessId" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              <select v-model="automationForm.recruitmentProcessId" class="automation-select w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
                 <option value="">선택하세요</option>
                 <option v-for="option in processOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-600 mb-1">트리거</label>
-              <select v-model="automationForm.triggerType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              <select v-model="automationForm.triggerType" class="automation-select w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
                 <option v-for="option in automationTriggerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-600 mb-1">액션</label>
-              <select v-model="automationForm.actionType" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              <select v-model="automationForm.actionType" class="automation-select w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
                 <option v-for="option in automationActionOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </div>
             <div>
               <label class="block text-xs font-bold text-slate-600 mb-1">Template Code</label>
-              <select v-model="automationForm.templateCode" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              <select v-model="automationForm.templateCode" class="automation-select w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
                 <option value="">선택하세요</option>
                 <option
                   v-for="template in filteredAutomationTemplates"
@@ -2671,6 +2612,78 @@ const getDayColor = (index) => {
   color: rgb(100, 116, 139);
 }
 
+.applicant-surface {
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.76), rgba(255, 255, 255, 0.96));
+}
+
+.applicant-surface__head {
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.applicant-board-scroll {
+  align-items: flex-start;
+}
+
+.applicant-search-field {
+  position: relative;
+  min-width: 260px;
+}
+
+.applicant-search-field__icon {
+  position: absolute;
+  left: 0.9rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgb(148, 163, 184);
+  pointer-events: none;
+}
+
+.applicant-search-field__input {
+  width: 100%;
+  height: 2.75rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0 0.95rem 0 2.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgb(30, 41, 59);
+  transition: all 0.18s ease;
+}
+
+.applicant-search-field__input::placeholder {
+  color: rgb(148, 163, 184);
+}
+
+.applicant-search-field__input:focus {
+  outline: none;
+  border-color: rgba(20, 184, 166, 0.75);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+}
+
+.automation-select,
+.automation-form input {
+  appearance: none;
+  background: #ffffff;
+  color: rgb(15, 23, 42);
+  border-color: rgb(226, 232, 240);
+}
+
+.automation-select:focus,
+.automation-form input:focus {
+  outline: none;
+  border-color: rgb(20, 184, 166);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
+}
+
+.automation-select option {
+  color: rgb(15, 23, 42);
+  background: #ffffff;
+}
+
 @media (max-width: 1024px) {
   .schedule-surface__head {
     grid-template-columns: 1fr;
@@ -2680,6 +2693,11 @@ const getDayColor = (index) => {
     flex-wrap: wrap;
     justify-content: flex-start;
     margin-left: 0;
+  }
+
+  .applicant-search-field {
+    width: 100%;
+    min-width: 0;
   }
 }
 
