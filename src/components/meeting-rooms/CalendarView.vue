@@ -1,12 +1,12 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, watch } from 'vue'
 
 const props = defineProps({
   rooms: { type: Array, required: true },
   bookings: { type: Array, required: true }
 })
 
-const emit = defineEmits(['dateClick', 'bookingClick'])
+const emit = defineEmits(['dateClick', 'bookingClick', 'roomChange'])
 
 const labels = {
   allRooms: '\uC804\uCCB4 \uD68C\uC758\uC2E4',
@@ -28,8 +28,18 @@ const state = reactive({
   selectedRoom: 'all'
 })
 
+watch(
+  () => state.selectedRoom,
+  (value) => {
+    emit('roomChange', value)
+  }
+)
+
 const monthStart = computed(() => new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth(), 1))
 const monthEnd = computed(() => new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 0))
+const currentMonthLabel = computed(
+  () => `${state.currentMonth.getFullYear()}년 ${state.currentMonth.getMonth() + 1}월`
+)
 
 const daysInMonth = computed(() => {
   const days = []
@@ -95,56 +105,40 @@ const getRoomName = (roomId) => {
   return room?.name || '\uD68C\uC758\uC2E4'
 }
 
-const selectedDay = ref(null)
-
+// 날짜 선택
 const openDayModal = (day) => {
-  selectedDay.value = day
-}
-
-const closeDayModal = () => {
-  selectedDay.value = null
+  emit('dateClick', day)
 }
 
 const handleDayBookingClick = (booking) => {
   emit('bookingClick', booking)
 }
-
-const selectedDayTitle = computed(() => {
-  if (!selectedDay.value) return ''
-  return `${selectedDay.value.getFullYear()}\uB144 ${selectedDay.value.getMonth() + 1}\uC6D4 ${selectedDay.value.getDate()}\uC77C`
-})
-
-const selectedDayBookings = computed(() => {
-  if (!selectedDay.value) return []
-  return getBookingsForDay(selectedDay.value)
-})
 </script>
 
 <template>
-  <div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-    <div class="bg-white border border-slate-300 rounded-[28px] overflow-hidden shadow-sm flex flex-col min-h-[480px]">
-      <div class="p-6 border-b border-slate-300 flex items-center justify-between bg-white">
-        <div class="flex items-center gap-4">
-          <select v-model="state.selectedRoom" class="px-4 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white shadow-sm">
+  <section class="meeting-calendar-surface">
+      <div class="meeting-calendar-surface__head">
+        <div>
+          <h2 class="surface-title">{{ currentMonthLabel }}</h2>
+        </div>
+
+        <div class="surface-head-actions">
+          <select v-model="state.selectedRoom" class="room-select">
             <option value="all">{{ labels.allRooms }}</option>
             <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option>
           </select>
-        </div>
-        <div class="flex items-center gap-4">
-          <button @click="goToday" class="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition-all shadow-sm text-sm font-bold">
-            {{ labels.todayMove }}
-          </button>
-          <div class="flex items-center gap-6">
-            <button @click="goPrevMonth" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+          <div class="surface-head-nav">
+            <button type="button" class="icon-button" @click="goPrevMonth">
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h2 class="text-2xl font-display font-bold text-slate-800 tracking-tight w-40 text-center">
-              {{ state.currentMonth.getFullYear() }}년 {{ state.currentMonth.getMonth() + 1 }}월
-            </h2>
-            <button @click="goNextMonth" class="p-2 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <button type="button" class="toolbar-button toolbar-button-subtle" @click="goToday">
+              {{ labels.todayMove }}
+            </button>
+            <button type="button" class="icon-button" @click="goNextMonth">
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -152,101 +146,306 @@ const selectedDayBookings = computed(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-7 text-center border-b border-slate-300 bg-slate-50/50">
-        <div v-for="(day, idx) in koDays" :key="day" class="py-2.5 text-[10px] font-black tracking-[0.12em]" :class="getDayColor(idx)">
+      <div class="month-weekdays">
+        <div
+          v-for="(day, idx) in koDays"
+          :key="day"
+          class="month-weekdays__item"
+          :class="getDayColor(idx)"
+        >
           {{ day }}
         </div>
       </div>
 
-      <div class="grid grid-cols-7 grid-rows-5 h-[540px] bg-white">
-      <div
+      <div class="month-grid">
+        <div
           v-for="(day, index) in calendarDays"
           :key="day ? day.toISOString() : `empty-${index}`"
-          class="border-r border-b border-slate-300 p-2.5 transition-all relative group h-full overflow-hidden"
+          class="month-cell"
           :class="{
-            'bg-slate-50/30': !day || !isSameMonth(day, state.currentMonth),
-            'border-r-0': (index + 1) % 7 === 0,
-            'cursor-pointer hover:bg-slate-50/50': day && isSameMonth(day, state.currentMonth),
-            'cursor-default': !day || !isSameMonth(day, state.currentMonth)
+            'month-cell--muted': !day || !isSameMonth(day, state.currentMonth),
+            'month-cell--today': day && isSameDay(day, today),
+            'month-cell--last': (index + 1) % 7 === 0
           }"
           @click="day && openDayModal(day)"
         >
-          <div class="flex items-center justify-between">
+          <div class="month-cell__head">
             <span
               v-if="day"
-              :class="[
-                'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
-                isSameDay(day, today) ? 'bg-brand-600 text-white shadow-md' : (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
-              ]"
+              class="month-cell__day"
+              :class="{
+                'month-cell__day--today': isSameDay(day, today),
+                'month-cell__day--sunday': day.getDay() === 0 && !isSameDay(day, today),
+                'month-cell__day--saturday': day.getDay() === 6 && !isSameDay(day, today)
+              }"
             >
               {{ day.getDate() }}
             </span>
+            <span v-if="day && getBookingsForDay(day).length" class="month-cell__count">
+              {{ getBookingsForDay(day).length }}
+            </span>
           </div>
-          <div class="space-y-1 h-[44px]" v-if="day">
+
+          <div v-if="day && getBookingsForDay(day).length" class="month-cell__events">
             <div
               v-for="booking in getBookingsForDay(day).slice(0, 2)"
               :key="booking.id"
-              class="text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity text-slate-800 font-bold"
+              class="month-event-chip"
               :style="{
-                backgroundColor: `${getRoomColor(booking.roomId)}20`,
-                borderLeft: `2px solid ${getRoomColor(booking.roomId)}`
+                backgroundColor: `${getRoomColor(booking.roomId)}16`,
+                borderLeftColor: getRoomColor(booking.roomId),
+                color: '#0f172a'
               }"
               @click.stop="emit('bookingClick', booking)"
             >
-              <span>{{ booking.title || '회의' }}</span>
-              <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
+              <span class="month-event-chip__time">{{ formatTime(booking.startTime) }}</span>
+              <span class="month-event-chip__title truncate">{{ booking.title || '회의' }}</span>
             </div>
             <button
               v-if="getBookingsForDay(day).length > 2"
-              class="text-[10px] text-slate-500 px-1.5 font-semibold text-right w-full"
+              type="button"
+              class="month-cell__more"
               @click.stop="openDayModal(day)"
             >
-              외 {{ getBookingsForDay(day).length - 2 }}개
+              +{{ getBookingsForDay(day).length - 2 }}개 더 보기
             </button>
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="bg-white border border-slate-300 rounded-[28px] shadow-sm p-6 h-fit">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h3 class="text-sm font-bold text-slate-800">
-            {{ selectedDay ? `${selectedDayTitle} ${labels.daySuffix}` : labels.dayPick }}
-          </h3>
-        </div>
-        <button v-if="selectedDay" class="text-xs text-slate-500 hover:text-slate-700" @click="closeDayModal">{{ labels.close }}</button>
-      </div>
-
-      <div class="space-y-3">
-        <div v-if="selectedDayBookings.length === 0" class="flex flex-col items-center justify-center h-32 text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-          <p class="font-medium text-sm">{{ labels.dayNone }}</p>
-        </div>
-
-        <div
-          v-for="booking in selectedDayBookings"
-          :key="booking.id"
-          class="group p-4 border rounded-[20px] transition-all cursor-pointer shadow-sm"
-          :style="{
-            backgroundColor: `${getRoomColor(booking.roomId)}0f`,
-            borderColor: `${getRoomColor(booking.roomId)}40`
-          }"
-          @click="handleDayBookingClick(booking)"
-        >
-          <div class="flex justify-between items-start mb-2">
-            <span class="text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest"
-                  :style="{
-                    backgroundColor: `${getRoomColor(booking.roomId)}1a`,
-                    color: '#0f172a'
-                  }">
-              {{ getRoomName(booking.roomId) }}
-            </span>
-            <span class="text-[10px] text-slate-500 font-bold">{{ formatTime(booking.startTime) }} - {{ formatTime(booking.endTime) }}</span>
-          </div>
-          <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ booking.title }}</h4>
-          <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ labels.host }}: {{ booking.organizer }}</p>
-        </div>
-      </div>
-    </div>
-  </div>
+  </section>
 </template>
+
+<style scoped>
+.meeting-calendar-surface {
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.meeting-calendar-surface {
+  overflow: hidden;
+}
+
+.meeting-calendar-surface__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 1rem 1rem 0.85rem;
+}
+
+.surface-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: rgb(15, 23, 42);
+}
+
+.surface-head-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.surface-head-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 1024px) {
+  .meeting-calendar-surface__head {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-head-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+.toolbar-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  transition: all 0.18s ease;
+}
+
+.toolbar-button {
+  padding: 0.72rem 0.95rem;
+}
+
+.icon-button {
+  height: 2.1rem;
+  width: 2.1rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  color: rgb(71, 85, 105);
+}
+
+.icon-button:hover {
+  border-color: rgba(15, 118, 110, 0.28);
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-subtle {
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  background: white;
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-subtle:hover {
+  filter: saturate(1.04);
+}
+
+.room-select {
+  min-width: 11rem;
+  height: 2.1rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  color: rgb(51, 65, 85);
+  font-size: 0.78rem;
+  font-weight: 900;
+  outline: none;
+}
+
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.52);
+}
+
+.month-weekdays__item {
+  padding: 0.75rem 0;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(118px, 1fr));
+  border-left: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.month-cell {
+  position: relative;
+  min-height: 118px;
+  padding: 0.75rem 0.7rem 0.65rem;
+  border-right: 1px solid rgba(226, 232, 240, 0.84);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+  background: white;
+  transition: background 0.18s ease;
+  cursor: pointer;
+}
+
+.month-cell:hover {
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.month-cell--muted {
+  background: rgba(248, 250, 252, 0.42);
+  cursor: default;
+}
+
+.month-cell--today {
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.92));
+}
+
+.month-cell--last {
+  border-right: 0;
+}
+
+.month-cell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.month-cell__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: rgb(51, 65, 85);
+}
+
+.month-cell__day--today {
+  background: rgb(20, 184, 166);
+  border-radius: 9999px;
+  color: white;
+}
+
+.month-cell__day--sunday {
+  color: rgb(244, 63, 94);
+}
+
+.month-cell__day--saturday {
+  color: rgb(99, 102, 241);
+}
+
+.month-cell__count {
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+}
+
+.month-cell__events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.month-event-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  height: 1.75rem;
+  padding: 0 0.55rem;
+  border: 0;
+  border-left: 2px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.month-event-chip__time {
+  flex-shrink: 0;
+  font-weight: 900;
+}
+
+.month-event-chip__title {
+  color: rgb(31, 41, 55);
+  font-weight: 700;
+}
+
+.month-cell__more {
+  padding-left: 0.15rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: rgb(100, 116, 139);
+  text-align: left;
+}
+</style>

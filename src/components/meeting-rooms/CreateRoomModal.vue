@@ -101,62 +101,128 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/30 flex items-center justify-center p-6 z-50">
-    <div class="bg-white rounded-2xl shadow-2xl ring-1 ring-black/5 w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col">
-      <div class="p-6 border-b">
-        <h3 class="text-lg font-semibold text-slate-900">{{ mode === 'edit' ? '회의실 수정' : '새 회의실 등록' }}</h3>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/34 p-4 backdrop-blur-[2px] sm:p-6"
+  >
+    <div class="flex max-h-[84vh] w-full max-w-[780px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-7">
+        <div class="space-y-2">
+          <h3 class="text-[1.45rem] font-black tracking-[-0.03em] text-slate-950">
+            {{ mode === 'edit' ? '회의실 수정' : '회의실 등록' }}
+          </h3>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+          @click="emit('close')"
+          aria-label="닫기"
+        >
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div class="p-6 space-y-4 overflow-y-auto pr-2">
-        <p v-if="errorMessage" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+      <div class="space-y-5 overflow-y-auto px-6 py-5 text-slate-900 sm:px-7">
+        <p v-if="errorMessage" class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600">
           {{ errorMessage }}
         </p>
-        <div>
-          <label class="text-sm font-medium text-slate-800">회의실 이름 *</label>
-          <input v-model="form.name" minlength="2" maxlength="20" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" placeholder="회의실 이름" />
+
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">회의실 이름 *</label>
+          <input
+            v-model="form.name"
+            minlength="2"
+            maxlength="20"
+            class="room-field"
+            placeholder="회의실 이름"
+          />
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm font-medium text-slate-800">수용 인원 *</label>
-            <input v-model="form.capacity" type="number" min="2" step="1" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div class="space-y-2">
+            <label class="text-sm font-black text-slate-900">수용 인원 *</label>
+            <input v-model="form.capacity" type="number" min="2" step="1" class="room-field" />
           </div>
-          <div>
-            <label class="text-sm font-medium text-slate-800">층수 *</label>
-            <input v-model="form.floor" type="number" min="1" max="100" step="1" class="w-full border rounded-lg px-3 py-2 text-slate-800" />
+          <div class="space-y-2">
+            <label class="text-sm font-black text-slate-900">층수 *</label>
+            <input v-model="form.floor" type="number" min="1" max="100" step="1" class="room-field" />
           </div>
         </div>
-        <div>
-          <label class="text-sm font-medium text-slate-800">설명</label>
-          <textarea v-model="form.description" class="w-full border rounded-lg px-3 py-2 text-slate-800 placeholder:text-slate-500" rows="3"></textarea>
+
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">설명</label>
+          <textarea
+            v-model="form.description"
+            class="room-field min-h-[120px] resize-none py-3"
+            rows="4"
+            placeholder="필요한 메모가 있으면 입력하세요"
+          ></textarea>
         </div>
-        <div>
-          <label class="text-sm font-medium text-slate-800">제공 시설 *</label>
-          <div class="grid grid-cols-2 gap-3 p-4 border rounded-lg">
-            <label v-for="facility in facilityOptions" :key="facility" class="flex items-center gap-2 text-sm text-slate-800">
-              <input type="checkbox" :value="facility" :checked="form.facilities.includes(facility)" @change="toggleFacility(facility)" />
+
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">제공 시설 *</label>
+          <div class="grid grid-cols-1 gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2">
+            <label
+              v-for="facility in facilityOptions"
+              :key="facility"
+              class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-200"
+            >
+              <input
+                type="checkbox"
+                :value="facility"
+                :checked="form.facilities.includes(facility)"
+                @change="toggleFacility(facility)"
+              />
               {{ facility }}
             </label>
           </div>
         </div>
-        <div>
-          <label class="text-sm font-medium text-slate-800">색상 *</label>
-          <div class="flex gap-2 flex-wrap">
+
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">색상 *</label>
+          <div class="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <button
               v-for="color in colorOptions"
               :key="color"
               type="button"
-              class="w-9 h-9 rounded-lg border"
-              :class="form.color === color ? 'ring-2 ring-offset-2 ring-gray-900' : ''"
+              class="h-10 w-10 rounded-xl border border-white/70 transition"
+              :class="form.color === color ? 'ring-2 ring-offset-2 ring-slate-900' : 'hover:scale-105'"
               :style="{ backgroundColor: color }"
               @click="form.color = color"
             ></button>
           </div>
         </div>
       </div>
-      <div class="p-6 border-t flex justify-end gap-2 flex-shrink-0 bg-white">
-        <button type="button" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200" @click="emit('close')" > 취소 </button>        <button type="button" class="px-4 py-2 bg-emerald-600 text-white rounded-lg" @click="handleSubmit">
+      <div class="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 sm:px-7">
+        <button type="button" class="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition-colors hover:bg-slate-50" @click="emit('close')">취소</button>
+        <button type="button" class="inline-flex items-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm shadow-brand-200 transition-colors hover:bg-brand-700" @click="handleSubmit">
           {{ mode === 'edit' ? '수정 저장' : '회의실 등록' }}
         </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.room-field {
+  width: 100%;
+  border-radius: 0.95rem;
+  border: 1px solid rgb(226, 232, 240);
+  background: rgb(248, 250, 252);
+  padding: 0.72rem 0.9rem;
+  color: rgb(15, 23, 42);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.room-field::placeholder {
+  color: rgb(148, 163, 184);
+}
+
+.room-field:focus {
+  outline: none;
+  border-color: rgb(20, 184, 166);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+  background: rgb(255, 255, 255);
+}
+</style>

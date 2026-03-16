@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ensureWorkspaceId, getStoredWorkspaceId } from '@/utils/workspaceSession'
 
 const routes = [
   {
@@ -265,32 +266,35 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
   const token = localStorage.getItem('accessToken')
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const isAdmin = user.role === 'ADMIN'
-  const hasWorkspace = Boolean(localStorage.getItem('workspaceId'))
+  let workspaceId = getStoredWorkspaceId()
+
+  if (token && !isAdmin && !workspaceId) {
+    workspaceId = await ensureWorkspaceId(token)
+  }
+
+  const hasWorkspace = Boolean(workspaceId)
 
   if (to.meta.requiresAuth && !token) {
-    next('/login')
-    return
+    return '/login'
   }
 
   if ((to.name === 'Login' || to.name === 'Signup') && token) {
     if (isAdmin) {
-      next('/admin/dashboard')
+      return '/admin/dashboard'
     } else {
-      next(hasWorkspace ? '/dashboard' : '/workspace/create')
+      return hasWorkspace ? '/dashboard' : '/workspace/create'
     }
-    return
   }
 
   if (token && !isAdmin && to.meta.requiresAuth && !hasWorkspace && to.name !== 'WorkspaceCreate' && to.name !== 'InvitationAccept') {
-    next('/workspace/create')
-    return
+    return '/workspace/create'
   }
 
-  next()
+  return true
 })
 
 export default router

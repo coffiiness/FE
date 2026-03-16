@@ -41,6 +41,15 @@ const safeParseJson = (value, fallback) => {
 
 const interviewers = ref(safeParseJson(route.query.interviewers, []))
 const applicants = ref(safeParseJson(route.query.applicants, []))
+const recruitmentTitle = computed(() => String(route.query.recruitmentTitle || '').trim() || '면접 일정')
+const stageLabel = computed(() => String(route.query.stage || '').trim())
+const roundLabel = computed(() => {
+  if (round === 'SECOND') return '2차 면접'
+  if (round === 'FIRST') return '1차 면접'
+  return round || '면접 일정'
+})
+const displayStageChip = computed(() => stageLabel.value || roundLabel.value)
+const totalParticipants = computed(() => interviewers.value.length + applicants.value.length)
 
 const getUserId = (person) => {
   const rawId = Number(person?.userId ?? person?.id ?? person?.memberId)
@@ -808,133 +817,143 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="page">
-    <h1 class="title">일정 선택</h1>
-
-    <div class="names">
-      <div class="line">
-        <span class="label">면접관</span>
-        <span class="value">{{ interviewers.map(i => i.name).join(', ') || '-' }}</span>
-      </div>
-      <div class="line">
-        <span class="label">지원자</span>
-        <span class="value">{{ applicants.map(a => a.name).join(', ') || '-' }}</span>
-      </div>
-    </div>
-
-    <div class="topbar">
-
-      <!-- 이전 주 -->
-      <button
-          class="navBtn ghost"
-          @click="moveWeek(-1)"
-      >
-        ‹
-      </button>
-
-      <!-- 가운데 -->
-      <div class="centerTitle">
-        {{ monthTitle }}
-        <div class="subDate">
-          {{ weekDays[0].date }} ~ {{ weekDays[6].date }}
-        </div>
-      </div>
-
-      <!-- 오른쪽 -->
-      <div class="rightBox">
-
-        <button
-            class="navBtn ghost"
-            @click="moveWeek(1)"
-        >
-          ›
-        </button>
-
-
-      </div>
-
-    </div>
-
-    <!-- 회의실 -->
-    <div class="roomRow">
-      <div class="roomLabel">회의실</div>
-
-      <select class="roomSelect" v-model="selectedRoomId">
-        <option v-for="r in rooms" :key="r.id" :value="r.id">
-          {{ r.name }} ({{ r.capacity }})
-        </option>
-      </select>
-
-      <button class="resetTextBtn" @click="resetSelection">
-        초기화
-      </button>
-
-      <button class="todayMiniBtn" @click="goToday">
-        오늘로 이동
-      </button>
-
-      <button
-          class="autoAssignBtn"
-          title="모든 회의실 기준으로 자동 탐색"
-          :disabled="!isHrMember"
-          @click="showAutoModal = true"
-      >
-        자동 배정
-      </button>
-    </div>
-
-
-    <!-- 그리드 -->
-    <div class="calendar">
-
-      <!-- 헤더 -->
-      <div class="head">
-        <div class="timeHead"></div>
-
-        <div
-            v-for="d in weekDays"
-            :key="d.date"
-            class="dayHead"
-            :class="dayHeaderClass(d.dayIndex)"
-        >
-          <div class="dow">{{ d.dayLabel }}</div>
-
-          <div class="numWrap" :class="{ today: isToday(d.date) }">
-            <span class="num">{{ d.dayNum }}</span>
+    <section class="hero-card">
+      <div class="hero-top">
+        <div class="hero-title-wrap">
+          <div class="hero-kicker">{{ recruitmentTitle }}</div>
+          <div class="hero-title-row">
+            <h1 class="title">일정 선택</h1>
+            <span v-if="displayStageChip" class="hero-chip active">{{ displayStageChip }}</span>
           </div>
         </div>
       </div>
 
-      <!-- 바디 -->
-      <div class="body">
-        <div
+      <div class="hero-grid">
+        <div class="hero-people-card">
+          <div class="person-line">
+            <span class="person-label">면접관</span>
+            <span class="person-value">{{ interviewers.map(i => i.name).join(', ') || '-' }}</span>
+          </div>
+          <div class="person-line">
+            <span class="person-label">지원자</span>
+            <span class="person-value">{{ applicants.map(a => a.name).join(', ') || '-' }}</span>
+          </div>
+        </div>
+
+        <div class="hero-stat-row">
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">참여 인원</span>
+            <strong class="hero-stat-value">{{ totalParticipants }}명</strong>
+          </div>
+          <div class="hero-stat-card">
+            <span class="hero-stat-label">선택 구간</span>
+            <strong class="hero-stat-value">{{ selectedTimeRanges.length }}건</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="planner-shell">
+      <div class="planner-topbar">
+        <div class="roomRow">
+          <div class="roomField">
+            <span class="roomLabel">회의실</span>
+
+            <select class="roomSelect" v-model="selectedRoomId">
+              <option v-for="r in rooms" :key="r.id" :value="r.id">
+                {{ r.name }} ({{ r.capacity }})
+              </option>
+            </select>
+          </div>
+
+          <button class="resetTextBtn" @click="resetSelection">
+            초기화
+          </button>
+        </div>
+
+        <div class="topbar">
+          <button
+            class="navBtn ghost"
+            @click="moveWeek(-1)"
+          >
+            ‹
+          </button>
+
+          <div class="centerTitle">
+            {{ monthTitle }}
+            <div class="subDate">
+              {{ weekDays[0].date }} ~ {{ weekDays[6].date }}
+            </div>
+          </div>
+
+          <button
+            class="navBtn ghost"
+            @click="moveWeek(1)"
+          >
+            ›
+          </button>
+        </div>
+
+        <div class="toolbarActions">
+          <button class="todayMiniBtn" @click="goToday">
+            오늘로 이동
+          </button>
+
+          <button
+            class="autoAssignBtn"
+            title="모든 회의실 기준으로 자동 탐색"
+            :disabled="!isHrMember"
+            @click="showAutoModal = true"
+          >
+            자동 배정
+          </button>
+        </div>
+      </div>
+
+      <div class="calendar">
+        <div class="head">
+          <div class="timeHead"></div>
+
+          <div
+            v-for="d in weekDays"
+            :key="d.date"
+            class="dayHead"
+            :class="dayHeaderClass(d.dayIndex)"
+          >
+            <div class="dow">{{ d.dayLabel }}</div>
+
+            <div class="numWrap" :class="{ today: isToday(d.date) }">
+              <span class="num">{{ d.dayNum }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="body">
+          <div
             v-for="t in timeSlots"
             :key="t"
             class="row"
-        >
-          <div class="timeCol">{{ t }}</div>
+          >
+            <div class="timeCol">{{ t }}</div>
 
-          <div
+            <div
               v-for="d in weekDays"
               :key="d.date + '_' + t"
               class="cell"
               :class="{
-    block: isBlocked(d.date, t),
-    select: isSelected(d.date, t)
-  }"
-
+                block: isBlocked(d.date, t),
+                select: isSelected(d.date, t)
+              }"
               @mousedown.prevent="startDrag(d.date, t)"
               @mousemove.prevent="dragOver(d.date, t)"
-          />
-
+            />
+          </div>
         </div>
       </div>
+    </section>
 
-    </div>
-
-    <!-- 아래 영역: 선택 시간/범례/버튼 -->
-    <div class="bottom">
-
-      <div class="left">
+    <section class="bottom">
+      <div class="left summaryCard">
         <div class="pickedTitle">선택된 시간</div>
 
         <div v-if="!selectedTimeRanges.length" class="pickedEmpty">
@@ -963,191 +982,394 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 버튼 영역 -->
       <div class="buttonRow">
         <button class="stepBtn prevBtn" @click="$router.back()">
           이전 단계
         </button>
 
         <button
-            class="stepBtn nextBtn"
-            :disabled="selectedKeys.length === 0 || !isHrMember"
-            @click="goNext"
+          class="stepBtn nextBtn"
+          :disabled="selectedKeys.length === 0 || !isHrMember"
+          @click="goNext"
         >
           일정 확정
         </button>
       </div>
-
-
-    </div>
-
+    </section>
   </div>
 
   <InterviewConfirmModal
-      :open="showModal"
-      :date="submitDateText"
-      :time="submitTimeText"
-      :interviewers="interviewers.map(i=>i.name).join(', ')"
-      :applicant="applicants.map(a=>a.name).join(', ')"
-      :room="selectedRoom?.name || '-'"
-      requester="HR 담당자"
-
-      @close="showModal=false"
-      @submit="confirmSchedule"
+    :open="showModal"
+    :date="submitDateText"
+    :time="submitTimeText"
+    :interviewers="interviewers.map(i=>i.name).join(', ')"
+    :applicant="applicants.map(a=>a.name).join(', ')"
+    :room="selectedRoom?.name || '-'"
+    requester="HR 담당자"
+    @close="showModal=false"
+    @submit="confirmSchedule"
   />
 
   <AutoAssignModal
-      :open="showAutoModal"
-      @close="showAutoModal = false"
-      @submit="handleAutoAssign"
+    :open="showAutoModal"
+    @close="showAutoModal = false"
+    @submit="handleAutoAssign"
   />
 
   <ConfirmModal
-      :show="modal.show"
-      :title="modal.title"
-      :message="modal.message"
-      :type="modal.type"
-      :show-cancel="modal.showCancel"
-      :confirm-text="modal.confirmText"
-      @confirm="onModalConfirm"
-      @cancel="onModalCancel"
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    @confirm="onModalConfirm"
+    @cancel="onModalCancel"
   />
-
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-* { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
 .page {
-  max-width: 1280px;
+  --surface: #ffffff;
+  --surface-muted: #f8fbfd;
+  --line: #dbe5ef;
+  --line-strong: #c7d6e7;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --teal: #0f9f94;
+  --teal-strong: #0b8178;
+  --teal-soft: #e6fbf7;
+  --danger-soft: #fff1f1;
+
   margin: 0 auto;
-  padding: 36px 40px 44px;
-  color: #0f172a;
-  background: #f8fafc;
+  max-width: 1480px;
+  padding: 10px 12px 18px;
+  color: var(--ink);
 }
 
-.back {
-  border: none;
-  background: none;
-  color: #0D9488;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 10px;
+.hero-card,
+.planner-shell,
+.summaryCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+}
+
+.hero-card {
+  padding: 18px 20px;
+  background:
+    radial-gradient(circle at top left, rgba(15, 159, 148, 0.12), transparent 34%),
+    linear-gradient(180deg, #f8fffe 0%, #ffffff 100%);
+}
+
+.hero-top {
+  display: block;
+}
+
+.hero-title-wrap {
+  min-width: 0;
+}
+
+.hero-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.hero-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .title {
-  font-size: 28px;
+  margin: 0;
+  font-size: 30px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 6px 0 14px;
+  letter-spacing: -0.03em;
 }
 
-.names {
-  font-size: 14px;
-  color: #334155;
-  margin-bottom: 20px;
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.88);
+  color: #35506b;
+  font-size: 13px;
+  font-weight: 700;
 }
-.names .line { display: flex; gap: 10px; margin: 4px 0; }
-.names .label { width: 56px; color: #64748b; font-weight: 600; }
-.names .value { font-weight: 600; color: #0f172a; }
+
+.hero-chip.active {
+  border-color: #8ce7de;
+  background: var(--teal-soft);
+  color: var(--teal-strong);
+}
+
+.hero-grid {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.8fr);
+}
+
+.hero-people-card,
+.hero-stat-card {
+  border: 1px solid rgba(199, 214, 231, 0.92);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.hero-people-card {
+  padding: 14px 18px;
+}
+
+.person-line {
+  display: flex;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.person-line + .person-line {
+  border-top: 1px solid #eef5fb;
+}
+
+.person-label {
+  width: 56px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.person-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.hero-stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hero-stat-card {
+  padding: 14px 18px;
+}
+
+.hero-stat-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.hero-stat-value {
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.planner-shell {
+  margin-top: 14px;
+  padding: 16px 16px 18px;
+}
+
+.planner-topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf3f8;
+}
+
+.roomRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.roomField {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.roomLabel {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.roomSelect {
+  min-width: 240px;
+  height: 44px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 0 16px;
+  font-weight: 600;
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.resetTextBtn {
+  height: 44px;
+  padding: 0 14px;
+  border: none;
+  background: none;
+  color: #ef4444;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.resetTextBtn:hover {
+  text-decoration: underline;
+}
 
 .topbar {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin: 16px 0 14px;
-}
-
-.monthNav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-}
-
-.monthTitle {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 .navBtn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
   background: #ffffff;
-  font-size: 18px;
+  color: #27445f;
+  font-size: 22px;
   font-weight: 700;
 }
 
 .navBtn:hover {
-  background: #f1f5f9;
+  background: #f7fbff;
 }
-.navBtn.ghost:hover { background: #ecfdf5; border-radius: 10px; }
 
-.roomRow {
+.navBtn.ghost:hover {
+  background: var(--teal-soft);
+  border-color: #a7e7de;
+}
+
+.centerTitle {
+  text-align: center;
+  font-weight: 800;
+  font-size: 20px;
+  min-width: 180px;
+}
+
+.subDate {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.toolbarActions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 6px 0 14px;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
-.roomLabel {
+
+.todayMiniBtn,
+.autoAssignBtn,
+.stepBtn {
+  height: 42px;
+  border-radius: 14px;
+  font-weight: 800;
   font-size: 13px;
-  color: #64748b;
-  font-weight: 700;
+  cursor: pointer;
 }
-.roomSelect {
-  border: 1px solid #e2e8f0;
-  background: white;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-weight: 600;
-  color: #0f172a;
+
+.todayMiniBtn {
+  padding: 0 18px;
+  border: 1px solid #8ce7de;
+  background: var(--teal-soft);
+  color: var(--teal-strong);
 }
-.roomHint {
-  font-size: 12px;
-  color: #64748b;
-  margin-left: 6px;
+
+.todayMiniBtn:hover {
+  background: #d8f9f3;
+}
+
+.autoAssignBtn {
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  background: #ffffff;
+  color: #24425d;
+}
+
+.autoAssignBtn:hover {
+  background: #f8fbff;
+}
+
+.autoAssignBtn:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .calendar {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
   overflow: hidden;
+  user-select: none;
   box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
 }
 
 .head {
   display: grid;
   grid-template-columns: 84px repeat(7, 1fr);
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: #fbfdff;
+  border-bottom: 1px solid var(--line);
 }
 
-.timeHead { border-right: 1px solid #e2e8f0; }
+.timeHead {
+  border-right: 1px solid var(--line);
+}
 
 .dayHead {
-  padding: 10px 0 12px;
+  padding: 12px 0 14px;
   text-align: center;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--line);
 }
-.dayHead:last-child { border-right: none; }
+
+.dayHead:last-child {
+  border-right: none;
+}
 
 .dow {
   font-size: 12px;
   font-weight: 700;
-  color: #334155;
+  color: #35506b;
 }
 
 .dayHead.sunday .dow,
-.dayHead.sunday .num { color: #EF4444; }
+.dayHead.sunday .num {
+  color: #ef4444;
+}
 
 .dayHead.saturday .dow,
-.dayHead.saturday .num { color: #2563EB; }
+.dayHead.saturday .num {
+  color: #2563eb;
+}
 
 .numWrap {
   margin-top: 6px;
@@ -1160,18 +1382,17 @@ onBeforeUnmount(() => {
 }
 
 .numWrap.today {
-  background: #0D9488;
-  color: white;
-  border-radius: 50%;
+  background: var(--teal);
 }
+
 .numWrap.today .num {
-  color: white;
+  color: #ffffff;
 }
 
 .num {
   font-size: 14px;
   font-weight: 800;
-  color: #0f172a;
+  color: var(--ink);
 }
 
 .body .row {
@@ -1180,87 +1401,102 @@ onBeforeUnmount(() => {
 }
 
 .timeCol {
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--line);
   border-bottom: 1px solid #eef2f7;
-  height: 48px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  color: #475569;
+  color: #516b85;
   font-weight: 700;
+  background: #fcfdff;
 }
 
 .cell {
   border-right: 1px solid #eef2f7;
   border-bottom: 1px solid #eef2f7;
-  height: 48px;
+  height: 50px;
   background: #ffffff;
   cursor: pointer;
   transition: background 0.12s ease, box-shadow 0.12s ease;
 }
-.cell:last-child { border-right: none; }
+
+.cell:last-child {
+  border-right: none;
+}
 
 .cell:hover {
-  background: #ECFDF5;
+  background: #edfdf9;
 }
 
 .cell.block {
-  background: #FEE2E2;
+  background: var(--danger-soft);
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.78;
 }
-.cell.block:hover { background: #FEE2E2; }
+
+.cell.block:hover {
+  background: var(--danger-soft);
+}
 
 .cell.select {
-  background: #0D9488;
+  background: linear-gradient(180deg, #69d1c8 0%, #4fc2b8 100%);
 }
 
 .bottom {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  margin-top: 18px;
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
 .left {
   flex: 1;
-  min-width: 0;
+  min-width: 320px;
+}
+
+.summaryCard {
+  padding: 16px 18px;
 }
 
 .pickedTitle {
   font-size: 13px;
-  color: #0f172a;
+  color: var(--muted);
   font-weight: 800;
   margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .pickedEmpty {
   font-size: 13px;
-  color: #64748b;
+  color: var(--muted);
   font-weight: 600;
-  padding: 10px 0;
+  padding: 8px 0;
 }
 
 .pickedList {
   margin: 0;
   padding-left: 18px;
-  color: #0f172a;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 700;
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 .legend {
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #475569;
+  color: var(--muted);
   font-weight: 700;
 }
+
 .lgItem {
   display: inline-flex;
   align-items: center;
@@ -1270,103 +1506,57 @@ onBeforeUnmount(() => {
 .dot {
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: 4px;
   display: inline-block;
-  border: 1px solid #e2e8f0;
-}
-.dot.available { background: #ffffff; }
-.dot.blocked { background: #FEE2E2; border-color: #fecaca; }
-.dot.selected { background: #0D9488; border-color: #0D9488; }
-
-.nextBtn {
-  border: none;
-  background: #0D9488;
-  color: #ffffff;
-  padding: 12px 18px;
-  border-radius: 10px;
-  font-weight: 800;
-  cursor: pointer;
-  min-width: 120px;
-}
-.nextBtn:hover { background: #0f766e; }
-.nextBtn:disabled {
-  background: #cbd5e1;
-  cursor: not-allowed;
+  border: 1px solid var(--line);
 }
 
-.todayBtn {
-  margin: 10px auto 0;
-  display: block;
-  padding: 8px 16px;
-  background: #0D9488;
-  color: white;
-  border: none;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 13px;
+.dot.available {
+  background: #ffffff;
 }
 
-.todayBtn:hover {
-  background: #0f766e;
+.dot.blocked {
+  background: var(--danger-soft);
+  border-color: #f3b5b5;
 }
 
-.calendar {
-  user-select: none;
-}
-
-.centerTitle {
-  text-align: center;
-  font-weight: 800;
-  font-size: 18px;
-}
-
-.subDate {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.rightBox {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.dot.selected {
+  background: var(--teal);
+  border-color: var(--teal);
 }
 
 .buttonRow {
   display: flex;
-  gap: 14px;
+  gap: 12px;
+  align-items: center;
+  margin-left: auto;
 }
 
 .stepBtn {
-  padding: 12px 22px;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 14px;
-  cursor: pointer;
+  padding: 0 22px;
+  border-radius: 14px;
   transition: 0.15s ease;
 }
 
-/* 이전 단계 */
 .prevBtn {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #0f172a;
+  border: 1px solid var(--line);
+  color: var(--ink);
 }
 
 .prevBtn:hover {
-  background: #f1f5f9;
+  background: #f8fbff;
 }
 
-/* 다음 단계 */
 .nextBtn {
-  background: #0D9488;
   border: none;
+  background: var(--teal);
   color: #ffffff;
+  min-width: 132px;
 }
 
 .nextBtn:hover {
-  background: #0f766e;
+  background: var(--teal-strong);
 }
 
 .nextBtn:disabled {
@@ -1374,97 +1564,75 @@ onBeforeUnmount(() => {
   cursor: not-allowed;
 }
 
-/* 토요일 위 버튼 영역 */
-.headerAction {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-bottom: 6px;
+@media (max-width: 1120px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar,
+  .toolbarActions {
+    justify-content: flex-start;
+  }
+
+  .buttonRow {
+    margin-left: 0;
+  }
 }
 
-/* 작은 버튼 공통 */
-.miniBtn {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  border: none;
-}
+@media (max-width: 760px) {
+  .page {
+    padding: 10px 10px 18px;
+  }
 
-/* 오늘 버튼 */
-.todayMiniBtn {
-  background: #0D9488;
-  color: white;
-}
+  .hero-card,
+  .planner-shell,
+  .summaryCard {
+    border-radius: 20px;
+  }
 
-.todayMiniBtn:hover {
-  background: #0f766e;
-}
+  .hero-card,
+  .planner-shell {
+    padding: 16px 14px;
+  }
 
-/* 초기화 버튼 */
-.resetBtn {
-  background: #e2e8f0;
-  color: #0f172a;
-}
+  .title {
+    font-size: 27px;
+  }
 
-.resetBtn:hover {
-  background: #cbd5e1;
-}
+  .hero-stat-row {
+    grid-template-columns: 1fr;
+  }
 
-/* 회의실 옆 정렬 */
-.roomRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+  .roomField {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.resetTextBtn {
-  background: none;
-  border: none;
-  color: #EF4444;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0;
-}
+  .roomSelect {
+    width: 100%;
+    min-width: 0;
+  }
 
-.resetTextBtn:hover {
-  text-decoration: underline;
-}
+  .calendar {
+    overflow-x: auto;
+  }
 
-.todayMiniBtn {
-  background: #0D9488;
-  color: white;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 12px;
-}
+  .head,
+  .body .row {
+    grid-template-columns: 64px repeat(7, minmax(108px, 1fr));
+  }
 
-.todayMiniBtn:hover {
-  background: #0f766e;
-}
+  .buttonRow {
+    width: 100%;
+  }
 
-.autoAssignBtn {
-  background: #2563EB;
-  color: white;
-  border: none;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-weight: 700;
-  cursor: pointer;
-  font-size: 12px;
+  .stepBtn {
+    flex: 1;
+  }
 }
-
-.autoAssignBtn:hover {
-  background: #1f2937;
-}
-
-.autoAssignBtn:disabled {
-  background: #94a3b8;
-  cursor: not-allowed;
-}
-
 </style>

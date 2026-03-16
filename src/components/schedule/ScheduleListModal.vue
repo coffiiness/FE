@@ -4,7 +4,11 @@ import { computed } from 'vue'
 const props = defineProps({
   isOpen: Boolean,
   date: String,
-  events: Array
+  events: Array,
+  showAddButton: {
+    type: Boolean,
+    default: true
+  }
 })
 
 const emit = defineEmits(['close', 'add', 'edit', 'delete'])
@@ -96,7 +100,7 @@ const typeLabel = (type) => {
           </div>
         </div>
 
-        <div class="p-4 border-t border-slate-100 bg-slate-50 text-right flex-none">
+        <div v-if="showAddButton" class="p-4 border-t border-slate-100 bg-slate-50 text-right flex-none">
           <button
               @click="$emit('add')"
               class="text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2.5 rounded-lg transition-colors shadow-sm flex items-center justify-center w-full sm:w-auto ml-auto"

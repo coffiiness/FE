@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRecruitmentStore } from '@/stores/recruitment'
 import { storeToRefs } from 'pinia'
@@ -21,9 +21,19 @@ const { organizations, allMembers } = storeToRefs(organizationStore)
 
 const weeklyInterviewSchedules = ref([])
 const memberType = ref('')
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
+
+const handleViewportResize = () => {
+  if (typeof window !== 'undefined') {
+    viewportWidth.value = window.innerWidth
+  }
+}
 
 // --- 페이지 진입 시 API 호출 ---
 onMounted(async () => {
+  handleViewportResize()
+  window.addEventListener('resize', handleViewportResize)
+
   const [recruitmentsResult, weeklySchedulesResult, organizationsResult, memberResult] = await Promise.allSettled([
     store.fetchRecruitments(),
     fetchWeeklyInterviewSchedules(),
@@ -47,6 +57,12 @@ onMounted(async () => {
     memberType.value = memberResult.value?.data?.data?.memberType || ''
   } else {
     console.error('멤버 정보 조회 실패:', memberResult.reason)
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', handleViewportResize)
   }
 })
 
@@ -320,6 +336,7 @@ const fetchWeeklyInterviewSchedules = async () => {
 
 // --- 상태 관리 ---
 const activeMenuId = ref(null) // 드롭다운 메뉴 상태
+const expandedRecruitmentId = ref(null)
 const showDeleteModal = ref(false) // 삭제 모달 상태
 const showCopyModal = ref(false) // 링크 복사 성공 모달 상태
 const deleteTargetId = ref(null) // 삭제할 공고 ID 저장
@@ -357,38 +374,38 @@ const selectedInterview = ref(null)
 const weeklySchedules = computed(() => weeklyInterviewSchedules.value)
 
 const stats = computed(() => {
-  // 1. 진행 중인 공고 (active + urgent)
   const activeJobsCount = jobs.value.filter(j => j.status === 'OPEN').length
-
-  // 2. 이번 주 면접 예정 (일~토 기준)
   const interviewsThisWeek = weeklySchedules.value.length
-
-  // 3. 마감 임박 공고
   const urgentJobsCount = jobs.value.filter((job) =>
     getDisplayStatus(job.status, job.endDate) === 'urgent'
   ).length
 
   return [
-    { label: '진행 중인 공고', value: activeJobsCount, unit: '건', color: 'text-slate-900', bg: 'bg-white' },
-    { 
-      label: '이번 주 면접 예정', 
-      value: interviewsThisWeek, 
-      unit: '건', 
-      color: 'text-brand-600', 
-      bg: 'bg-brand-50/50 cursor-pointer hover:bg-brand-100 transition-colors', // Clickable style
-      onClick: () => { showWeeklyModal.value = true } 
+    {
+      label: '진행 중인 공고',
+      value: activeJobsCount,
+      unit: '건',
+      tone: 'slate',
+      helper: activeJobsCount > 0 ? '현재 게시 중인 공고를 빠르게 확인합니다.' : '게시 중인 공고가 없습니다.'
+    },
+    {
+      label: '이번 주 면접 예정',
+      value: interviewsThisWeek,
+      unit: '건',
+      tone: 'brand',
+      helper: interviewsThisWeek > 0 ? '주간 면접 일정을 바로 열어 확인합니다.' : '이번 주 예정된 면접이 없습니다.',
+      onClick: () => { showWeeklyModal.value = true }
     },
     {
       label: '마감 임박 공고',
       value: urgentJobsCount,
       unit: '건',
-      color: 'text-rose-600',
-      bg: 'bg-rose-50/50 cursor-pointer hover:bg-rose-100 transition-colors',
-      glow: true,
+      tone: 'rose',
+      helper: urgentJobsCount > 0 ? '곧 마감되는 공고를 우선 점검합니다.' : '지금은 마감 임박 공고가 없습니다.',
       onClick: () => {
         statusFilter.value = statusFilter.value === '마감 임박' ? '전체 상태' : '마감 임박'
       }
-    },
+    }
   ]
 })
 
@@ -416,6 +433,16 @@ const getStatusColor = (status) => {
     case 'closed': return 'text-slate-600 bg-slate-100 border-slate-200'
     case 'pending': return 'text-amber-700 bg-amber-50 border-amber-200'
     default: return 'text-slate-600'
+  }
+}
+
+const getStatusValueColor = (status) => {
+  switch (status) {
+    case 'active': return 'text-brand-700'
+    case 'urgent': return 'text-rose-600'
+    case 'closed': return 'text-slate-500'
+    case 'pending': return 'text-amber-600'
+    default: return 'text-slate-900'
   }
 }
 
@@ -450,6 +477,12 @@ const handleNoticeConfirm = () => {
 
 const goToDetail = (id) => {
   router.push(`/recruitment/jobs/${id}`)
+}
+
+const isRecruitmentExpanded = (recruitmentId) => expandedRecruitmentId.value === recruitmentId
+
+const toggleRecruitmentExpanded = (recruitmentId) => {
+  expandedRecruitmentId.value = expandedRecruitmentId.value === recruitmentId ? null : recruitmentId
 }
 
 // 1. 삭제 버튼 클릭 시 모달 열기
@@ -559,6 +592,12 @@ const sortBy = ref('최신순')
 const filteredJobs = computed(() => {
   let result = jobs.value.map(job => {
     const dday = getDday(job.status, job.startDate, job.endDate)
+    const funnel = normalizePipelineStages(job.stages).map(s => ({
+      step: s.stageName,
+      count: s.applicantCount || 0,
+      active: (s.applicantCount || 0) > 0
+    }))
+    const interviewers = resolveInterviewerNames(job)
     return {
       ...job,
       dday: dday.text,
@@ -567,12 +606,12 @@ const filteredJobs = computed(() => {
       displayStatus: getDisplayStatus(job.status, job.endDate),
       team: resolveTeamName(job),
       position: getCareerText(job),
-      funnel: normalizePipelineStages(job.stages).map(s => ({
-        step: s.stageName,
-        count: s.applicantCount || 0,
-        active: (s.applicantCount || 0) > 0
-      })),
-      interviewers: resolveInterviewerNames(job)
+      funnel,
+      interviewers,
+      interviewerPreview: interviewers.slice(0, 4),
+      interviewerCount: interviewers.length,
+      stageCount: funnel.length,
+      applicantTotal: funnel.reduce((total, step) => total + step.count, 0)
     }
   })
 
@@ -602,11 +641,68 @@ const filteredJobs = computed(() => {
   // 3. 정렬
   if (sortBy.value === '최신순') {
     result.sort((a, b) => new Date(b.endDate || 0) - new Date(a.endDate || 0))
+  } else if (sortBy.value === '지원자순') {
+    result.sort((a, b) => b.applicantTotal - a.applicantTotal)
   } else if (sortBy.value === '마감일순') {
     result.sort((a, b) => a.ddayValue - b.ddayValue)
   }
 
   return result
+})
+
+const recruitmentColumnCount = computed(() => {
+  if (viewportWidth.value >= 1280) return 3
+  if (viewportWidth.value >= 768) return 2
+  return 1
+})
+
+const recruitmentColumns = computed(() => {
+  const columns = Array.from({ length: recruitmentColumnCount.value }, () => [])
+
+  filteredJobs.value.forEach((job, index) => {
+    columns[index % recruitmentColumnCount.value].push(job)
+  })
+
+  return columns
+})
+
+const memberRoleLabel = computed(() => (canManageRecruitment.value ? '인사담당자' : '공고 참여자'))
+
+const heroDescription = computed(() => (
+  canManageRecruitment.value
+    ? '공고 생성부터 게시, 면접관 배정, 마감 임박 대응까지 채용 운영 흐름을 한 화면에서 빠르게 정리합니다.'
+    : '내가 연결된 공고와 이번 주 면접 일정을 기준으로 필요한 채용 흐름만 빠르게 확인할 수 있습니다.'
+))
+
+const visibleRecruitmentCount = computed(() => filteredJobs.value.length)
+
+const pendingRecruitmentCount = computed(() => jobs.value.filter((job) => job.status === 'DRAFT').length)
+
+const nextDeadlineJob = computed(() => {
+  const candidates = filteredJobs.value
+    .filter((job) => ['active', 'urgent', 'pending'].includes(job.displayStatus) && Number.isFinite(job.ddayValue))
+    .slice()
+    .sort((a, b) => a.ddayValue - b.ddayValue)
+
+  return candidates[0] || null
+})
+
+const activeFilters = computed(() => {
+  const filters = []
+
+  if (searchQuery.value.trim()) {
+    filters.push({ label: '검색', value: searchQuery.value.trim() })
+  }
+
+  if (statusFilter.value !== '전체 상태') {
+    filters.push({ label: '상태', value: statusFilter.value })
+  }
+
+  if (sortBy.value !== '최신순') {
+    filters.push({ label: '정렬', value: sortBy.value })
+  }
+
+  return filters
 })
 
 const isFilterApplied = computed(() => {
@@ -880,212 +976,396 @@ const saveInterviewers = async () => {
 
 
 <template>
-  <div class="space-y-8 animate-fade-in-up p-2 relative">
+  <div class="relative space-y-6 p-2 animate-fade-in-up">
+    <div
+      v-if="activeMenuId !== null"
+      class="fixed inset-0 z-10 cursor-default"
+      @click="activeMenuId = null"
+    ></div>
 
-    <div v-if="activeMenuId !== null"
-         @click="activeMenuId = null"
-         class="fixed inset-0 z-10 cursor-default">
-    </div>
+    <section class="rounded-[24px] border border-brand-100 bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.16),_transparent_42%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(240,253,250,0.94))] p-4">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-[1.7rem] font-bold tracking-tight text-slate-950 sm:text-[1.9rem]">채용 홈</h1>
+            <span class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-xs font-semibold text-slate-600">
+              {{ canManageRecruitment ? '인사담당자' : '공고 참여자' }}
+            </span>
+          </div>
 
-    <div class="flex flex-col md:flex-row md:items-center justify-end gap-4 relative z-0">
-      <button
-          v-if="canManageRecruitment"
-          @click="goToCreateRecruitment"
-          class="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center group z-20"
-      >
-        <svg class="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        새 공고 만들기
-      </button>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-0">
-      <div v-for="(stat, idx) in stats" :key="idx"
-           @click="stat.onClick && stat.onClick()"
-           :class="['relative overflow-hidden border rounded-2xl p-6 transition-all hover:shadow-md group/stat', stat.bg, 'border-slate-200 shadow-sm']">
-        <div v-if="stat.glow" class="absolute -right-4 -top-4 w-24 h-24 bg-rose-100 rounded-full blur-2xl pointer-events-none"></div>
-        <p class="text-sm text-slate-500 font-medium mb-1">{{ stat.label }}</p>
-        <div class="flex items-baseline mb-2">
-          <span :class="['text-4xl font-display font-bold', stat.color]">
-            {{ stat.value }}
-          </span>
-          <span class="ml-2 text-slate-400 font-medium">{{ stat.unit }}</span>
+          <p class="mt-1.5 text-[13px] text-slate-500">
+            전체 {{ jobs.length }}개 · 현재 {{ visibleRecruitmentCount }}개 표시
+            <template v-if="nextDeadlineJob">
+              · 다음 마감 {{ nextDeadlineJob.title }} {{ nextDeadlineJob.dday }}
+            </template>
+          </p>
         </div>
-        
-        <!-- Detail View Button for Clickable Stats -->
-        <div v-if="stat.onClick" class="absolute bottom-4 right-4 opacity-0 group-hover/stat:opacity-100 transition-opacity">
-          <button class="flex items-center text-xs font-bold text-slate-400 hover:text-brand-600 bg-white/50 hover:bg-white px-2 py-1 rounded-lg transition-all backdrop-blur-sm">
-            상세보기
-            <svg class="w-3 h-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+
+        <button
+          v-if="canManageRecruitment"
+          type="button"
+          class="inline-flex items-center gap-2 rounded-2xl border border-brand-200 bg-white px-3.5 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+          @click="goToCreateRecruitment"
+        >
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          새 공고
+        </button>
+      </div>
+
+      <div class="mt-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-[20px] border border-white/80 bg-white/75 px-4 py-2.5">
+          <p class="text-xs font-semibold text-slate-500">진행 중 공고</p>
+          <div class="mt-1.5 flex items-baseline gap-1">
+            <span class="text-[1.7rem] font-bold text-slate-950">{{ stats[0]?.value ?? 0 }}</span>
+            <span class="text-sm text-slate-400">건</span>
+          </div>
+        </div>
+
+        <div class="rounded-[20px] border border-white/80 bg-white/75 px-4 py-2.5">
+          <p class="text-xs font-semibold text-slate-500">게시 대기</p>
+          <div class="mt-1.5 flex items-baseline gap-1">
+            <span class="text-[1.7rem] font-bold text-slate-950">{{ pendingRecruitmentCount }}</span>
+            <span class="text-sm text-slate-400">건</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="rounded-[20px] border border-white/80 bg-white/75 px-4 py-2.5 text-left transition-colors hover:border-brand-200 hover:bg-white"
+          @click="showWeeklyModal = true"
+        >
+          <p class="text-xs font-semibold text-slate-500">이번 주 면접</p>
+          <div class="mt-1.5 flex items-baseline gap-1">
+            <span class="text-[1.7rem] font-bold text-brand-700">{{ stats[1]?.value ?? 0 }}</span>
+            <span class="text-sm text-slate-400">건</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          class="rounded-[20px] border border-white/80 bg-white/75 px-4 py-2.5 text-left transition-colors hover:border-rose-200 hover:bg-white"
+          @click="statusFilter === '마감 임박' ? statusFilter = '전체 상태' : statusFilter = '마감 임박'"
+        >
+          <p class="text-xs font-semibold text-slate-500">마감 임박</p>
+          <div class="mt-1.5 flex items-baseline gap-1">
+            <span class="text-[1.7rem] font-bold text-rose-600">{{ stats[2]?.value ?? 0 }}</span>
+            <span class="text-sm text-slate-400">건</span>
+          </div>
+        </button>
+      </div>
+    </section>
+
+    <section class="rounded-[24px] border border-slate-200 bg-white p-4">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-slate-950">채용 공고</h2>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">전체 {{ jobs.length }}개</span>
+          <span class="rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700">현재 {{ visibleRecruitmentCount }}개 표시</span>
         </div>
       </div>
-    </div>
 
-    <div class="flex flex-col sm:flex-row gap-4 relative z-0">
-      <div class="relative flex-1">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
+      <div class="mt-4 grid gap-2.5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
             v-model="searchQuery"
             type="text"
             placeholder="공고명, 부서명 또는 담당자 검색..."
-            class="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all shadow-sm"
-        >
-      </div>
-      <div class="flex gap-2">
-        <select v-model="statusFilter" class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
-          <option>전체 상태</option>
-          <option>진행 중</option>
-          <option>마감 임박</option>
-          <option>게시 전</option>
-          <option>종료됨</option>
-        </select>
-        <select v-model="sortBy" class="bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-700 focus:outline-none focus:border-brand-500 shadow-sm transition-all">
-          <option>최신순</option>
-          <option>지원자순</option>
-          <option>마감일순</option>
-        </select>
-      </div>
-    </div>
+            class="w-full rounded-[20px] border border-slate-200 bg-slate-50/60 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 transition-all focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+        </div>
 
-    <div v-if="showEmptyState"
-         class="bg-white border border-dashed border-slate-300 rounded-3xl px-8 py-16 text-center shadow-sm">
-      <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center">
-        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <select
+            v-model="statusFilter"
+            class="rounded-[20px] border border-slate-200 bg-slate-50/60 px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option>전체 상태</option>
+            <option>진행 중</option>
+            <option>마감 임박</option>
+            <option>게시 전</option>
+            <option>종료됨</option>
+          </select>
+
+          <select
+            v-model="sortBy"
+            class="rounded-[20px] border border-slate-200 bg-slate-50/60 px-4 py-2.5 text-sm text-slate-700 transition-all focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option>최신순</option>
+            <option>지원자순</option>
+            <option>마감일순</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <span
+          v-if="activeFilters.length === 0"
+          class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500"
+        >
+          필터가 적용되지 않았습니다.
+        </span>
+
+        <span
+          v-for="filter in activeFilters"
+          :key="`${filter.label}-${filter.value}`"
+          class="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700"
+        >
+          {{ filter.label }} · {{ filter.value }}
+        </span>
+
+        <button
+          v-if="isFilterApplied"
+          type="button"
+          class="ml-auto inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition-colors hover:border-brand-200 hover:text-brand-700"
+          @click="resetFilters"
+        >
+          필터 초기화
+        </button>
+      </div>
+    </section>
+
+    <div
+      v-if="showEmptyState"
+      class="rounded-[28px] border border-dashed border-slate-300 bg-white px-8 py-16 text-center"
+    >
+      <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17v-6m3 6V7m3 10v-3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
       </div>
-      <h3 class="text-xl font-bold text-slate-900 mb-2">{{ emptyState.title }}</h3>
-      <p class="text-sm text-slate-500 leading-relaxed max-w-xl mx-auto">
+      <h3 class="mb-2 text-xl font-bold text-slate-900">{{ emptyState.title }}</h3>
+      <p class="mx-auto max-w-xl text-sm leading-relaxed text-slate-500">
         {{ emptyState.description }}
       </p>
       <button
         v-if="emptyState.action"
+        type="button"
+        class="mt-6 inline-flex items-center justify-center rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-700"
         @click="emptyState.action && emptyState.action()"
-        class="mt-6 inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-sm transition-colors"
       >
         {{ emptyState.actionText }}
       </button>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      <div v-for="job in filteredJobs" :key="job.id"
-           class="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-brand-300 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 shadow-sm"
-           :class="{'relative z-20 border-brand-300 ring-2 ring-brand-100': activeMenuId === job.id}">
-
-        <div class="flex justify-between items-start mb-4 relative">
-          <div class="flex-1 cursor-pointer" @click="goToDetail(job.id)">
-            <span :class="['inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold mb-2 border', getStatusColor(job.displayStatus)]"
-                  :title="job.ddayDetail || ''">
-              {{ job.dday }}
-              <span v-if="job.ddayDetail" class="ml-1 text-[10px] font-normal opacity-75">{{ job.ddayDetail }}</span>
-            </span>
-            <h3 class="text-xl font-bold text-slate-900 group-hover:text-brand-600 transition-colors">{{ job.title }}</h3>
-            <p class="text-sm text-slate-500 mt-1 flex items-center">
-              <span class="w-1.5 h-1.5 rounded-full bg-slate-400 mr-2"></span>
-              {{ job.team }} · {{ job.position }}
-            </p>
-          </div>
-
-          <div class="relative">
-            <button @click.stop="toggleMenu(job.id)"
-                    class="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors focus:outline-none">
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-
-            <div v-if="activeMenuId === job.id"
-                 class="absolute right-0 top-8 w-48 bg-white border border-slate-200 rounded-xl shadow-xl z-30 py-1 animate-fade-in-down origin-top-right">
-
-              <button
-                  v-if="canManageRecruitment && job.status === 'DRAFT'"
-                  @click.stop="requestPublishRecruitment(job)"
-                  :disabled="publishingRecruitmentId === job.id"
-                  class="w-full text-left px-4 py-2.5 text-sm text-brand-600 hover:bg-brand-50 flex items-center transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.868v4.264a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                {{ publishingRecruitmentId === job.id ? '게시 중...' : '즉시 게시' }}
-              </button>
-
-              <button
-                  @click.stop="goToEditRecruitment(job.id)"
-                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                공고 수정
-              </button>
-
-              <button
-                  @click.stop="copyLink(job.id)"
-                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-                링크 복사
-              </button>
-
-              <button
-                  @click.stop="openInterviewerModal(job)"
-                  class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 flex items-center transition-colors"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                면접관 설정
-              </button>
-
-              <div class="border-t border-slate-100 my-1"></div>
-
-              <button
-                  @click.stop="openDeleteModal(job.id)"
-                  class="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 flex items-center transition-colors font-medium"
-              >
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                공고 삭제
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mb-6 bg-slate-50 rounded-xl px-4 py-5 border border-slate-100" @click="goToDetail(job.id)">
-          <div class="flex items-end space-x-2 h-14">
-            <div v-for="(step, sIdx) in job.funnel" :key="sIdx" class="flex-1 flex flex-col items-center group/step relative">
-              <div v-if="step.count > 0"
-                   :class="['mb-2 px-2 py-0.5 rounded text-xs font-bold shadow-sm transition-all duration-300',
-                            step.active ? 'bg-brand-500 text-white translate-y-0 opacity-100' : 'bg-white border border-slate-200 text-slate-600 -translate-y-1 opacity-0 group-hover/step:opacity-100 group-hover/step:translate-y-0']">
-                {{ step.count }}
-              </div>
-              <div v-else class="h-[26px]"></div>
-              <div class="w-full h-2 rounded-full mb-2 overflow-hidden bg-slate-200">
-                <div :class="['h-full rounded-full transition-all duration-500', step.active ? 'bg-brand-500 w-full' : 'bg-slate-300 w-full']"></div>
-              </div>
-              <span :class="['text-sm font-bold text-center truncate w-full transition-colors', step.active ? 'text-brand-600' : 'text-slate-600']">
-                {{ step.step }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex justify-between items-center border-t border-slate-100 pt-4">
-          <div class="flex -space-x-2">
-            <div v-for="(intr, iIdx) in job.interviewers" :key="iIdx"
-                 class="w-8 h-8 rounded-full bg-white border border-slate-300 flex items-center justify-center text-xs font-bold text-slate-600 ring-2 ring-white shadow-sm">
-              {{ intr[0] }}
-            </div>
-          </div>
-          <button @click="goToDetail(job.id)"
-                  class="text-xs font-bold text-slate-500 hover:text-brand-600 flex items-center transition-colors group/btn">
-            관리하기
-            <svg class="w-3 h-3 ml-1 group-hover/btn:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+    <div v-else class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-lg font-bold text-slate-950">채용 카드</h3>
         </div>
       </div>
 
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div
+          v-for="(columnJobs, columnIndex) in recruitmentColumns"
+          :key="`recruitment-column-${columnIndex}`"
+          class="space-y-5"
+        >
+          <article
+            v-for="job in columnJobs"
+            :key="job.id"
+            class="group relative rounded-[26px] border border-slate-200 bg-white p-5 transition-colors duration-200 hover:border-brand-300"
+            :class="{ 'z-20 border-brand-300 ring-1 ring-brand-100': activeMenuId === job.id }"
+          >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1 cursor-pointer" @click="goToDetail(job.id)">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  :class="['inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold', getStatusColor(job.displayStatus)]"
+                  :title="job.ddayDetail || ''"
+                >
+                  {{ job.dday }}
+                  <span v-if="job.ddayDetail" class="ml-1 text-[10px] font-normal opacity-75">{{ job.ddayDetail }}</span>
+                </span>
+                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{{ job.team }}</span>
+                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{{ job.position }}</span>
+              </div>
+
+              <div class="mt-4">
+                <h3 class="truncate text-xl font-bold text-slate-950 transition-colors group-hover:text-brand-700">{{ job.title }}</h3>
+                <p class="mt-2 text-sm leading-6 text-slate-500">
+                  면접관 {{ job.interviewerCount }}명 · 채용 단계 {{ job.stageCount }}개 · 지원자 {{ job.applicantTotal }}명
+                </p>
+              </div>
+            </div>
+
+            <div class="relative flex self-stretch flex-col items-end justify-between pb-1">
+              <button
+                type="button"
+                class="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                @click.stop="toggleMenu(job.id)"
+              >
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+
+              <div
+                v-if="activeMenuId === job.id"
+                class="absolute right-0 top-9 z-30 w-48 origin-top-right rounded-2xl border border-slate-200 bg-white py-1 animate-fade-in-down"
+              >
+                <button
+                  v-if="canManageRecruitment && job.status === 'DRAFT'"
+                  type="button"
+                  :disabled="publishingRecruitmentId === job.id"
+                  class="flex w-full items-center px-4 py-2.5 text-left text-sm font-medium text-brand-700 transition-colors hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  @click.stop="requestPublishRecruitment(job)"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.868v4.264a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  {{ publishingRecruitmentId === job.id ? '게시 중...' : '즉시 게시' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="flex w-full items-center px-4 py-2.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 hover:text-brand-700"
+                  @click.stop="goToEditRecruitment(job.id)"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                  </svg>
+                  공고 수정
+                </button>
+
+                <button
+                  type="button"
+                  class="flex w-full items-center px-4 py-2.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 hover:text-brand-700"
+                  @click.stop="copyLink(job.id)"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                  </svg>
+                  링크 복사
+                </button>
+
+                <button
+                  type="button"
+                  class="flex w-full items-center px-4 py-2.5 text-left text-sm text-slate-700 transition-colors hover:bg-slate-50 hover:text-brand-700"
+                  @click.stop="openInterviewerModal(job)"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                  </svg>
+                  면접관 설정
+                </button>
+
+                <div class="my-1 border-t border-slate-100"></div>
+
+                <button
+                  type="button"
+                  class="flex w-full items-center px-4 py-2.5 text-left text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50"
+                  @click.stop="openDeleteModal(job.id)"
+                >
+                  <svg class="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                  </svg>
+                  공고 삭제
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-bold text-slate-500 transition-colors hover:text-brand-700"
+                @click.stop="toggleRecruitmentExpanded(job.id)"
+              >
+                {{ isRecruitmentExpanded(job.id) ? '접기' : '펼쳐보기' }}
+                <svg
+                  class="h-3.5 w-3.5 transition-transform duration-200"
+                  :class="{ 'rotate-90': isRecruitmentExpanded(job.id) }"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div v-if="isRecruitmentExpanded(job.id)" class="mt-4 space-y-3 border-t border-slate-100 pt-4">
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
+                <p class="text-xs font-semibold text-slate-500">담당 면접관</p>
+                <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">
+                  {{ job.interviewerCount > 0 ? job.interviewers.join(' · ') : '배정된 면접관이 없습니다.' }}
+                </p>
+              </div>
+
+              <div class="rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5">
+                <p class="text-xs font-semibold text-slate-500">현재 상태</p>
+                <p :class="['mt-3 text-sm font-semibold', getStatusValueColor(job.displayStatus)]">{{ job.dday }}</p>
+              </div>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <div>
+                  <p class="text-sm font-semibold text-slate-900">채용 단계</p>
+                  <p class="mt-1 text-xs text-slate-500">{{ job.stageCount }}단계 · 지원자 {{ job.applicantTotal }}명</p>
+                </div>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-brand-700 transition-colors hover:text-brand-800"
+                  @click="goToDetail(job.id)"
+                >
+                  상세 보기
+                </button>
+              </div>
+
+              <div class="grid gap-3 px-4 py-4">
+                <div
+                  v-for="(step, sIdx) in job.funnel"
+                  :key="`${job.id}-step-${sIdx}`"
+                  class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3"
+                >
+                  <span
+                    class="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold"
+                    :class="step.active ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-500'"
+                  >
+                    {{ sIdx + 1 }}
+                  </span>
+
+                  <div class="min-w-0">
+                    <div class="flex items-center justify-between gap-3">
+                      <p class="truncate text-sm font-medium text-slate-700">{{ step.step }}</p>
+                      <span class="text-xs font-semibold text-slate-400">{{ step.count }}명</span>
+                    </div>
+                    <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        class="h-full rounded-full transition-all"
+                        :class="step.active ? 'bg-brand-500' : 'bg-slate-200'"
+                        :style="{ width: step.count > 0 ? '100%' : '32%' }"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-end border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-xs font-bold text-slate-500 transition-colors hover:text-brand-700"
+                @click="goToDetail(job.id)"
+              >
+                관리하기
+                <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          </article>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1108,7 +1388,7 @@ const saveInterviewers = async () => {
     <div v-if="showDeleteModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeDeleteModal"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+      <div class="relative w-[400px] max-w-[90%] scale-100 transform rounded-[24px] border border-slate-200 bg-white p-6 transition-all">
 
         <div class="flex flex-col items-center text-center">
           <div class="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center text-rose-500 mb-4">
@@ -1132,7 +1412,7 @@ const saveInterviewers = async () => {
             </button>
             <button
                 @click="confirmDelete"
-                class="flex-1 py-2.5 px-4 bg-rose-500 text-white rounded-xl font-bold hover:bg-rose-600 shadow-md hover:shadow-lg transition-all"
+                class="flex-1 rounded-xl bg-rose-500 px-4 py-2.5 font-bold text-white transition-colors hover:bg-rose-600"
             >
               삭제하기
             </button>
@@ -1147,7 +1427,7 @@ const saveInterviewers = async () => {
     <div v-if="showCopyModal" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="showCopyModal = false"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+      <div class="relative w-[400px] max-w-[90%] scale-100 transform rounded-[24px] border border-slate-200 bg-white p-6 transition-all">
         <div class="flex flex-col items-center text-center">
           <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mb-4">
             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1163,7 +1443,7 @@ const saveInterviewers = async () => {
 
           <button
               @click="showCopyModal = false"
-              class="w-full py-2.5 px-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-md hover:shadow-lg transition-all"
+              class="w-full rounded-xl bg-slate-900 px-4 py-2.5 font-bold text-white transition-colors hover:bg-slate-800"
           >
             확인
           </button>
@@ -1177,7 +1457,7 @@ const saveInterviewers = async () => {
     <div v-if="isInterviewerModalOpen" class="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
       <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="closeInterviewerModal"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-2xl w-[720px] max-w-[95%] overflow-hidden flex flex-col max-h-[85vh] animate-fade-in-up border border-slate-100">
+      <div class="relative flex max-h-[85vh] w-[720px] max-w-[95%] flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white animate-fade-in-up">
         <div class="p-6 border-b border-slate-100 flex justify-between items-center">
           <div>
             <h3 class="text-xl font-bold text-slate-900">담당 면접관 수정</h3>
@@ -1189,11 +1469,11 @@ const saveInterviewers = async () => {
         </div>
 
         <div class="px-6 pt-6 overflow-y-auto custom-scrollbar">
-          <div v-if="selectedInterviewerDetails.length > 0" class="flex flex-wrap gap-2 mb-4 p-3 bg-brand-50/50 rounded-xl border border-brand-100">
+          <div v-if="selectedInterviewerDetails.length > 0" class="mb-4 flex flex-wrap gap-2 rounded-xl border border-brand-100 bg-brand-50/50 p-3">
             <div
               v-for="member in selectedInterviewerDetails"
               :key="getMemberUserId(member) ?? member.id"
-              class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-brand-200 text-sm text-slate-700 shadow-sm"
+              class="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-sm text-slate-700"
             >
               <span class="w-6 h-6 rounded-full bg-brand-500 text-white flex items-center justify-center text-[11px] font-bold">
                 {{ member.name.substring(0, 1) }}
@@ -1213,10 +1493,10 @@ const saveInterviewers = async () => {
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             </span>
             <input v-model="interviewerSearchQuery" type="text" placeholder="이름 또는 직책으로 검색..."
-                   class="w-full bg-white border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 font-medium placeholder-slate-400 shadow-sm focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all">
+                   class="w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm font-medium text-slate-900 placeholder-slate-400 transition-all focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
           </div>
 
-          <div class="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm max-h-[400px] overflow-y-auto">
+          <div class="max-h-[400px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
             <div v-for="dept in filteredOrganizations" :key="dept.id">
               <button @click="toggleDept(dept.id)" type="button"
                       class="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 border-b border-slate-200 transition-colors">
@@ -1296,7 +1576,7 @@ const saveInterviewers = async () => {
           <button
               @click="saveInterviewers"
               :disabled="savingInterviewers"
-              class="flex-1 bg-brand-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-brand-700 shadow-md transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+              class="flex-1 rounded-xl bg-brand-600 py-2.5 text-sm font-bold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60">
             {{ savingInterviewers ? '저장 중...' : '저장하기' }}
           </button>
         </div>

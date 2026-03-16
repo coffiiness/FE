@@ -12,6 +12,13 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 
+const goToSignup = () => {
+  router.push({
+    path: '/signup',
+    query: route.query.redirect ? { redirect: route.query.redirect } : {}
+  })
+}
+
 const handleLogin = async () => {
   error.value = ''
   loading.value = true
@@ -37,117 +44,495 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-white">
-    <!-- Left Section: Stylish Background & Branding -->
-    <div class="hidden lg:flex lg:w-1/2 bg-slate-900 relative justify-center items-center overflow-hidden">
-        <!-- Background Pattern/Gradient -->
-        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-brand-950 opacity-90 z-0"></div>
-        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0"></div>
-        
-        <!-- Decorative Shapes -->
-        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl"></div>
-
-        <!-- Content -->
-        <div class="relative z-10 text-center px-10">
-            <h1 class="text-5xl font-extrabold text-white mb-6 tracking-tight leading-tight">
-                Recruiting <br/> <span class="text-brand-400">Simplified.</span>
-            </h1>
-            <p class="text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
-                면접관의 시간과 회의실 예약까지 알아서 조율하는,<br>가장 똑똑한 자동화 채용 파트너
-            </p>
-            
-            <!-- Illustration Placeholder (CSS-only minimal graphic) -->
-            <div class="mt-12 flex justify-center">
-                 <div class="relative w-48 h-48">
-                    <div class="absolute inset-0 bg-brand-500 rounded-2xl rotate-6 opacity-20"></div>
-                    <div class="absolute inset-0 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-2xl flex items-center justify-center">
-                        <span class="text-6xl">📅</span>
-                    </div>
-                    <!-- Orbiting element -->
-                    <div class="absolute -top-4 -right-4 w-16 h-16 bg-brand-500 rounded-xl rotate-12 flex items-center justify-center shadow-lg animate-bounce">
-                         <span class="text-2xl">✨</span>
-                    </div>
-                 </div>
-            </div>
-        </div>
+  <div class="login-shell">
+    <div class="login-shell__background" aria-hidden="true">
+      <div class="login-shell__beam login-shell__beam--blue"></div>
+      <div class="login-shell__beam login-shell__beam--amber"></div>
+      <div class="login-shell__beam login-shell__beam--rose"></div>
+      <div class="login-shell__beam login-shell__beam--teal"></div>
+      <div class="login-shell__glow"></div>
     </div>
 
-    <!-- Right Section: Login Form -->
-    <div class="flex flex-1 flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
-      <div class="mx-auto w-full max-w-sm lg:w-96">
-        
-        <!-- Logo on Mobile (visible only on small screens if needed, but here usually at top of form) -->
-        <div class="mb-10">
-           <h2 class="text-3xl font-bold tracking-tight text-slate-900">
-             <span class="text-brand-600">Cal</span>Fit
-           </h2>
-           <p class="mt-2 text-sm text-slate-500">
-             돌아오신 것을 환영합니다! 계정 정보를 입력해주세요.
-           </p>
+    <header class="login-shell__header">
+      <div class="login-shell__brand">
+        <svg class="login-shell__brand-mark" viewBox="0 0 128 128" aria-hidden="true">
+          <path
+            d="M108 20H62C35 20 16 39 16 66c0 19 9 34 23 42V92c-9-6-15-16-15-31 0-22 15-33 40-33h35z"
+            fill="url(#calfit-mark-gradient)"
+          />
+          <path
+            d="M54 44h46l-10 14H63v18h27l-10 14H63v26l-15-2V58H37z"
+            fill="url(#calfit-mark-gradient)"
+          />
+          <defs>
+            <linearGradient id="calfit-mark-gradient" x1="18" y1="18" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#2dd4bf" />
+              <stop offset="1" stop-color="#0f766e" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="login-shell__brand-wordmark">
+          <span class="login-shell__brand-cal">Cal</span><span class="login-shell__brand-fit">Fit</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="login-shell__content">
+      <section class="login-card">
+        <div class="login-card__copy">
+          <span class="login-card__eyebrow">Workspace sign in</span>
+          <h1 class="login-card__title">계정에 로그인</h1>
+          <p class="login-card__description">
+            이메일과 비밀번호를 입력해 채용 운영 화면으로 돌아오세요.
+          </p>
         </div>
 
-        <form class="space-y-6" @submit.prevent="handleLogin">
-          <div>
-            <label for="email" class="block text-sm font-semibold text-slate-700">이메일</label>
-            <div class="mt-1">
-              <input
-                id="email"
-                v-model="email"
-                type="email"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="name@company.com"
-              />
-            </div>
-          </div>
+        <form class="login-form" @submit.prevent="handleLogin">
+          <label class="login-field">
+            <span class="login-field__label">이메일</span>
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              required
+              class="login-field__input"
+              placeholder="name@company.com"
+            />
+          </label>
 
-          <div>
-            <label for="password" class="block text-sm font-semibold text-slate-700">비밀번호</label>
-            <div class="mt-1">
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
+          <label class="login-field">
+            <span class="login-field__label">비밀번호</span>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              required
+              class="login-field__input"
+              placeholder="••••••••"
+            />
+          </label>
 
-          <div v-if="error" class="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-100">
+          <div v-if="error" class="login-form__error">
             {{ error }}
           </div>
 
-          <div>
-            <button
-              type="submit"
-              :disabled="loading"
-              class="flex w-full justify-center rounded-lg border border-transparent bg-brand-600 py-3 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
-            >
-               <span v-if="loading" class="flex items-center">
-                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  로그인 중...
-                </span>
-                <span v-else>로그인</span>
-            </button>
-          </div>
+          <button
+            type="submit"
+            :disabled="loading"
+            class="login-form__submit"
+          >
+            <span v-if="loading" class="login-form__submit-content">
+              <svg class="login-form__spinner" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              로그인 중...
+            </span>
+            <span v-else>로그인</span>
+          </button>
         </form>
 
-        <div class="mt-8 text-center">
-            <p class="text-sm text-slate-500">
-                계정이 없으신가요? 
-                <button @click="router.push({ path: '/signup', query: route.query.redirect ? { redirect: route.query.redirect } : {} })" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
-                    무료로 회원가입하기
-                </button>
-            </p>
+        <div class="login-card__footer">
+          <span>계정이 없으신가요?</span>
+          <button type="button" class="login-card__footer-link" @click="goToSignup">
+            무료로 회원가입하기
+          </button>
         </div>
-
-      </div>
-    </div>
+      </section>
+    </main>
   </div>
 </template>
+
+<style scoped>
+.login-shell {
+  --login-bg: #f7f8fc;
+  --login-card-shadow: 0 24px 64px rgba(15, 23, 42, 0.16);
+  --login-border: rgba(148, 163, 184, 0.24);
+  --login-text: #1f2a44;
+  --login-muted: #667085;
+  --login-accent: #0d9488;
+  --login-accent-strong: #0f766e;
+  --login-accent-soft: #ecfdf5;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 248, 252, 0.94) 100%);
+}
+
+.login-shell__background {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-shell__beam {
+  position: absolute;
+  filter: blur(10px);
+  opacity: 0.88;
+  transform: rotate(-18deg);
+  border-radius: 999px;
+  animation: login-beam-float 16s ease-in-out infinite alternate;
+}
+
+.login-shell__beam--blue {
+  top: -9rem;
+  right: 32%;
+  width: 28rem;
+  height: 90rem;
+  background: linear-gradient(180deg, rgba(204, 251, 241, 0.96), rgba(94, 234, 212, 0.22));
+  animation-duration: 18s;
+}
+
+.login-shell__beam--amber {
+  top: -14rem;
+  right: 14%;
+  width: 20rem;
+  height: 96rem;
+  background: linear-gradient(180deg, rgba(153, 246, 228, 0.96), rgba(20, 184, 166, 0.2));
+  animation-duration: 14s;
+  animation-delay: -4s;
+}
+
+.login-shell__beam--rose {
+  top: -12rem;
+  right: -1rem;
+  width: 24rem;
+  height: 108rem;
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.92), rgba(19, 78, 74, 0.14));
+  animation-duration: 20s;
+  animation-delay: -8s;
+}
+
+.login-shell__beam--teal {
+  bottom: -22rem;
+  left: -12rem;
+  width: 36rem;
+  height: 36rem;
+  transform: none;
+  opacity: 0.5;
+  filter: blur(80px);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.32), rgba(16, 185, 129, 0));
+  animation: login-orb-drift 22s ease-in-out infinite alternate;
+}
+
+.login-shell__glow {
+  position: absolute;
+  inset: 7rem auto auto 8%;
+  width: min(38rem, 44vw);
+  height: min(38rem, 44vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.48) 32%, rgba(255, 255, 255, 0) 72%);
+  filter: blur(12px);
+  animation: login-glow-drift 18s ease-in-out infinite alternate;
+}
+
+.login-shell__header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: 5.5rem;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.72);
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(18px);
+}
+
+.login-shell__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0;
+}
+
+.login-shell__brand-mark {
+  width: 2.35rem;
+  height: 2.35rem;
+  flex-shrink: 0;
+}
+
+.login-shell__brand-wordmark {
+  font-size: 1.62rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.login-shell__brand-cal {
+  color: #2dd4bf;
+}
+
+.login-shell__brand-fit {
+  color: #f8fafc;
+  text-shadow:
+    1px 0 0 rgba(15, 23, 42, 0.44),
+    -1px 0 0 rgba(15, 23, 42, 0.44),
+    0 1px 0 rgba(15, 23, 42, 0.44),
+    0 -1px 0 rgba(15, 23, 42, 0.44),
+    0 2px 10px rgba(15, 23, 42, 0.18);
+}
+
+.login-shell__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 5.5rem 1.5rem 3rem;
+}
+
+.login-card {
+  width: min(100%, 42rem);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.75rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--login-card-shadow);
+  backdrop-filter: blur(22px);
+}
+
+.login-card__copy {
+  padding: 3.1rem 3.1rem 1.4rem;
+}
+
+.login-card__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--login-accent-soft);
+  color: var(--login-accent-strong);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.login-card__title {
+  margin-top: 1.15rem;
+  font-size: clamp(2.1rem, 3.4vw, 3rem);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: var(--login-text);
+}
+
+.login-card__description {
+  margin-top: 0.85rem;
+  max-width: 29rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--login-muted);
+}
+
+.login-form {
+  padding: 0 3.1rem 2rem;
+}
+
+.login-field {
+  display: block;
+}
+
+.login-field + .login-field {
+  margin-top: 1.35rem;
+}
+
+.login-field__label {
+  display: block;
+  margin-bottom: 0.65rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--login-text);
+}
+
+.login-field__input {
+  width: 100%;
+  height: 3.9rem;
+  padding: 0 1rem;
+  border: 1px solid var(--login-border);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 1.03rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.login-field__input::placeholder {
+  color: #94a3b8;
+}
+
+.login-field__input:focus {
+  outline: none;
+  border-color: rgba(13, 148, 136, 0.42);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+  background: #ffffff;
+}
+
+.login-form__error {
+  margin-top: 1.25rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 0.95rem;
+  background: #fff4f4;
+  color: #c2410c;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.login-form__submit {
+  width: 100%;
+  height: 3.95rem;
+  margin-top: 1.6rem;
+  border: 0;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.98), rgba(13, 148, 136, 0.98));
+  color: #ffffff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  box-shadow: 0 18px 40px rgba(13, 148, 136, 0.22);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.login-form__submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 42px rgba(13, 148, 136, 0.28);
+}
+
+.login-form__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.login-form__submit-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+}
+
+.login-form__spinner {
+  width: 1rem;
+  height: 1rem;
+  animation: login-spin 0.9s linear infinite;
+}
+
+.login-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 1.45rem 1.75rem 1.65rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  border-bottom-left-radius: 1.75rem;
+  border-bottom-right-radius: 1.75rem;
+  background: rgba(248, 250, 255, 0.86);
+  color: var(--login-muted);
+  font-size: 0.98rem;
+}
+
+.login-card__footer-link {
+  border: 0;
+  background: transparent;
+  color: var(--login-accent-strong);
+  font-weight: 700;
+}
+
+.login-card__footer-link:hover {
+  text-decoration: underline;
+}
+
+@keyframes login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes login-beam-float {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(-18deg) scale(1);
+  }
+
+  100% {
+    transform: translate3d(2.25rem, -2rem, 0) rotate(-14deg) scale(1.035);
+  }
+}
+
+@keyframes login-orb-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(4rem, -2.5rem, 0) scale(1.08);
+  }
+}
+
+@keyframes login-glow-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  100% {
+    transform: translate3d(3rem, 1.5rem, 0) scale(1.06);
+  }
+}
+
+@media (max-width: 767px) {
+  .login-shell__header {
+    min-height: 4.75rem;
+    padding: 0 1rem;
+  }
+
+  .login-shell__brand {
+    gap: 0.3rem;
+  }
+
+  .login-shell__brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .login-shell__brand-wordmark {
+    font-size: 1.42rem;
+  }
+
+  .login-shell__content {
+    padding: 2.5rem 1rem 1.5rem;
+  }
+
+  .login-card {
+    border-radius: 1.3rem;
+  }
+
+  .login-card__copy {
+    padding: 2rem 1.4rem 1.1rem;
+  }
+
+  .login-card__description {
+    font-size: 0.94rem;
+  }
+
+  .login-form {
+    padding: 0 1.4rem 1.4rem;
+  }
+
+  .login-field__input,
+  .login-form__submit {
+    height: 3.55rem;
+  }
+
+  .login-card__footer {
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 1.2rem 1rem 1.35rem;
+  }
+}
+</style>
