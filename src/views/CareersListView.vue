@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { careerApi } from '@/api/career'
@@ -128,7 +128,6 @@ const handleAuthAction = () => {
         <div class="flex items-center gap-6">
           <nav class="flex items-center gap-6">
             <button @click="router.push('/careers')" class="text-gray-600 hover:text-gray-900 font-medium text-sm">전체 기업</button>
-            <span class="text-gray-900 font-medium border-b-2 border-gray-900 pb-1">APPLY</span>
           </nav>
           <button
             @click="handleAuthAction"
