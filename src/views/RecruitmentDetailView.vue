@@ -1,7 +1,8 @@
 <script setup>
 import { reactive, ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import InterviewDetailModal from '@/components/recruitment/InterviewDetailModal.vue'
+import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
+import ScheduleDetailDrawer from '@/components/schedule/ScheduleDetailDrawer.vue'
 import { applicationBoardApi } from '@/api/applicationBoard'
 import { automationRulesApi } from '@/api/automationRules'
 import { automationTemplatesApi } from '@/api/automationTemplates'
@@ -68,6 +69,7 @@ const autoScrollFrameId = ref(null)
 // --- Modal State ---
 const isInterviewDetailModalOpen = ref(false)
 const selectedInterview = ref(null)
+const isInterviewListModalOpen = ref(false)
 const showCopyModal = ref(false) // 링크 복사 모달
 const apiSchedules = ref([])
 const recruitmentDetail = ref(null)
@@ -571,15 +573,28 @@ const stageTypeMeta = {
 // ...
 
 const openInterviewDetail = (booking) => {
-  if (booking?.entryType === 'BUSY') return
+  const event =
+    booking?.type
+      ? booking
+      : {
+          id: booking.id,
+          interviewScheduleId: booking.interviewScheduleId ?? booking.id,
+          type: booking.entryType === 'BUSY' ? (booking.scheduleType || 'OTHERS') : 'INTERVIEW',
+          title: booking.entryType === 'BUSY' ? getBookingDisplayTitle(booking) : getBookingPrimaryText(booking),
+          description: booking.description || getBookingSummaryText(booking),
+          date: booking.date,
+          time: booking.isAllDay ? '종일' : booking.time,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          location: booking.location || '',
+          ownerName: booking.interviewerName || getInterviewerName(booking.interviewerId),
+          attendees: booking.attendees || [],
+          applicantName: booking.entryType === 'BUSY' ? '' : booking.applicantName,
+          isAllDay: booking.isAllDay === true,
+          isBusy: booking.entryType === 'BUSY'
+        }
 
-  selectedInterview.value = {
-    ...booking,
-    title: getBookingDisplayTitle(booking),
-    host: booking.interviewerName || getInterviewerName(booking.interviewerId),
-    attendees: booking.attendees || (booking.applicantName ? splitNames(booking.applicantName) : []),
-    showSelf: booking.showSelf === true
-  }
+  selectedInterview.value = event
   isInterviewDetailModalOpen.value = true
 }
 
@@ -594,6 +609,26 @@ const selectedDayBookings = computed(() => {
   if (!selectedDay.value) return []
   return getBookingsForDay(selectedDay.value)
 })
+
+const selectedDayCalendarEvents = computed(() =>
+  selectedDayBookings.value.map((booking) => ({
+    id: booking.id,
+    interviewScheduleId: booking.interviewScheduleId ?? booking.id,
+    type: booking.entryType === 'BUSY' ? (booking.scheduleType || 'OTHERS') : 'INTERVIEW',
+    title: booking.entryType === 'BUSY' ? getBookingDisplayTitle(booking) : getBookingPrimaryText(booking),
+    description: booking.description || getBookingSummaryText(booking),
+    date: booking.date,
+    time: booking.isAllDay ? '종일' : booking.time,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    location: booking.location || '',
+    ownerName: booking.interviewerName || getInterviewerName(booking.interviewerId),
+    attendees: booking.attendees || [],
+    applicantName: booking.entryType === 'BUSY' ? '' : booking.applicantName,
+    isAllDay: booking.isAllDay === true,
+    isBusy: booking.entryType === 'BUSY'
+  }))
+)
 
 const currentDayTitle = computed(() => {
   const d = calendarState.currentMonth
@@ -1354,9 +1389,12 @@ const getInterviewerColor = (id) => {
 
 const openDayDetail = (day) => {
   selectedDay.value = day
+  isInterviewDetailModalOpen.value = false
+  isInterviewListModalOpen.value = true
 }
 const closeDayDetail = () => {
   selectedDay.value = null
+  isInterviewListModalOpen.value = false
 }
 const toggleBooking = (id) => {
   if (expandedBookingIds.value.has(id)) expandedBookingIds.value.delete(id)
@@ -1628,61 +1666,73 @@ const getDayColor = (index) => {
     </div>
   </div>
 
-  <div v-else class="flex h-[calc(100vh-4rem)] bg-slate-50 overflow-hidden relative">
+  <div v-else class="relative flex min-h-[calc(100vh-4rem)] gap-4 overflow-hidden bg-[#f7faf9] px-4 pb-4 pt-0">
     
     <!-- Sidebar -->
-    <aside class="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm flex-none">
-      <div class="p-6 space-y-6 overflow-y-auto">
-        <button @click="router.push('/recruitment/home')" class="flex items-center text-slate-500 hover:text-brand-600 text-sm font-bold mb-2">
+    <aside v-if="activeTab !== 'CALENDAR'" class="z-20 flex w-[320px] flex-none flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div class="space-y-5 overflow-y-auto p-5">
+        <button @click="router.push('/recruitment/home')" class="flex items-center text-sm font-bold text-slate-500 transition-colors hover:text-brand-600">
           <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
           목록으로
         </button>
 
-        <div>
-          <h5 class="text-xs font-bold text-slate-500 mb-2">공고 상세 정보</h5>
-          <h1 class="text-2xl font-display font-bold text-slate-900 leading-tight mb-1">{{ recruitment.title }}</h1>
-          <p class="text-sm font-bold text-brand-600 mb-2">{{ recruitment.position }}</p>
-          <p class="text-xs text-slate-500 font-medium mb-4">기간: {{ recruitment.period }}</p>
-          
-          <button @click="copyRecruitmentLink" class="w-full flex items-center justify-center gap-2 py-2.5 bg-brand-50 text-brand-600 border border-brand-200 rounded-xl text-xs font-bold hover:bg-brand-100 transition-colors">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-            공고 링크 복사
-          </button>
-        </div>
+        <section class="rounded-xl border border-brand-100 bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.12),_transparent_44%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(240,253,250,0.92))] p-5">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-[11px] font-semibold text-slate-600">
+              공고 상세
+            </span>
+            <span class="inline-flex items-center rounded-full border border-white/80 bg-white/75 px-3 py-1 text-[11px] font-semibold text-slate-600">
+              {{ recruitment.leadGroupName }}
+            </span>
+          </div>
 
-        <button @click="goInterview" class="w-full mt-4 bg-brand-600 text-white py-2 rounded-lg font-bold hover:bg-brand-700 transition">
-          + 일정 생성하기
-        </button>
-
-        <div>
-          <h2 class="text-sm font-bold text-slate-800 mb-3">총 지원자: {{ recruitment.totalApplicants }}명</h2>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span class="text-xs text-slate-500 block mb-1">진행 중 면접</span>
-              <span class="text-xl font-bold text-blue-600">{{ recruitment.ongoingInterviews }}건</span>
+          <div class="mt-4">
+            <h1 class="text-[1.7rem] font-black leading-tight tracking-tight text-slate-950">{{ recruitment.title }}</h1>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <span class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">{{ recruitment.position }}</span>
+              <span class="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">{{ recruitment.dday }}</span>
             </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <span class="text-xs text-slate-500 block mb-1">마감일</span>
-              <span class="text-xl font-bold text-slate-800">{{ recruitment.dday }}</span>
+            <p class="mt-3 text-xs font-medium text-slate-500">{{ recruitment.period }}</p>
+          </div>
+
+          <div class="mt-4 grid grid-cols-3 gap-2">
+            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
+              <p class="text-[11px] font-semibold text-slate-500">지원자</p>
+              <p class="mt-1 text-xl font-black text-slate-950">{{ recruitment.totalApplicants }}<span class="ml-1 text-sm font-semibold text-slate-400">명</span></p>
+            </div>
+            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
+              <p class="text-[11px] font-semibold text-slate-500">진행 중 면접</p>
+              <p class="mt-1 text-xl font-black text-brand-700">{{ recruitment.ongoingInterviews }}<span class="ml-1 text-sm font-semibold text-slate-400">건</span></p>
+            </div>
+            <div class="rounded-xl border border-white/80 bg-white/80 px-3 py-3">
+              <p class="text-[11px] font-semibold text-slate-500">면접관</p>
+              <p class="mt-1 text-xl font-black text-slate-950">{{ interviewers.length }}<span class="ml-1 text-sm font-semibold text-slate-400">명</span></p>
             </div>
           </div>
-        </div>
 
-        <hr class="border-slate-100">
+          <div class="mt-4 grid grid-cols-2 gap-2">
+            <button @click="copyRecruitmentLink" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-colors hover:border-brand-200 hover:text-brand-700">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              링크 복사
+            </button>
+            <button @click="goInterview" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-xs font-bold text-brand-700 transition-colors hover:bg-brand-100">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+              일정 생성
+            </button>
+          </div>
+        </section>
 
-        <div>
-           <div class="flex justify-between items-center mb-4">
+        <section class="rounded-xl border border-slate-200 bg-white p-4">
+          <div class="mb-3 flex items-center justify-between">
             <h5 class="text-xs font-bold text-slate-500">담당 면접관</h5>
+            <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{{ interviewers.length }}명</span>
           </div>
-          <div class="space-y-3">
-            <div v-for="member in interviewers" :key="getMemberUserId(member) ?? member.id" class="flex items-center">
-              <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 mr-3 border border-slate-200">
-                {{ member.name[0] }}
-              </div>
-              <div class="flex-1"><p class="text-sm font-bold text-slate-800">{{ member.displayName || getInterviewerLabel(member) }}</p></div>
+          <div class="space-y-2.5">
+            <div v-for="member in interviewers" :key="getMemberUserId(member) ?? member.id" class="flex items-center rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+              <div class="flex-1"><p class="text-sm font-semibold text-slate-800">{{ member.displayName || getInterviewerLabel(member) }}</p></div>
               <label class="flex items-center cursor-pointer">
                 <input type="checkbox" v-model="member.checked" class="hidden">
-                <div class="w-5 h-5 rounded border flex items-center justify-center transition-colors"
+                <div class="flex h-5 w-5 items-center justify-center rounded border transition-colors"
                      :class="member.checked ? member.bgClass + ' border-transparent' : 'bg-white border-slate-300'">
                   <svg v-if="member.checked" class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -1691,16 +1741,56 @@ const getDayColor = (index) => {
               </label>
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </aside>
 
-    <main class="flex-1 flex flex-col min-w-0 bg-white">
+    <main class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <section v-if="activeTab === 'CALENDAR'" class="border-b border-slate-200 bg-white px-5 py-4">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="min-w-0">
+            <button @click="router.push('/recruitment/home')" class="flex items-center text-sm font-bold text-slate-500 transition-colors hover:text-brand-600">
+              <svg class="mr-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+              채용 홈으로
+            </button>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <h1 class="text-2xl font-black tracking-tight text-slate-950">{{ recruitment.title }}</h1>
+              <span class="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">{{ recruitment.dday }}</span>
+              <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">{{ recruitment.position }}</span>
+            </div>
+
+            <p class="mt-2 text-sm font-medium text-slate-500">
+              {{ recruitment.leadGroupName }} · {{ recruitment.period }}
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">지원자 {{ recruitment.totalApplicants }}명</span>
+            <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">면접관 {{ interviewers.length }}명</span>
+            <button @click="copyRecruitmentLink" class="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-brand-200 hover:text-brand-700">
+              <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              링크 복사
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <span
+            v-for="member in interviewers.slice(0, 3)"
+            :key="getMemberUserId(member) ?? member.id"
+            class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600"
+          >
+            {{ member.displayName || getInterviewerLabel(member) }}
+          </span>
+        </div>
+      </section>
+
       <!-- Header -->
-      <header class="flex-none px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-white z-10">
-        <div class="flex space-x-1 bg-slate-100 p-1 rounded-lg">
-          <button @click="activeTab = 'CALENDAR'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'CALENDAR' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'">면접 일정</button>
-          <button @click="activeTab = 'APPLICANTS'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'APPLICANTS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'">지원자 관리</button>
+      <header class="z-10 flex flex-none items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
+        <div class="flex space-x-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <button @click="activeTab = 'CALENDAR'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'CALENDAR' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-700'">면접 일정</button>
+          <button @click="activeTab = 'APPLICANTS'" class="px-4 py-1.5 text-sm font-bold rounded-md transition-all" :class="activeTab === 'APPLICANTS' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-700'">지원자 관리</button>
         </div>
         
         <div v-if="activeTab === 'APPLICANTS'" class="flex items-center gap-3">
@@ -1715,105 +1805,117 @@ const getDayColor = (index) => {
       </header>
 
       <!-- Calendar View (New Design) -->
-      <div v-if="activeTab === 'CALENDAR'" class="flex-1 p-6 overflow-hidden">
-        <div class="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6 h-full">
+      <div v-if="activeTab === 'CALENDAR'" class="flex-1 overflow-hidden p-5">
+        <div class="flex h-full flex-col gap-4">
           <!-- Main Calendar Grid -->
-          <div class="bg-white border border-slate-300 rounded-[28px] overflow-hidden shadow-sm flex flex-col h-full">
-            <!-- Calendar Header -->
-            <div class="p-6 border-b border-slate-300 flex items-center justify-between bg-white">
-              <div class="flex items-center gap-2">
-                 <div class="flex bg-slate-100 p-0.5 rounded-md border border-slate-200">
+          <div class="flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+            <div class="schedule-surface__head">
+              <div>
+                <h2 class="surface-title">
+                  {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
+                </h2>
+                <p v-if="currentView === 'WEEK'" class="mt-1 text-[11px] font-bold text-brand-600">{{ currentWeekTitle }}</p>
+                <p v-if="currentView === 'DAY'" class="mt-1 text-[11px] font-bold text-brand-600">{{ currentDayTitle }}</p>
+              </div>
+
+              <div class="surface-head-actions">
+                <div class="view-switch">
                   <button
-                      v-for="opt in viewOptions"
-                      :key="opt.value"
-                      @click="currentView = opt.value"
-                      class="px-2.5 py-1 text-[11px] font-bold rounded transition-all"
-                      :class="currentView === opt.value ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'"
+                    v-for="opt in viewOptions"
+                    :key="opt.value"
+                    type="button"
+                    class="view-switch__button"
+                    :class="{ 'view-switch__button--active': currentView === opt.value }"
+                    @click="currentView = opt.value"
                   >
                     {{ opt.label }}
                   </button>
                 </div>
-                <button @click="goToday" class="px-3 py-1 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-md transition-all text-[11px] font-bold">
-                  {{ labels.todayMove }}
-                </button>
-              </div>
-              <div class="flex items-center gap-3">
-                <button @click="goPrev" class="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <div class="text-center min-w-[180px]">
-                  <h2 class="text-lg font-display font-bold text-slate-800 tracking-tight">
-                    {{ calendarState.currentMonth.getFullYear() }}년 {{ calendarState.currentMonth.getMonth() + 1 }}월
-                  </h2>
-                  <p v-if="currentView === 'WEEK'" class="text-[11px] font-bold text-brand-600">{{ currentWeekTitle }}</p>
-                  <p v-if="currentView === 'DAY'" class="text-[11px] font-bold text-brand-600">{{ currentDayTitle }}</p>
+
+                <div class="surface-head-nav">
+                  <button type="button" class="icon-button" @click="goPrev">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button type="button" class="toolbar-button toolbar-button-subtle" @click="goToday">
+                    {{ labels.todayMove }}
+                  </button>
+                  <button type="button" class="icon-button" @click="goNext">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 </div>
-                <button @click="goNext" class="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
+
+                <button type="button" class="toolbar-button toolbar-button-primary" @click="goInterview">
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
                   </svg>
+                  일정 생성
                 </button>
               </div>
             </div>
 
             <!-- MONTH VIEW -->
             <template v-if="currentView === 'MONTH'">
-              <!-- Days Header -->
-              <div class="grid grid-cols-7 text-center border-b border-slate-300 bg-slate-50/50">
-                <div v-for="(day, idx) in koDays" :key="day" class="py-2.5 text-[10px] font-black tracking-[0.12em]" :class="getDayColor(idx)">
+              <div class="month-weekdays">
+                <div v-for="(day, idx) in koDays" :key="day" class="month-weekdays__item" :class="getDayColor(idx)">
                   {{ day }}
                 </div>
               </div>
 
-              <!-- Calendar Grid Body -->
-              <div class="grid grid-cols-7 grid-rows-5 flex-1 bg-white">
+              <div class="month-grid">
                 <div
                   v-for="(day, index) in calendarDays"
                   :key="day ? day.toISOString() : `empty-${index}`"
-                  class="border-r border-b border-slate-300 p-2.5 transition-all relative group h-full overflow-hidden"
+                  class="month-cell"
                   :class="{
-                    'bg-slate-50/30': !day || !isSameMonth(day, calendarState.currentMonth),
-                    'border-r-0': (index + 1) % 7 === 0,
-                    'cursor-pointer hover:bg-slate-50/50': day && isSameMonth(day, calendarState.currentMonth),
-                    'cursor-default': !day || !isSameMonth(day, calendarState.currentMonth)
+                    'month-cell--muted': !day || !isSameMonth(day, calendarState.currentMonth),
+                    'month-cell--today': day && isSameDay(day, new Date()),
+                    'month-cell--last': (index + 1) % 7 === 0
                   }"
-                  @click="day && openDayDetail(day)"
+                  @click="day && isSameMonth(day, calendarState.currentMonth) && openDayDetail(day)"
                 >
-                  <div class="flex items-center justify-between">
+                  <div class="month-cell__head">
                     <span
                       v-if="day"
-                      :class="[
-                        'text-sm font-bold flex items-center justify-center w-7 h-7 rounded-full',
-                        isSameDay(day, new Date()) ? 'bg-brand-600 text-white shadow-md' : 
-                        (selectedDay && isSameDay(day, selectedDay)) ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-200' :
-                        (day.getDay() === 0 ? 'text-rose-500' : day.getDay() === 6 ? 'text-blue-500' : 'text-slate-500')
-                      ]"
+                      class="month-cell__day"
+                      :class="{
+                        'month-cell__day--today': isSameDay(day, new Date()),
+                        'month-cell__day--sunday': day.getDay() === 0 && !isSameDay(day, new Date()),
+                        'month-cell__day--saturday': day.getDay() === 6 && !isSameDay(day, new Date()),
+                        'ring-1 ring-brand-600 text-brand-600': selectedDay && isSameDay(day, selectedDay) && !isSameDay(day, new Date()),
+                        'opacity-0': !isSameMonth(day, calendarState.currentMonth)
+                      }"
                     >
                       {{ day.getDate() }}
                     </span>
+                    <span v-if="day && getBookingsForDay(day).length" class="month-cell__count">
+                      {{ getBookingsForDay(day).length }}
+                    </span>
                   </div>
-                  <div class="space-y-1 h-[calc(100%-28px)] overflow-hidden" v-if="day">
+
+                  <div v-if="day && isSameMonth(day, calendarState.currentMonth) && getBookingsForDay(day).length" class="month-cell__events">
                     <div
-                      v-for="booking in getBookingsForDay(day).slice(0, 2)"
+                      v-for="booking in getBookingsForDay(day).slice(0, 3)"
                       :key="booking.id"
-                      class="text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:opacity-80 transition-opacity text-slate-800 font-bold"
+                      class="month-event-chip"
                       :style="{
-                        backgroundColor: `${getInterviewerColor(booking.interviewerId)}20`,
-                        borderLeft: `2px solid ${getInterviewerColor(booking.interviewerId)}`
+                        backgroundColor: `${getInterviewerColor(booking.interviewerId)}18`,
+                        color: getInterviewerColor(booking.interviewerId)
                       }"
                       @click.stop="openInterviewDetail(booking)"
                     >
-                      <span>{{ getBookingPrimaryText(booking) }}</span>
-                      <span class="ml-1 text-[9px] text-slate-500 font-semibold">{{ booking.startTime }}</span>
+                      <span class="month-event-chip__time">{{ booking.startTime }}</span>
+                      <span class="month-event-chip__title truncate">{{ getBookingPrimaryText(booking) }}</span>
                     </div>
                     <button
-                      v-if="getBookingsForDay(day).length > 2"
-                      class="text-[10px] text-slate-500 px-1.5 font-semibold text-right w-full"
+                      v-if="getBookingsForDay(day).length > 3"
+                      class="month-cell__more"
                       @click.stop="openDayDetail(day)"
                     >
-                      외 {{ getBookingsForDay(day).length - 2 }}개
+                      +{{ getBookingsForDay(day).length - 3 }}개 더 보기
                     </button>
                   </div>
                 </div>
@@ -1824,16 +1926,16 @@ const getDayColor = (index) => {
             <template v-else-if="currentView === 'WEEK'">
               <div class="flex flex-col h-full overflow-hidden">
                  <!-- Week Header -->
-                <div class="grid grid-cols-[60px_1fr] border-b border-slate-300 bg-slate-50/50 sticky top-0 z-30">
-                  <div class="border-r border-slate-300"></div>
+                <div class="sticky top-0 z-30 grid grid-cols-[60px_1fr] border-b border-slate-200 bg-slate-50/60">
+                  <div class="border-r border-slate-200"></div>
                   <div class="grid grid-cols-7">
                     <div v-for="(day, idx) in currentWeekDays" :key="day.toISOString()"
-                         class="py-3 text-center border-r border-slate-300 last:border-0 flex flex-col items-center gap-1 group cursor-pointer hover:bg-slate-100 transition-colors"
-                         @click="calendarState.currentMonth = new Date(day); selectedDay = day; currentView = 'DAY'">
+                         class="group flex cursor-pointer flex-col items-center gap-1 border-r border-slate-200 py-3 text-center transition-colors hover:bg-slate-100 last:border-0"
+                         @click="openDayDetail(day)">
                       <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ koDays[idx] }}</span>
                       <span class="text-lg font-display font-bold leading-none w-7 h-7 flex items-center justify-center rounded-lg transition-all"
                             :class="{
-                              'bg-brand-600 text-white shadow-md': isSameDay(day, new Date()),
+                              'bg-brand-600 text-white': isSameDay(day, new Date()),
                               'ring-1 ring-brand-600 text-brand-600': isSameDay(day, calendarState.currentMonth) && !isSameDay(day, new Date()),
                               'text-slate-700 group-hover:text-brand-600': !isSameDay(day, new Date()) && !isSameDay(day, calendarState.currentMonth)
                             }">
@@ -1845,18 +1947,18 @@ const getDayColor = (index) => {
 
                 <!-- Time Grid -->
                 <div class="flex flex-1 overflow-y-auto custom-scrollbar">
-                  <div class="w-[60px] border-r border-slate-300 shrink-0 bg-slate-50/10">
-                    <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-300 text-[10px] font-bold text-slate-500 flex items-start justify-center pt-2">
+                  <div class="w-[60px] shrink-0 border-r border-slate-200 bg-slate-50/10">
+                    <div v-for="time in timeSlots" :key="time" class="flex h-[60px] items-start justify-center border-b border-slate-200 pt-2 text-[10px] font-bold text-slate-500">
                       {{ time }}
                     </div>
                   </div>
                   <div class="flex-1 grid grid-cols-7 relative">
-                    <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="relative border-r border-slate-300 last:border-0 group">
-                      <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-300 hover:bg-slate-50/30 transition-colors"></div>
+                    <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="group relative border-r border-slate-200 last:border-0">
+                      <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-200 transition-colors hover:bg-slate-50/30"></div>
 
                       <div v-for="evt in getBookingsForDay(day)" :key="evt.id"
                            @click="openInterviewDetail(evt)"
-                           class="absolute left-1 right-1 p-1.5 rounded-lg shadow-sm z-20 cursor-pointer hover:scale-[1.02] transition-transform overflow-hidden border-l-4"
+                           class="absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-lg border-l-4 p-1.5 transition-transform hover:scale-[1.02]"
                            :style="{
                              ...getEventStyle(evt),
                              backgroundColor: `${getInterviewerColor(evt.interviewerId)}`,
@@ -1879,13 +1981,13 @@ const getDayColor = (index) => {
             <template v-else>
               <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
                 <div class="space-y-4 max-w-3xl mx-auto">
-                  <div v-if="getBookingsForDay(calendarState.currentMonth).length === 0" class="flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[28px] border border-dashed border-slate-300">
+                  <div v-if="getBookingsForDay(calendarState.currentMonth).length === 0" class="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-20">
                      <p class="text-sm font-bold text-slate-400">등록된 면접 일정이 없습니다.</p>
                   </div>
 
                   <div v-for="evt in getBookingsForDay(calendarState.currentMonth)" :key="evt.id"
                        @click="openInterviewDetail(evt)"
-                       class="group p-6 rounded-[24px] border border-slate-200 bg-white hover:border-brand-300 hover:shadow-lg hover:shadow-brand-500/10 transition-all cursor-pointer flex items-center gap-6">
+                       class="group flex cursor-pointer items-center gap-6 rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-brand-300">
                     
                     <div class="w-20 text-center shrink-0 border-r-2 border-slate-100 pr-4">
                       <span class="block text-xl font-black text-slate-800 tracking-tighter">{{ evt.time }}</span>
@@ -1908,53 +2010,6 @@ const getDayColor = (index) => {
             </template>
           </div>
 
-          <!-- Selected Day Details Sidebar -->
-          <div class="bg-white border border-slate-300 rounded-[28px] shadow-sm p-6 overflow-y-auto">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h3 class="text-sm font-bold text-slate-800">
-                  {{ selectedDay ? `${selectedDayTitle} ${labels.daySuffix}` : labels.dayPick }}
-                </h3>
-              </div>
-              <button v-if="selectedDay" class="text-xs text-slate-500 hover:text-slate-700" @click="closeDayDetail">{{ labels.close }}</button>
-            </div>
-
-            <div class="space-y-3">
-              <div v-if="selectedDayBookings.length === 0" class="flex flex-col items-center justify-center h-32 text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                <p class="font-medium text-sm">{{ labels.dayNone }}</p>
-              </div>
-
-              <div
-                v-for="booking in selectedDayBookings"
-                :key="booking.id"
-                class="group p-4 border rounded-[20px] transition-all cursor-pointer shadow-sm"
-                :style="{
-                  backgroundColor: `${getInterviewerColor(booking.interviewerId)}0f`,
-                  borderColor: `${getInterviewerColor(booking.interviewerId)}40`
-                }"
-                @click="booking.entryType === 'BUSY' ? toggleBooking(booking.id) : openInterviewDetail(booking)"
-              >
-                <div class="flex justify-between items-start mb-2">
-                  <span class="text-[9px] px-2.5 py-1 rounded-lg font-bold uppercase tracking-widest"
-                        :style="{
-                          backgroundColor: `${getInterviewerColor(booking.interviewerId)}1a`,
-                          color: '#0f172a'
-                        }">
-                    {{ booking.interviewerName || getInterviewerName(booking.interviewerId) }}
-                  </span>
-                  <span class="text-[10px] text-slate-500 font-bold">{{ booking.time }}</span>
-                </div>
-                <h4 class="text-sm font-bold text-slate-800 group-hover:text-slate-900 transition-colors">{{ getBookingDisplayTitle(booking) }}</h4>
-                <p class="text-[11px] text-slate-500 mt-1.5 font-medium">{{ getBookingSummaryText(booking) }}</p>
-
-                <div v-if="booking.entryType === 'BUSY' && expandedBookingIds.has(booking.id)" class="mt-3 pt-3 border-t border-slate-200">
-                  <div class="text-xs text-slate-600 mb-2">
-                    {{ booking.description }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1965,27 +2020,27 @@ const getDayColor = (index) => {
         class="flex-1 p-6 bg-slate-50 overflow-x-auto overflow-y-auto"
         @dragover.prevent="handleBoardDragOver"
       >
-        <div v-if="applicantBoardLoading" class="flex h-full items-center justify-center rounded-3xl border border-slate-200 bg-white px-10">
+        <div v-if="applicantBoardLoading" class="flex h-full items-center justify-center rounded-xl border border-slate-200 bg-white px-10">
           <p class="text-sm font-bold text-slate-500">지원자 보드를 불러오는 중입니다.</p>
         </div>
 
-        <div v-else-if="applicantBoardError" class="flex h-full items-center justify-center rounded-3xl border border-rose-200 bg-rose-50 px-10">
+        <div v-else-if="applicantBoardError" class="flex h-full items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-10">
           <p class="text-sm font-bold text-rose-600">{{ applicantBoardError }}</p>
         </div>
 
-        <div v-else-if="processes.length === 0" class="flex h-full items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-10">
+        <div v-else-if="processes.length === 0" class="flex h-full items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-10">
           <p class="text-sm font-bold text-slate-500">표시할 전형 프로세스가 없습니다.</p>
         </div>
 
         <div v-else class="flex gap-6 min-w-max w-max">
           <div 
             v-for="process in processes" :key="process.id"
-            class="flex flex-col w-80 rounded-2xl border"
+            class="flex w-80 flex-col rounded-xl border"
             @dragover.prevent="handleColumnDragOver($event, process.id)"
             @drop="onDrop($event, process.id)"
             :class="[getStageTypeMeta(process.stageType).column, {'ring-2 ring-brand-300': draggingOverColumnId === process.id}]"
           >
-            <div class="flex-none p-4 flex items-center justify-between border-b border-slate-200 bg-white rounded-t-2xl">
+            <div class="flex-none rounded-t-xl border-b border-slate-200 bg-white p-4 flex items-center justify-between">
               <div>
                 <div class="flex items-center gap-2 mb-1">
                   <h3 class="font-bold text-slate-700">{{ process.stageName }}</h3>
@@ -2009,7 +2064,7 @@ const getDayColor = (index) => {
                 </button>
                 <div
                   v-if="openProcessMenuId === process.id"
-                  class="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white shadow-lg p-1"
+                  class="absolute right-0 top-9 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1"
                 >
                   <button
                     type="button"
@@ -2024,7 +2079,7 @@ const getDayColor = (index) => {
             <div class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               <div v-for="app in getApplicantsByProcess(process.id)" :key="app.id"
                    :draggable="canMoveApplicants && movingApplicationId !== app.applicationId" @dragstart="onDragStart($event, app.applicationId)" @dragend="onDragEnd"
-                   class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:border-brand-400 hover:shadow-md transition-all"
+                   class="cursor-grab rounded-xl border border-slate-200 bg-white p-4 transition-all active:cursor-grabbing hover:border-brand-400"
                    :class="{
                      'opacity-50 border-dashed': draggingCardId === app.applicationId,
                      'cursor-not-allowed opacity-70': !canMoveApplicants,
@@ -2069,12 +2124,12 @@ const getDayColor = (index) => {
           </div>
 
           <div v-if="!canMoveApplicants" class="flex items-start">
-            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
               HR 멤버만 지원자를 다른 프로세스로 이동할 수 있습니다.
             </div>
           </div>
           <div v-else-if="false" class="flex items-start">
-            <div class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+            <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
               FAIL 단계가 없어 불합격 처리를 사용할 수 없습니다.
             </div>
           </div>
@@ -2084,10 +2139,10 @@ const getDayColor = (index) => {
           v-if="canMoveApplicants && selectedApplicantCount > 0"
           class="pointer-events-none fixed bottom-6 left-1/2 z-30 w-[min(860px,calc(100vw-2rem))] -translate-x-1/2"
         >
-          <div class="pointer-events-auto rounded-[28px] border border-slate-200 bg-white/95 px-5 py-4 shadow-[0_20px_60px_rgba(15,23,42,0.18)] backdrop-blur">
+          <div class="pointer-events-auto rounded-xl border border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
                   <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
@@ -2142,7 +2197,7 @@ const getDayColor = (index) => {
           class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm"
           @click.self="closeBulkMoveResultModal"
         >
-          <div class="w-full max-w-md rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+          <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white">
             <div class="border-b border-slate-200 px-6 py-5">
               <p class="text-xs font-bold tracking-[0.2em] text-slate-400">RESULT</p>
               <h3 class="mt-1 text-xl font-bold text-slate-900">{{ bulkMoveResultModal.title }}</h3>
@@ -2151,7 +2206,7 @@ const getDayColor = (index) => {
               <p class="whitespace-pre-line text-sm leading-6 text-slate-600">{{ bulkMoveResultModal.message }}</p>
               <button
                 type="button"
-                class="mt-5 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+                class="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
                 @click="closeBulkMoveResultModal"
               >
                 확인
@@ -2160,7 +2215,7 @@ const getDayColor = (index) => {
           </div>
         </div>
 
-        <div v-if="false && canMoveApplicants" class="mt-6 rounded-3xl border border-slate-200 bg-white p-5">
+        <div v-if="false && canMoveApplicants" class="mt-6 rounded-xl border border-slate-200 bg-white p-5">
           <div class="flex items-start justify-between gap-3 mb-4">
             <div>
               <h3 class="text-sm font-bold text-slate-900">Automation Rules</h3>
@@ -2169,7 +2224,7 @@ const getDayColor = (index) => {
             <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-1">HR</span>
           </div>
 
-          <div v-if="automationError" class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+          <div v-if="automationError" class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
             {{ automationError }}
           </div>
 
@@ -2209,16 +2264,16 @@ const getDayColor = (index) => {
             </form>
 
             <div>
-              <div v-if="automationLoading" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
+              <div v-if="automationLoading" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
                 자동화 규칙을 불러오는 중입니다.
               </div>
 
-              <div v-else-if="automationRules.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
+              <div v-else-if="automationRules.length === 0" class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-500">
                 등록된 자동화 규칙이 없습니다.
               </div>
 
               <div v-else class="space-y-3">
-                <article v-for="rule in automationRules" :key="rule.ruleId" class="rounded-2xl border border-slate-200 p-4">
+                <article v-for="rule in automationRules" :key="rule.ruleId" class="rounded-xl border border-slate-200 p-4">
                   <div class="flex items-start justify-between gap-3 mb-2">
                     <div>
                       <p class="text-sm font-bold text-slate-900">{{ processes.find((process) => process.id === rule.recruitmentProcessId)?.stageName || `Process #${rule.recruitmentProcessId}` }}</p>
@@ -2243,7 +2298,7 @@ const getDayColor = (index) => {
 
     <!-- 모달: 면접관 수정 -->
     <div v-if="ruleModalProcessId" class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm" @click.self="closeRuleModal">
-      <div class="bg-white rounded-3xl shadow-2xl w-[760px] max-w-[96vw] max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="bg-white rounded-xl w-[760px] max-w-[96vw] max-h-[85vh] overflow-hidden flex flex-col border border-slate-200">
         <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
             <p class="text-xs font-bold text-slate-500 mb-1">AUTOMATION</p>
@@ -2294,7 +2349,7 @@ const getDayColor = (index) => {
                 추천 stageType: {{ selectedRuleStageType }}
               </p>
             </div>
-            <div v-if="automationError" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+            <div v-if="automationError" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
               {{ automationError }}
             </div>
             <div class="flex gap-2">
@@ -2308,14 +2363,14 @@ const getDayColor = (index) => {
           </form>
 
           <div>
-            <div v-if="automationLoading || automationTemplatesLoading" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
+            <div v-if="automationLoading || automationTemplatesLoading" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
               자동화 규칙을 불러오는 중입니다.
             </div>
-            <div v-else-if="selectedProcessRules.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
+            <div v-else-if="selectedProcessRules.length === 0" class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
               이 단계에 연결된 규칙이 없습니다.
             </div>
             <div v-else class="space-y-3">
-              <article v-for="rule in selectedProcessRules" :key="rule.ruleId" class="rounded-2xl border border-slate-200 p-4">
+              <article v-for="rule in selectedProcessRules" :key="rule.ruleId" class="rounded-xl border border-slate-200 p-4">
                 <div class="flex items-start justify-between gap-3 mb-2">
                   <div>
                     <p class="text-sm font-bold text-slate-900">{{ rule.triggerType }} -> {{ rule.actionType }}</p>
@@ -2338,7 +2393,7 @@ const getDayColor = (index) => {
       <div v-if="showCopyModal" class="fixed inset-0 z-[70] flex items-center justify-center" role="dialog">
         <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="showCopyModal = false"></div>
 
-        <div class="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-100">
+        <div class="relative bg-white rounded-xl w-[400px] max-w-[90%] p-6 transform transition-all scale-100 border border-slate-200">
           <div class="flex flex-col items-center text-center">
             <div class="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500 mb-4">
               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2354,7 +2409,7 @@ const getDayColor = (index) => {
 
             <button
                 @click="showCopyModal = false"
-                class="w-full py-2.5 px-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 shadow-md hover:shadow-lg transition-all"
+                class="w-full py-2.5 px-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all"
             >
               확인
             </button>
@@ -2363,18 +2418,271 @@ const getDayColor = (index) => {
       </div>
     </Transition>
 
-    <!-- 모달: 면접 상세 보기 -->
-    <InterviewDetailModal 
-      :show="isInterviewDetailModalOpen" 
-      :event="selectedInterview || {}" 
+    <ScheduleListModal
+      :isOpen="isInterviewListModalOpen"
+      :date="selectedDay ? toYmd(selectedDay) : ''"
+      :events="selectedDayCalendarEvents"
+      @close="closeDayDetail"
+      @add="goInterview"
+      @edit="openInterviewDetail"
+    />
+
+    <ScheduleDetailDrawer
+      :is-open="isInterviewDetailModalOpen"
+      :event="selectedInterview || {}"
+      :show-actions="false"
       @close="isInterviewDetailModalOpen = false"
-      @delete="handleInterviewDelete"
     />
 
   </div>
 </template>
 
 <style scoped>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+.schedule-surface__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+  padding: 0 0 0.75rem;
+}
+
+.surface-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: rgb(15, 23, 42);
+}
+
+.surface-head-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+  align-self: start;
+}
+
+.surface-head-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.view-switch__button {
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+  transition: all 0.18s ease;
+}
+
+.view-switch__button--active {
+  background: rgb(20, 184, 166);
+  color: white;
+}
+
+.toolbar-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  transition: all 0.18s ease;
+}
+
+.toolbar-button {
+  padding: 0.72rem 0.95rem;
+}
+
+.icon-button {
+  height: 2.1rem;
+  width: 2.1rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  color: rgb(71, 85, 105);
+}
+
+.icon-button:hover {
+  border-color: rgba(15, 118, 110, 0.28);
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-primary {
+  border: 1px solid rgba(15, 118, 110, 0.92);
+  background: rgb(15, 118, 110);
+  color: white;
+}
+
+.toolbar-button-subtle {
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  background: white;
+  color: rgb(15, 118, 110);
+}
+
+.toolbar-button-primary:hover,
+.toolbar-button-subtle:hover {
+  filter: saturate(1.04);
+}
+
+.month-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.52);
+}
+
+.month-weekdays__item {
+  padding: 0.75rem 0;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.month-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(118px, 1fr));
+  border-top: 1px solid rgba(226, 232, 240, 0.88);
+  border-left: 1px solid rgba(226, 232, 240, 0.88);
+}
+
+.month-cell {
+  position: relative;
+  min-height: 118px;
+  border-right: 1px solid rgba(226, 232, 240, 0.84);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+  padding: 0.75rem 0.7rem 0.65rem;
+  transition: background 0.18s ease;
+  cursor: pointer;
+}
+
+.month-cell:hover {
+  background: rgba(248, 250, 252, 0.74);
+}
+
+.month-cell--muted {
+  background: rgba(248, 250, 252, 0.42);
+  cursor: default;
+}
+
+.month-cell--today {
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.88), rgba(255, 255, 255, 0.9));
+}
+
+.month-cell--last {
+  border-right: 0;
+}
+
+.month-cell__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.month-cell__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: rgb(51, 65, 85);
+}
+
+.month-cell__day--today {
+  background: rgb(20, 184, 166);
+  border-radius: 9999px;
+  color: white;
+}
+
+.month-cell__day--sunday {
+  color: rgb(244, 63, 94);
+}
+
+.month-cell__day--saturday {
+  color: rgb(99, 102, 241);
+}
+
+.month-cell__count {
+  font-size: 0.65rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+}
+
+.month-cell__events {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.month-event-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  height: 1.75rem;
+  padding: 0 0.55rem;
+  border-radius: 4px;
+  border: 0;
+  border-left: 2px solid currentColor;
+  font-size: 0.68rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.month-event-chip__time {
+  flex-shrink: 0;
+  font-weight: 900;
+}
+
+.month-event-chip__title {
+  color: rgb(31, 41, 55);
+  font-weight: 700;
+}
+
+.month-cell__more {
+  padding-left: 0.15rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: rgb(100, 116, 139);
+}
+
+@media (max-width: 1024px) {
+  .schedule-surface__head {
+    grid-template-columns: 1fr;
+  }
+
+  .surface-head-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
