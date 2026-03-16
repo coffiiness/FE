@@ -1,10 +1,11 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import BookingModal from '@/components/meeting-rooms/BookingModal.vue'
 import BookingDetailModal from '@/components/meeting-rooms/BookingDetailModal.vue'
 import RoomDetailModal from '@/components/meeting-rooms/RoomDetailModal.vue'
 import CreateRoomModal from '@/components/meeting-rooms/CreateRoomModal.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import { meetingRoomApi } from '@/api/meetingRoom'
 import { scheduleApi } from '@/api/schedule'
 import { recruitmentApi } from '@/api/recruitment'
@@ -69,6 +70,8 @@ const selectedRoom = ref(null)
 const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
+const selectedListDate = ref('')
+const calendarRoomFilter = ref('all')
 const reservationTitleMap = ref({})
 const reservationAttendeeMap = ref({})
 const interviewReservationTitleMap = ref({})
@@ -422,6 +425,33 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`
 }
 
+const formatBookingTimeRange = (booking) =>
+  `${pad2(booking.startTime.getHours())}:${pad2(booking.startTime.getMinutes())} - ${pad2(booking.endTime.getHours())}:${pad2(booking.endTime.getMinutes())}`
+
+const isSameBookingDate = (booking, dateString) => {
+  if (!booking?.startTime || !dateString) return false
+  return formatDate(new Date(booking.startTime)) === dateString
+}
+
+const selectedDateEvents = computed(() =>
+  bookings.value
+    .filter((booking) => calendarRoomFilter.value === 'all' || booking.roomId === calendarRoomFilter.value)
+    .filter((booking) => isSameBookingDate(booking, selectedListDate.value))
+    .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+    .map((booking) => {
+      const room = rooms.value.find((item) => item.id === booking.roomId)
+      return {
+        ...booking,
+        type: 'MEETING',
+        date: selectedListDate.value,
+        time: formatBookingTimeRange(booking),
+        description: room?.name
+          ? `${room.name} · ${booking.organizer || '주최자 없음'}`
+          : booking.organizer || booking.description || ''
+      }
+    })
+)
+
 const loadScheduleTitlesByReservationKey = async ({ from, to }) => {
   const startDate = formatDate(from)
   const inclusiveEnd = new Date(to.getTime())
@@ -740,6 +770,7 @@ const handleTimeSlotClick = (roomId, hour) => {
 }
 
 const handleBookingClick = (booking) => {
+  selectedListDate.value = ''
   selectedBooking.value = booking
   selectedRoom.value = rooms.value.find((r) => r.id === booking.roomId) || null
   roomDetailOpen.value = false
@@ -957,11 +988,20 @@ const confirmDeleteRoom = async () => {
 }
 
 const handleDateClick = (date) => {
-  dateValue.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const nextDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  dateValue.value = nextDate
+  selectedListDate.value = nextDate
+  detailModalOpen.value = false
+  roomDetailOpen.value = false
+  selectedBooking.value = null
 }
 
 const setDateValue = (value) => {
   dateValue.value = value
+}
+
+const handleCalendarRoomChange = (value) => {
+  calendarRoomFilter.value = value
 }
 
 const openCreateRoom = () => {
@@ -990,6 +1030,7 @@ const openCreateRoom = () => {
           handleBookRoomClick,
           handleDateClick,
           setDateValue,
+          handleCalendarRoomChange,
           handleEditRoom,
           handleDeleteRoom,
           openCreateRoom
@@ -1012,6 +1053,16 @@ const openCreateRoom = () => {
         :room="selectedRoom"
         @close="detailModalOpen = false"
         @delete="handleBookingDelete"
+    />
+
+    <ScheduleListModal
+      :isOpen="Boolean(selectedListDate)"
+      :date="selectedListDate"
+      :events="selectedDateEvents"
+      :showAddButton="false"
+      @close="selectedListDate = ''"
+      @edit="handleBookingClick"
+      @delete="handleBookingDelete"
     />
 
     <RoomDetailModal

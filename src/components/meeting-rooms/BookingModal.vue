@@ -21,6 +21,7 @@ const attendeeInput = ref('')
 const formError = ref('')
 const submitError = ref('')
 const organizerUserId = ref(null)
+const organizerName = computed(() => getCurrentUserName() || '미지정')
 
 const parseDateOnly = (value) => {
   const [year, month, day] = String(value || '').split('-').map(Number)
@@ -234,7 +235,7 @@ watch(
     endMeridiem.value = endParts.period
     endHour12.value = endParts.hour12
     organizerUserId.value = getCurrentUserId()
-    state.organizer = getCurrentUserName()
+    state.organizer = organizerName.value
     selectedParticipants.value = []
     submitError.value =
       props.selectedHour !== null && isPastDateTime(state.date, state.startTime)
@@ -327,7 +328,7 @@ const handleSubmit = () => {
   const participantUserIds = selectedParticipants.value
     .map((participant) => participant.userId)
     .filter((userId) => Number.isFinite(userId) && userId !== organizerUserId.value)
-  const organizerName = String(state.organizer || '').trim() || getCurrentUserName() || '미지정'
+  const fixedOrganizerName = organizerName.value
 
   emit('confirm', {
     roomId: props.room.id,
@@ -335,7 +336,7 @@ const handleSubmit = () => {
     description: state.description,
     startTime: startDateTime,
     endTime: endDateTime,
-    organizer: organizerName,
+    organizer: fixedOrganizerName,
     attendees: attendeesList,
     participantUserIds,
     status: 'confirmed'
@@ -349,65 +350,86 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div v-if="open" class="fixed inset-0 bg-black/40 flex items-start justify-center p-4 z-50 overflow-y-auto">
-    <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[68vh] mt-6 overflow-hidden flex flex-col">
-      <div class="px-6 py-5 border-b flex items-start justify-between">
-        <div>
-          <h3 class="text-lg font-semibold text-slate-900">회의실 예약</h3>
-          <p class="text-xs text-slate-500 mt-1">예약 정보를 입력하세요</p>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/34 p-4 backdrop-blur-[2px] sm:p-6"
+  >
+    <div class="flex max-h-[84vh] w-full max-w-[780px] flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5 sm:px-7">
+        <div class="space-y-2">
+          <h3 class="text-[1.45rem] font-black tracking-[-0.03em] text-slate-950">회의실 예약</h3>
+          <div
+            class="inline-flex items-center gap-3 rounded-2xl border border-slate-200 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.12),transparent_45%),linear-gradient(180deg,rgba(251,253,253,0.98),rgba(247,250,252,0.98))] px-4 py-3"
+          >
+            <span
+              class="h-3 w-3 rounded-full"
+              :style="{ backgroundColor: room?.color || '#94a3b8' }"
+            ></span>
+            <div>
+              <p class="text-sm font-black text-slate-950">{{ room?.name }}</p>
+              <p class="mt-0.5 text-sm font-semibold text-slate-500">
+                {{ room?.capacity }}인 · {{ room?.floor }}층
+              </p>
+            </div>
+          </div>
         </div>
-        <button class="text-slate-500 hover:text-slate-700" @click="emit('close')" aria-label="닫기">
+        <button
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+          @click="emit('close')"
+          aria-label="닫기"
+        >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
-      <div class="p-6 space-y-5 overflow-y-auto text-slate-900">
-        <p v-if="submitError" class="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+      <div class="space-y-5 overflow-y-auto px-6 py-5 text-slate-900 sm:px-7">
+        <p v-if="submitError" class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600">
           {{ submitError }}
         </p>
 
-        <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-center gap-3">
-          <span class="w-3 h-3 rounded-full" :style="{ backgroundColor: room?.color || '#94a3b8' }"></span>
-          <div>
-            <div class="font-semibold text-slate-900">{{ room?.name }}</div>
-            <div class="text-sm text-slate-700 mt-0.5">{{ room?.capacity }}인 · {{ room?.floor }}층</div>
-          </div>
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">회의 제목 *</label>
+          <input
+            v-model="state.title"
+            class="booking-field"
+            placeholder="회의 제목을 입력하세요"
+          />
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-medium text-slate-900">회의 제목 *</label>
-          <input v-model="state.title" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" placeholder="회의 제목을 입력하세요" />
-        </div>
-
-        <div class="space-y-2">
-          <label class="text-sm font-medium text-slate-900">회의 설명</label>
-          <textarea v-model="state.description" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 resize-none" rows="3"></textarea>
+          <label class="text-sm font-black text-slate-900">회의 설명</label>
+          <textarea
+            v-model="state.description"
+            class="booking-field min-h-[120px] resize-none py-3"
+            rows="4"
+            placeholder="필요한 메모가 있으면 입력하세요"
+          ></textarea>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="space-y-2">
-            <label class="text-sm font-medium text-slate-900">날짜</label>
-            <input v-model="state.date" type="date" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" />
+            <label class="text-sm font-black text-slate-900">날짜</label>
+            <input v-model="state.date" type="date" class="booking-field" />
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium text-slate-900">시작 시간</label>
+            <label class="text-sm font-black text-slate-900">시작 시간</label>
             <div class="flex gap-2">
-              <select v-model="startMeridiem" class="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+              <select v-model="startMeridiem" class="booking-select w-24 text-xs">
                 <option v-for="period in meridiemOptions" :key="period" :value="period">{{ period }}</option>
               </select>
-              <select v-model="startHour12" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+              <select v-model="startHour12" class="booking-select min-w-[5.5rem] flex-1">
                 <option v-for="hour in hour12Options" :key="`start-${hour}`" :value="hour">{{ hour }}</option>
               </select>
             </div>
           </div>
           <div class="space-y-2">
-            <label class="text-sm font-medium text-slate-900">종료 시간</label>
+            <label class="text-sm font-black text-slate-900">종료 시간</label>
             <div class="flex gap-2">
-              <select v-model="endMeridiem" class="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+              <select v-model="endMeridiem" class="booking-select w-24 text-xs">
                 <option v-for="period in meridiemOptions" :key="`end-${period}`" :value="period">{{ period }}</option>
               </select>
-              <select v-model="endHour12" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500">
+              <select v-model="endHour12" class="booking-select min-w-[5.5rem] flex-1">
                 <option v-for="hour in hour12Options" :key="`end-${hour}`" :value="hour">{{ hour }}</option>
               </select>
             </div>
@@ -415,19 +437,23 @@ const handleSubmit = () => {
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-medium text-slate-900">주최자 *</label>
-          <input v-model="state.organizer" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500" placeholder="주최자 이름" />
+          <label class="text-sm font-black text-slate-900">주최자 *</label>
+          <input
+            v-model="state.organizer"
+            class="booking-field"
+            readonly
+          />
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-medium text-slate-900">참석자</label>
+          <label class="text-sm font-black text-slate-900">참석자</label>
 
-          <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 mb-3">
+          <div class="mb-3 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <input
               v-model="memberSearchQuery"
               type="text"
               placeholder="실제 멤버 이름으로 검색"
-              class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+              class="booking-field bg-white"
             />
 
             <div v-if="isMembersLoading" class="text-center py-6 text-slate-400 text-xs">
@@ -440,7 +466,7 @@ const handleSubmit = () => {
                   v-for="group in groupedMembers"
                   :key="group.id"
                   @click="toggleGroup(group.id)"
-                  class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border shrink-0"
+                  class="shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-bold transition-all"
                   :class="String(selectedGroupId) === String(group.id) ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'"
                 >
                   {{ group.name }}
@@ -463,7 +489,7 @@ const handleSubmit = () => {
                       v-for="member in currentGroup.members"
                       :key="getMemberUserId(member) ?? member.id ?? member.name"
                       @click="toggleAttendee(member)"
-                      class="flex items-center gap-2 p-2 rounded-lg border text-left transition-all group"
+                      class="group flex items-center gap-2 rounded-xl border p-2.5 text-left transition-all"
                       :class="getMemberUserId(member) === organizerUserId
                         ? 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
                         : isSelectedMember(getMemberUserId(member))
@@ -508,9 +534,9 @@ const handleSubmit = () => {
             </div>
           </div>
 
-          <div class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500 transition-all flex flex-wrap gap-2 items-center min-h-[50px] shadow-sm">
+          <div class="flex min-h-[52px] w-full flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition-all focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
                 <span v-for="(person, index) in selectedParticipants" :key="`${person.userId || 'external'}-${person.name}-${index}`"
-                      class="bg-brand-50 text-brand-700 border border-brand-100 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1.5 animate-fade-in-up">
+                      class="animate-fade-in-up flex items-center gap-1.5 rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">
                   {{ person.name }}
                   <button @click="removeAttendee(index)" class="hover:text-brand-900 rounded-full hover:bg-brand-200 p-0.5 transition-colors">
                     <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -528,18 +554,55 @@ const handleSubmit = () => {
           </div>
         </div>
       </div>
-      <p v-if="formError" class="px-6 pt-3 text-sm font-medium text-rose-600">
+      <p v-if="formError" class="px-6 pt-3 text-sm font-semibold text-rose-600 sm:px-7">
         {{ formError }}
       </p>
-      <div class="px-6 py-4 border-t flex justify-end gap-2 bg-white">
-        <button class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors" @click="emit('close')">취소</button>
-        <button class="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm shadow-brand-200" @click="handleSubmit">예약 확정</button>
+      <div class="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-4 sm:px-7">
+        <button class="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-extrabold text-slate-700 transition-colors hover:bg-slate-50" @click="emit('close')">취소</button>
+        <button class="inline-flex items-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm shadow-brand-200 transition-colors hover:bg-brand-700" @click="handleSubmit">예약 확정</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.booking-field {
+  width: 100%;
+  border-radius: 0.95rem;
+  border: 1px solid rgb(226, 232, 240);
+  background: rgb(248, 250, 252);
+  padding: 0.72rem 0.9rem;
+  color: rgb(15, 23, 42);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.booking-select {
+  min-width: 0;
+  border-radius: 0.95rem;
+  border: 1px solid rgb(226, 232, 240);
+  background: rgb(248, 250, 252);
+  padding: 0.72rem 0.9rem;
+  color: rgb(15, 23, 42);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.booking-field::placeholder {
+  color: rgb(148, 163, 184);
+}
+
+.booking-field[readonly] {
+  color: rgb(71, 85, 105);
+  cursor: default;
+}
+
+.booking-field:focus,
+.booking-select:focus {
+  outline: none;
+  border-color: rgb(20, 184, 166);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+  background: rgb(255, 255, 255);
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
