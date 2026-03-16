@@ -110,15 +110,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
         >
           <div class="drawer-surface flex h-full flex-col">
             <header class="drawer-header">
-              <div class="space-y-3">
+              <div class="space-y-2">
                 <span :class="badgeClass">{{ typeLabel }}</span>
                 <div>
                   <h3 class="text-[1.35rem] font-black leading-tight text-slate-950">
                     {{ event?.title || '일정 상세' }}
                   </h3>
-                  <p class="mt-2 text-sm leading-6 text-slate-500">
-                    목록 흐름을 벗어나지 않고 필요한 일정 정보만 빠르게 확인할 수 있어요.
-                  </p>
                 </div>
               </div>
 

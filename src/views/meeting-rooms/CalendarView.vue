@@ -15,26 +15,26 @@ const hours = Array.from({ length: 13 }, (_, i) => i + 8)
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div class="flex items-center gap-2">
-      <button
-        class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-        :class="viewMode === 'calendar'
-          ? 'bg-brand-600 text-white border-brand-600'
-          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
-        @click="viewMode = 'calendar'"
-      >
-        전체 캘린더
-      </button>
-      <button
-        class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
-        :class="viewMode === 'timeline'
-          ? 'bg-brand-600 text-white border-brand-600'
-          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
-        @click="viewMode = 'timeline'"
-      >
-        타임라인
-      </button>
+  <div class="meeting-schedule-shell">
+    <div class="meeting-schedule-shell__head">
+      <div class="view-switch">
+        <button
+          type="button"
+          class="view-switch__button"
+          :class="{ 'view-switch__button--active': viewMode === 'calendar' }"
+          @click="viewMode = 'calendar'"
+        >
+          전체 캘린더
+        </button>
+        <button
+          type="button"
+          class="view-switch__button"
+          :class="{ 'view-switch__button--active': viewMode === 'timeline' }"
+          @click="viewMode = 'timeline'"
+        >
+          타임라인
+        </button>
+      </div>
     </div>
 
     <CalendarView
@@ -43,6 +43,7 @@ const hours = Array.from({ length: 13 }, (_, i) => i + 8)
       :bookings="bookings"
       @dateClick="handlers.handleDateClick"
       @bookingClick="handlers.handleBookingClick"
+      @roomChange="handlers.handleCalendarRoomChange"
     />
 
     <MeetingRoomTimeline
@@ -56,3 +57,39 @@ const hours = Array.from({ length: 13 }, (_, i) => i + 8)
     />
   </div>
 </template>
+
+<style scoped>
+.meeting-schedule-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.meeting-schedule-shell__head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.view-switch {
+  display: inline-flex;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.view-switch__button {
+  border-radius: 6px;
+  padding: 0.48rem 0.92rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: rgb(100, 116, 139);
+  transition: all 0.18s ease;
+}
+
+.view-switch__button--active {
+  background: rgb(20, 184, 166);
+  color: white;
+}
+</style>
