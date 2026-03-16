@@ -73,6 +73,11 @@ const isInterviewListModalOpen = ref(false)
 const showCopyModal = ref(false) // 링크 복사 모달
 const apiSchedules = ref([])
 const recruitmentDetail = ref(null)
+const applicantDetailModalOpen = ref(false)
+const applicantDetailLoading = ref(false)
+const applicantDetailError = ref('')
+const applicantDetail = ref(null)
+const downloadingApplicantFileId = ref(null)
 
 // --- Calendar State (New) ---
 const calendarState = reactive({
@@ -365,6 +370,9 @@ const selectedInterviewerIds = computed(() =>
 )
 
 const selectedInterviewerKey = computed(() => selectedInterviewerIds.value.join(','))
+const allInterviewersChecked = computed(() =>
+  interviewers.value.length > 0 && interviewers.value.every((member) => member.checked !== false)
+)
 
 // 조직도에서 전체 직원 가져오기
 const allEmployees = computed(() => {
@@ -552,6 +560,161 @@ const formatApplicantDate = (value) => {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}.${month}.${day}`
+}
+
+const setAllInterviewersChecked = (checked = true) => {
+  interviewers.value = interviewers.value.map((member) => ({
+    ...member,
+    checked
+  }))
+}
+
+const toggleInterviewerChecked = (memberId) => {
+  interviewers.value = interviewers.value.map((member) => {
+    const currentId = getMemberUserId(member) ?? member.id
+    if (currentId !== memberId) return member
+    return {
+      ...member,
+      checked: member.checked === false
+    }
+  })
+}
+
+const formatApplicantDateTime = (value) => {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+
+  const datePart = formatApplicantDate(date)
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${datePart} ${hour}:${minute}`
+}
+
+const applicantStatusLabelMap = {
+  DOCUMENT_REVIEW: '서류 검토',
+  FIRST_INTERVIEW: '1차 면접',
+  SECOND_INTERVIEW: '2차 면접',
+  OFFER_NEGOTIATION: '처우 협의',
+  HIRED: '합격',
+  PASSED: '합격',
+  REJECTED: '불합격',
+  FAILED: '불합격'
+}
+
+const applicantGenderLabelMap = {
+  MALE: '남성',
+  FEMALE: '여성',
+  M: '남성',
+  F: '여성'
+}
+
+const normalizeApplicantStatus = (status) => {
+  if (!status) return '서류 검토'
+  return applicantStatusLabelMap[status] || status
+}
+
+const normalizeApplicantGender = (gender) => {
+  if (!gender) return '-'
+  return applicantGenderLabelMap[gender] || gender
+}
+
+const parseApplicantJsonSafely = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+const toApplicantAnswerList = (detail) => {
+  const answerList = []
+  const pushAnswer = (label, value) => {
+    if (value == null || value === '') return
+    answerList.push({ label, value: String(value) })
+  }
+
+  pushAnswer('간단 자기소개', detail?.shortBio ?? detail?.selfIntroduction)
+  pushAnswer('포트폴리오 URL', detail?.portfolioUrl ?? detail?.portfolio)
+
+  if (Array.isArray(detail?.answers)) {
+    detail.answers.forEach((item, index) => {
+      const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
+      const value = item?.value ?? item?.answer
+      pushAnswer(label, value)
+    })
+  }
+
+  const parsedFormFields = parseApplicantJsonSafely(detail?.formFields)
+  if (Array.isArray(parsedFormFields)) {
+    parsedFormFields.forEach((item, index) => {
+      const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
+      const value = item?.value ?? item?.answer
+      pushAnswer(label, value)
+    })
+  } else if (parsedFormFields && typeof parsedFormFields === 'object') {
+    Object.entries(parsedFormFields).forEach(([label, value]) => {
+      pushAnswer(label, value)
+    })
+  }
+
+  if (detail?.answerMap && typeof detail.answerMap === 'object') {
+    Object.entries(detail.answerMap).forEach(([label, value]) => {
+      pushAnswer(label, value)
+    })
+  }
+
+  return answerList
+}
+
+const toApplicantDetailModel = (detail) => {
+  const files = Array.isArray(detail?.files) ? detail.files : []
+  const primaryFile = files[0] || null
+  const resumeFileId =
+    detail?.resumeFileId ??
+    detail?.resume?.fileId ??
+    primaryFile?.fileId ??
+    primaryFile?.id ??
+    null
+  const resumeUrl =
+    detail?.resumeUrl ?? detail?.resumeDownloadUrl ?? detail?.resume?.url ?? primaryFile?.downloadUrl ?? null
+  const resumeName =
+    detail?.resumeFileName ??
+    detail?.resumeName ??
+    detail?.resume?.name ??
+    primaryFile?.fileName ??
+    (primaryFile ? '이력서 파일' : null)
+
+  return {
+    id: detail?.applicationId ?? detail?.applicantId ?? detail?.id ?? null,
+    name: detail?.name ?? detail?.applicantName ?? '-',
+    email: detail?.email ?? detail?.applicantEmail ?? '-',
+    phone: detail?.phone ?? detail?.phoneNumber ?? '-',
+    gender: normalizeApplicantGender(detail?.gender ?? detail?.sex),
+    birthdate: formatApplicantDate(detail?.birthDate ?? detail?.birthdate) || '-',
+    job: detail?.recruitmentTitle ?? recruitment.value.title ?? '-',
+    status: normalizeApplicantStatus(detail?.status ?? detail?.applicationStatus ?? detail?.progressStatus),
+    nextSchedule: formatApplicantDateTime(detail?.nextSchedule ?? detail?.nextInterviewAt ?? detail?.nextScheduleAt),
+    appliedDate: formatApplicantDate(detail?.appliedAt ?? detail?.appliedDate ?? detail?.createdAt) || '-',
+    answers: toApplicantAnswerList(detail),
+    resume: resumeFileId || resumeUrl || resumeName
+      ? { fileId: resumeFileId, name: resumeName, url: resumeUrl }
+      : null
+  }
+}
+
+const getApplicantStatusStyle = (status) => {
+  const styles = {
+    '서류 검토': 'border-sky-200 bg-sky-50 text-sky-700',
+    '1차 면접': 'border-violet-200 bg-violet-50 text-violet-700',
+    '2차 면접': 'border-violet-200 bg-violet-50 text-violet-700',
+    '처우 협의': 'border-amber-200 bg-amber-50 text-amber-700',
+    합격: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    불합격: 'border-rose-200 bg-rose-50 text-rose-700'
+  }
+  return styles[status] || 'border-slate-200 bg-slate-50 text-slate-700'
 }
 
 const schedules = computed(() => apiSchedules.value)
@@ -1656,6 +1819,78 @@ const getDayColor = (index) => {
   if (index === 6) return 'text-blue-500' // Saturday
   return 'text-slate-500'
 }
+
+const openApplicantDetailModal = async (app) => {
+  if (!app?.applicationId || movingApplicationId.value === app.applicationId) return
+
+  applicantDetailModalOpen.value = true
+  applicantDetailLoading.value = true
+  applicantDetailError.value = ''
+  applicantDetail.value = null
+
+  try {
+    const response = await applicationBoardApi.getApplicationDetail(app.applicationId)
+    const payload = applicationBoardApi.extractResponseData(response)
+    const detail = payload?.application ?? payload?.item ?? payload
+
+    if (!detail || typeof detail !== 'object') {
+      throw new Error('지원자 정보를 찾을 수 없습니다.')
+    }
+
+    applicantDetail.value = toApplicantDetailModel(detail)
+  } catch (error) {
+    applicantDetailError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      error?.message ||
+      '지원자 상세 정보를 불러오지 못했습니다.'
+  } finally {
+    applicantDetailLoading.value = false
+  }
+}
+
+const closeApplicantDetailModal = () => {
+  applicantDetailModalOpen.value = false
+  applicantDetailLoading.value = false
+  applicantDetailError.value = ''
+  applicantDetail.value = null
+  downloadingApplicantFileId.value = null
+}
+
+const handleApplicantResumeDownload = async () => {
+  if (!applicantDetail.value?.resume) return
+
+  const { resume } = applicantDetail.value
+
+  if (!resume.fileId) {
+    if (resume.url) {
+      window.open(resume.url, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
+
+  downloadingApplicantFileId.value = resume.fileId
+
+  try {
+    const response = await applicationBoardApi.getApplicationFileDownloadPresign(resume.fileId)
+    const payload = applicationBoardApi.extractResponseData(response)
+    const downloadUrl = payload?.downloadUrl ?? payload?.url ?? payload?.presignedUrl ?? null
+
+    if (!downloadUrl) {
+      throw new Error('다운로드 URL을 받지 못했습니다.')
+    }
+
+    window.open(downloadUrl, '_blank', 'noopener,noreferrer')
+  } catch (error) {
+    applicantDetailError.value =
+      error?.response?.data?.error?.message ||
+      error?.response?.data?.message ||
+      error?.message ||
+      '첨부 파일 다운로드에 실패했습니다.'
+  } finally {
+    downloadingApplicantFileId.value = null
+  }
+}
 </script>
 
 <template>
@@ -1769,157 +2004,186 @@ const getDayColor = (index) => {
               </div>
             </div>
 
-            <!-- MONTH VIEW -->
-            <template v-if="currentView === 'MONTH'">
-              <div class="month-weekdays">
-                <div v-for="(day, idx) in koDays" :key="day" class="month-weekdays__item" :class="getDayColor(idx)">
-                  {{ day }}
+            <div class="calendar-layout">
+              <aside v-if="interviewers.length" class="calendar-filter-panel">
+                <div class="calendar-filter-panel__head">
+                  <h3 class="calendar-filter-panel__title">면접관</h3>
+                  <p class="calendar-filter-panel__caption">일정 표시 대상 선택</p>
                 </div>
-              </div>
 
-              <div class="month-grid">
-                <div
-                  v-for="(day, index) in calendarDays"
-                  :key="day ? day.toISOString() : `empty-${index}`"
-                  class="month-cell"
-                  :class="{
-                    'month-cell--muted': !day || !isSameMonth(day, calendarState.currentMonth),
-                    'month-cell--today': day && isSameDay(day, new Date()),
-                    'month-cell--last': (index + 1) % 7 === 0
-                  }"
-                  @click="day && isSameMonth(day, calendarState.currentMonth) && openDayDetail(day)"
-                >
-                  <div class="month-cell__head">
-                    <span
-                      v-if="day"
-                      class="month-cell__day"
-                      :class="{
-                        'month-cell__day--today': isSameDay(day, new Date()),
-                        'month-cell__day--sunday': day.getDay() === 0 && !isSameDay(day, new Date()),
-                        'month-cell__day--saturday': day.getDay() === 6 && !isSameDay(day, new Date()),
-                        'ring-1 ring-brand-600 text-brand-600': selectedDay && isSameDay(day, selectedDay) && !isSameDay(day, new Date()),
-                        'opacity-0': !isSameMonth(day, calendarState.currentMonth)
-                      }"
-                    >
-                      {{ day.getDate() }}
-                    </span>
-                    <span v-if="day && getBookingsForDay(day).length" class="month-cell__count">
-                      {{ getBookingsForDay(day).length }}
-                    </span>
+                <div class="calendar-filter-panel__list">
+                  <button
+                    type="button"
+                    class="calendar-filter-chip"
+                    :class="{ 'calendar-filter-chip--active': allInterviewersChecked }"
+                    @click="setAllInterviewersChecked(true)"
+                  >
+                    전체 면접관
+                  </button>
+
+                  <button
+                    v-for="member in interviewers"
+                    :key="getMemberUserId(member) ?? member.id"
+                    type="button"
+                    class="calendar-filter-chip"
+                    :class="{ 'calendar-filter-chip--active': member.checked !== false }"
+                    @click="toggleInterviewerChecked(getMemberUserId(member) ?? member.id)"
+                  >
+                    {{ member.displayName || getInterviewerLabel(member) }}
+                  </button>
+                </div>
+              </aside>
+
+              <div class="calendar-layout__main">
+                <!-- MONTH VIEW -->
+                <template v-if="currentView === 'MONTH'">
+                  <div class="month-weekdays">
+                    <div v-for="(day, idx) in koDays" :key="day" class="month-weekdays__item" :class="getDayColor(idx)">
+                      {{ day }}
+                    </div>
                   </div>
 
-                  <div v-if="day && isSameMonth(day, calendarState.currentMonth) && getBookingsForDay(day).length" class="month-cell__events">
+                  <div class="month-grid">
                     <div
-                      v-for="booking in getBookingsForDay(day).slice(0, 3)"
-                      :key="booking.id"
-                      class="month-event-chip"
-                      :style="{
-                        backgroundColor: `${getInterviewerColor(booking.interviewerId)}18`,
-                        color: getInterviewerColor(booking.interviewerId)
+                      v-for="(day, index) in calendarDays"
+                      :key="day ? day.toISOString() : `empty-${index}`"
+                      class="month-cell"
+                      :class="{
+                        'month-cell--muted': !day || !isSameMonth(day, calendarState.currentMonth),
+                        'month-cell--today': day && isSameDay(day, new Date()),
+                        'month-cell--last': (index + 1) % 7 === 0
                       }"
-                      @click.stop="openInterviewDetail(booking)"
+                      @click="day && isSameMonth(day, calendarState.currentMonth) && openDayDetail(day)"
                     >
-                      <span class="month-event-chip__time">{{ booking.startTime }}</span>
-                      <span class="month-event-chip__title truncate">{{ getBookingPrimaryText(booking) }}</span>
-                    </div>
-                    <button
-                      v-if="getBookingsForDay(day).length > 3"
-                      class="month-cell__more"
-                      @click.stop="openDayDetail(day)"
-                    >
-                      +{{ getBookingsForDay(day).length - 3 }}개 더 보기
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </template>
+                      <div class="month-cell__head">
+                        <span
+                          v-if="day"
+                          class="month-cell__day"
+                          :class="{
+                            'month-cell__day--today': isSameDay(day, new Date()),
+                            'month-cell__day--sunday': day.getDay() === 0 && !isSameDay(day, new Date()),
+                            'month-cell__day--saturday': day.getDay() === 6 && !isSameDay(day, new Date()),
+                            'ring-1 ring-brand-600 text-brand-600': selectedDay && isSameDay(day, selectedDay) && !isSameDay(day, new Date()),
+                            'opacity-0': !isSameMonth(day, calendarState.currentMonth)
+                          }"
+                        >
+                          {{ day.getDate() }}
+                        </span>
+                        <span v-if="day && getBookingsForDay(day).length" class="month-cell__count">
+                          {{ getBookingsForDay(day).length }}
+                        </span>
+                      </div>
 
-            <!-- WEEK VIEW -->
-            <template v-else-if="currentView === 'WEEK'">
-              <div class="flex flex-col h-full overflow-hidden">
-                 <!-- Week Header -->
-                <div class="sticky top-0 z-30 grid grid-cols-[60px_1fr] border-b border-slate-200 bg-slate-50/60">
-                  <div class="border-r border-slate-200"></div>
-                  <div class="grid grid-cols-7">
-                    <div v-for="(day, idx) in currentWeekDays" :key="day.toISOString()"
-                         class="group flex cursor-pointer flex-col items-center gap-1 border-r border-slate-200 py-3 text-center transition-colors hover:bg-slate-100 last:border-0"
-                         @click="openDayDetail(day)">
-                      <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ koDays[idx] }}</span>
-                      <span class="text-lg font-display font-bold leading-none w-7 h-7 flex items-center justify-center rounded-lg transition-all"
-                            :class="{
-                              'bg-brand-600 text-white': isSameDay(day, new Date()),
-                              'ring-1 ring-brand-600 text-brand-600': isSameDay(day, calendarState.currentMonth) && !isSameDay(day, new Date()),
-                              'text-slate-700 group-hover:text-brand-600': !isSameDay(day, new Date()) && !isSameDay(day, calendarState.currentMonth)
-                            }">
-                        {{ day.getDate() }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Time Grid -->
-                <div class="flex flex-1 overflow-y-auto custom-scrollbar">
-                  <div class="w-[60px] shrink-0 border-r border-slate-200 bg-slate-50/10">
-                    <div v-for="time in timeSlots" :key="time" class="flex h-[60px] items-start justify-center border-b border-slate-200 pt-2 text-[10px] font-bold text-slate-500">
-                      {{ time }}
+                      <div v-if="day && isSameMonth(day, calendarState.currentMonth) && getBookingsForDay(day).length" class="month-cell__events">
+                        <div
+                          v-for="booking in getBookingsForDay(day).slice(0, 3)"
+                          :key="booking.id"
+                          class="month-event-chip"
+                          :style="{
+                            backgroundColor: `${getInterviewerColor(booking.interviewerId)}18`,
+                            color: getInterviewerColor(booking.interviewerId)
+                          }"
+                          @click.stop="openInterviewDetail(booking)"
+                        >
+                          <span class="month-event-chip__time">{{ booking.startTime }}</span>
+                          <span class="month-event-chip__title truncate">{{ getBookingPrimaryText(booking) }}</span>
+                        </div>
+                        <button
+                          v-if="getBookingsForDay(day).length > 3"
+                          class="month-cell__more"
+                          @click.stop="openDayDetail(day)"
+                        >
+                          +{{ getBookingsForDay(day).length - 3 }}개 더 보기
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div class="flex-1 grid grid-cols-7 relative">
-                    <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="group relative border-r border-slate-200 last:border-0">
-                      <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-200 transition-colors hover:bg-slate-50/30"></div>
+                </template>
 
-                      <div v-for="evt in getBookingsForDay(day)" :key="evt.id"
-                           @click="openInterviewDetail(evt)"
-                           class="absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-lg border-l-4 p-1.5 transition-transform hover:scale-[1.02]"
-                           :style="{
-                             ...getEventStyle(evt),
-                             backgroundColor: `${getInterviewerColor(evt.interviewerId)}`,
-                             borderColor: getInterviewerColor(evt.interviewerId),
-                             color: '#fff'
-                           }">
-                        <div class="flex flex-col h-full justify-center">
-                           <!-- <p class="text-[9px] font-bold opacity-90 mb-0.5">{{ evt.time }}</p> -->
-                           <p class="text-[10px] font-extrabold truncate leading-tight">{{ getBookingPrimaryText(evt) }}</p>
-                           <p class="text-[9px] font-medium truncate opacity-90">{{ getBookingSecondaryText(evt) }}</p>
+                <!-- WEEK VIEW -->
+                <template v-else-if="currentView === 'WEEK'">
+                  <div class="flex flex-col h-full overflow-hidden">
+                    <div class="sticky top-0 z-30 grid grid-cols-[60px_1fr] border-b border-slate-200 bg-slate-50/60">
+                      <div class="border-r border-slate-200"></div>
+                      <div class="grid grid-cols-7">
+                        <div v-for="(day, idx) in currentWeekDays" :key="day.toISOString()"
+                             class="group flex cursor-pointer flex-col items-center gap-1 border-r border-slate-200 py-3 text-center transition-colors hover:bg-slate-100 last:border-0"
+                             @click="openDayDetail(day)">
+                          <span class="text-[10px] font-black tracking-widest uppercase" :class="getDayColor(idx)">{{ koDays[idx] }}</span>
+                          <span class="text-lg font-display font-bold leading-none w-7 h-7 flex items-center justify-center rounded-lg transition-all"
+                                :class="{
+                                  'bg-brand-600 text-white': isSameDay(day, new Date()),
+                                  'ring-1 ring-brand-600 text-brand-600': isSameDay(day, calendarState.currentMonth) && !isSameDay(day, new Date()),
+                                  'text-slate-700 group-hover:text-brand-600': !isSameDay(day, new Date()) && !isSameDay(day, calendarState.currentMonth)
+                                }">
+                            {{ day.getDate() }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-1 overflow-y-auto custom-scrollbar">
+                      <div class="w-[60px] shrink-0 border-r border-slate-200 bg-slate-50/10">
+                        <div v-for="time in timeSlots" :key="time" class="flex h-[60px] items-start justify-center border-b border-slate-200 pt-2 text-[10px] font-bold text-slate-500">
+                          {{ time }}
+                        </div>
+                      </div>
+                      <div class="flex-1 grid grid-cols-7 relative">
+                        <div v-for="(day, dayIdx) in currentWeekDays" :key="dayIdx" class="group relative border-r border-slate-200 last:border-0">
+                          <div v-for="time in timeSlots" :key="time" class="h-[60px] border-b border-slate-200 transition-colors hover:bg-slate-50/30"></div>
+
+                          <div v-for="evt in getBookingsForDay(day)" :key="evt.id"
+                               @click="openInterviewDetail(evt)"
+                               class="absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-lg border-l-4 p-1.5 transition-transform hover:scale-[1.02]"
+                               :style="{
+                                 ...getEventStyle(evt),
+                                 backgroundColor: `${getInterviewerColor(evt.interviewerId)}`,
+                                 borderColor: getInterviewerColor(evt.interviewerId),
+                                 color: '#fff'
+                               }">
+                            <div class="flex flex-col h-full justify-center">
+                               <p class="text-[10px] font-extrabold truncate leading-tight">{{ getBookingPrimaryText(evt) }}</p>
+                               <p class="text-[9px] font-medium truncate opacity-90">{{ getBookingSecondaryText(evt) }}</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            </template>
+                </template>
 
-            <!-- DAY VIEW -->
-            <template v-else>
-              <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
-                <div class="space-y-4 max-w-3xl mx-auto">
-                  <div v-if="getBookingsForDay(calendarState.currentMonth).length === 0" class="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-20">
-                     <p class="text-sm font-bold text-slate-400">등록된 면접 일정이 없습니다.</p>
-                  </div>
+                <!-- DAY VIEW -->
+                <template v-else>
+                  <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+                    <div class="space-y-4 max-w-3xl mx-auto">
+                      <div v-if="getBookingsForDay(calendarState.currentMonth).length === 0" class="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/50 py-20">
+                         <p class="text-sm font-bold text-slate-400">등록된 면접 일정이 없습니다.</p>
+                      </div>
 
-                  <div v-for="evt in getBookingsForDay(calendarState.currentMonth)" :key="evt.id"
-                       @click="openInterviewDetail(evt)"
-                       class="group flex cursor-pointer items-center gap-6 rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-brand-300">
-                    
-                    <div class="w-20 text-center shrink-0 border-r-2 border-slate-100 pr-4">
-                      <span class="block text-xl font-black text-slate-800 tracking-tighter">{{ evt.time }}</span>
+                      <div v-for="evt in getBookingsForDay(calendarState.currentMonth)" :key="evt.id"
+                           @click="openInterviewDetail(evt)"
+                           class="group flex cursor-pointer items-center gap-6 rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-brand-300">
+                        <div class="w-20 text-center shrink-0 border-r-2 border-slate-100 pr-4">
+                          <span class="block text-xl font-black text-slate-800 tracking-tighter">{{ evt.time }}</span>
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                          <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-1"
+                                :style="{
+                                  backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
+                                  color: getInterviewerColor(evt.interviewerId)
+                                }">
+                            {{ evt.interviewerName || getInterviewerName(evt.interviewerId) }}
+                          </span>
+                          <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ getBookingDisplayTitle(evt) }}</h4>
+                          <p class="text-sm text-slate-500 mt-1 font-medium">{{ getBookingSummaryText(evt) }}</p>
+                        </div>
+                      </div>
                     </div>
-
-                    <div class="flex-1 min-w-0">
-                      <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-1"
-                            :style="{
-                              backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
-                              color: getInterviewerColor(evt.interviewerId)
-                            }">
-                        {{ evt.interviewerName || getInterviewerName(evt.interviewerId) }}
-                      </span>
-                      <h4 class="text-lg font-bold text-slate-900 group-hover:text-brand-600 transition-colors leading-snug">{{ getBookingDisplayTitle(evt) }}</h4>
-                      <p class="text-sm text-slate-500 mt-1 font-medium">{{ getBookingSummaryText(evt) }}</p>
-                    </div>
                   </div>
-                </div>
+                </template>
               </div>
-            </template>
+            </div>
           </div>
 
         </div>
@@ -1932,7 +2196,7 @@ const getDayColor = (index) => {
       >
         <div
           ref="applicantBoardScrollRef"
-          class="applicant-surface flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-4"
+          class="applicant-surface flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-3.5"
           @dragover.prevent="handleBoardDragOver"
         >
         <div class="schedule-surface__head applicant-surface__head">
@@ -1972,23 +2236,22 @@ const getDayColor = (index) => {
           <p class="text-sm font-bold text-slate-500">표시할 전형 프로세스가 없습니다.</p>
         </div>
 
-        <div v-else class="applicant-board-scroll flex h-full gap-5 min-w-max w-max overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
+        <div v-else class="applicant-board-scroll flex h-full min-w-max w-max gap-4 overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
           <div 
             v-for="process in processes" :key="process.id"
-            class="flex w-80 flex-col rounded-2xl border border-slate-200 bg-slate-50/55"
+            class="flex h-full min-h-[32rem] w-72 flex-col rounded-2xl border border-slate-200 bg-slate-50/55"
             @dragover.prevent="handleColumnDragOver($event, process.id)"
             @drop="onDrop($event, process.id)"
             :class="[getStageTypeMeta(process.stageType).column, {'ring-2 ring-brand-300': draggingOverColumnId === process.id}]"
           >
-            <div class="flex-none rounded-t-2xl border-b border-slate-200 bg-white px-4 py-3.5 flex items-center justify-between">
+            <div class="flex-none rounded-t-2xl border-b border-slate-200 bg-white px-3.5 py-3 flex items-center justify-between">
               <div>
                 <div class="flex items-center gap-2 mb-1">
-                  <h3 class="font-bold text-slate-700">{{ process.stageName }}</h3>
+                  <h3 class="text-sm font-bold text-slate-700">{{ process.stageName }}</h3>
                   <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border" :class="getStageTypeMeta(process.stageType).badge">
                     {{ getStageTypeMeta(process.stageType).label }}
                   </span>
                 </div>
-                <p class="text-[11px] text-slate-400 font-medium">order {{ process.order }}</p>
               </div>
               <div class="flex items-center gap-2 relative">
                 <span class="bg-slate-100 px-2 py-0.5 rounded text-xs font-bold text-slate-500">{{ getApplicantsByProcess(process.id).length }}</span>
@@ -2016,17 +2279,18 @@ const getDayColor = (index) => {
                 </div>
               </div>
             </div>
-            <div class="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto p-2.5 space-y-2.5 custom-scrollbar">
               <div v-for="app in getApplicantsByProcess(process.id)" :key="app.id"
                    :draggable="canMoveApplicants && movingApplicationId !== app.applicationId" @dragstart="onDragStart($event, app.applicationId)" @dragend="onDragEnd"
-                   class="cursor-grab rounded-2xl border border-slate-200 bg-white p-4 transition-all active:cursor-grabbing hover:border-brand-300 hover:shadow-[0_16px_30px_-24px_rgba(15,23,42,0.45)]"
+                   class="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition-all hover:border-brand-300 hover:shadow-[0_16px_30px_-24px_rgba(15,23,42,0.45)] active:cursor-grabbing"
                    :class="{
                      'opacity-50 border-dashed': draggingCardId === app.applicationId,
                      'cursor-not-allowed opacity-70': !canMoveApplicants,
                      'pointer-events-none opacity-60': movingApplicationId === app.applicationId
-                   }">
-                <div v-if="canMoveApplicants" class="mb-2 flex items-center justify-between">
-                  <label class="inline-flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                   }"
+                   @click="openApplicantDetailModal(app)">
+                <div v-if="canMoveApplicants" class="mb-2 flex items-center justify-between gap-2">
+                  <label class="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
                     <input
                       type="checkbox"
                       class="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
@@ -2037,28 +2301,44 @@ const getDayColor = (index) => {
                     >
                     선택
                   </label>
-                </div>
-                <div class="flex justify-between items-start mb-2">
-                  <span class="font-bold text-slate-900">{{ app.name }}</span>
-                  <div v-if="app.hasInterview" class="text-brand-600 bg-brand-50 p-1 rounded-full"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" /></svg></div>
-                </div>
-                <p class="text-xs text-slate-500 mb-2">{{ app.email }}</p>
-                <div class="flex gap-1 flex-wrap">
-                  <span v-for="tag in app.tags" :key="tag" class="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-600 border border-slate-200">{{ tag }}</span>
-                </div>
-                <div v-if="canMoveApplicants" class="mt-3 flex justify-end">
                   <button
                     type="button"
-                    class="rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors"
+                    class="rounded-lg border px-2 py-1 text-[10px] font-bold transition-colors"
                     :class="app.processId === failProcess?.id || movingApplicationId === app.applicationId
                       ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
                       : 'border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100'"
                     :disabled="app.processId === failProcess?.id || movingApplicationId === app.applicationId"
                     @click.stop="handleRejectApplicant(app.applicationId)"
                   >
-                    불합격 처리
+                    불합격
                   </button>
                 </div>
+                <div class="flex items-start justify-between gap-2 mb-1.5">
+                  <span class="text-sm font-bold text-slate-900 leading-5">{{ app.name }}</span>
+                  <div v-if="app.hasInterview" class="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">면접</div>
+                </div>
+                <p class="mb-2 truncate text-[11px] font-medium text-slate-500">{{ app.email }}</p>
+                <div v-if="app.tags?.length" class="flex flex-wrap gap-1">
+                  <span
+                    v-for="tag in app.tags.slice(0, 2)"
+                    :key="tag"
+                    class="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600"
+                  >
+                    {{ tag }}
+                  </span>
+                  <span
+                    v-if="app.tags.length > 2"
+                    class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-bold text-slate-500"
+                  >
+                    +{{ app.tags.length - 2 }}
+                  </span>
+                </div>
+              </div>
+              <div
+                v-if="getApplicantsByProcess(process.id).length === 0"
+                class="flex h-full min-h-[10rem] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white/70 px-4"
+              >
+                <p class="text-[11px] font-bold text-slate-400">지원자 없음</p>
               </div>
             </div>
           </div>
@@ -2359,6 +2639,117 @@ const getDayColor = (index) => {
       </div>
     </Transition>
 
+    <div
+      v-if="applicantDetailModalOpen"
+      class="fixed inset-0 z-[71] flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm"
+      @click.self="closeApplicantDetailModal"
+    >
+      <div class="relative flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_30px_90px_-45px_rgba(15,23,42,0.55)]">
+        <button
+          type="button"
+          class="absolute right-6 top-6 z-10 flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-700"
+          @click="closeApplicantDetailModal"
+        >
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div class="flex-1 overflow-y-auto px-6 py-6">
+          <div v-if="applicantDetailLoading" class="flex min-h-[16rem] items-center justify-center">
+            <p class="text-sm font-bold text-slate-500">지원자 상세 정보를 불러오는 중입니다.</p>
+          </div>
+
+          <div v-else-if="applicantDetailError" class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-6 text-center">
+            <p class="text-sm font-bold text-rose-600">{{ applicantDetailError }}</p>
+          </div>
+
+          <template v-else-if="applicantDetail">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h4 class="text-2xl font-black tracking-tight text-slate-950">{{ applicantDetail.name }}</h4>
+                    <span
+                      class="rounded-full border px-3 py-1 text-xs font-bold"
+                      :class="getApplicantStatusStyle(applicantDetail.status)"
+                    >
+                      {{ applicantDetail.status }}
+                    </span>
+                  </div>
+                  <p class="mt-2 text-sm font-medium text-slate-500">{{ applicantDetail.job }}</p>
+                </div>
+
+                <button
+                  v-if="applicantDetail.resume"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-brand-200 hover:text-brand-700"
+                  :disabled="downloadingApplicantFileId === applicantDetail.resume.fileId"
+                  @click="handleApplicantResumeDownload"
+                >
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  {{ downloadingApplicantFileId === applicantDetail.resume.fileId ? '다운로드 준비 중' : '이력서 다운로드' }}
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div v-if="applicantDetail.email && applicantDetail.email !== '-'" class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-[11px] font-bold text-slate-400">이메일</p>
+                  <p class="mt-1 break-all text-sm font-bold text-slate-900">{{ applicantDetail.email }}</p>
+                </div>
+                <div v-if="applicantDetail.phone && applicantDetail.phone !== '-'" class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-[11px] font-bold text-slate-400">연락처</p>
+                  <p class="mt-1 text-sm font-bold text-slate-900">{{ applicantDetail.phone }}</p>
+                </div>
+                <div v-if="applicantDetail.gender && applicantDetail.gender !== '-'" class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-[11px] font-bold text-slate-400">성별</p>
+                  <p class="mt-1 text-sm font-bold text-slate-900">{{ applicantDetail.gender }}</p>
+                </div>
+                <div v-if="applicantDetail.birthdate && applicantDetail.birthdate !== '-'" class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p class="text-[11px] font-bold text-slate-400">생년월일</p>
+                  <p class="mt-1 text-sm font-bold text-slate-900">{{ applicantDetail.birthdate }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="applicantDetail.answers.length > 0" class="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+              <div class="flex items-center justify-between gap-3">
+                <h4 class="text-lg font-black tracking-tight text-slate-950">지원서 답변</h4>
+                <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500">
+                  {{ applicantDetail.answers.length }}개
+                </span>
+              </div>
+
+              <div class="mt-4 space-y-4">
+                <div
+                  v-for="(answer, index) in applicantDetail.answers"
+                  :key="`${answer.label}-${index}`"
+                  class="rounded-xl border border-slate-200 bg-slate-50/65 p-4"
+                >
+                  <p class="text-sm font-bold text-slate-800">{{ answer.label }}</p>
+                  <p class="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{{ answer.value }}</p>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="border-t border-slate-200 px-6 py-4">
+          <div class="flex justify-end">
+            <button
+              type="button"
+              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800"
+              @click="closeApplicantDetailModal"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <ScheduleListModal
       :isOpen="isInterviewListModalOpen"
       :date="selectedDay ? toYmd(selectedDay) : ''"
@@ -2481,6 +2872,80 @@ const getDayColor = (index) => {
 .toolbar-button-primary:hover,
 .toolbar-button-subtle:hover {
   filter: saturate(1.04);
+}
+
+.calendar-layout {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  gap: 1rem;
+}
+
+.calendar-layout__main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.calendar-filter-panel {
+  width: 220px;
+  flex-shrink: 0;
+  align-self: stretch;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.78), rgba(255, 255, 255, 0.96));
+  padding: 1rem;
+}
+
+.calendar-filter-panel__head {
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.calendar-filter-panel__title {
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: rgb(15, 23, 42);
+}
+
+.calendar-filter-panel__caption {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgb(100, 116, 139);
+}
+
+.calendar-filter-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.calendar-filter-chip {
+  width: 100%;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 0.72rem 0.85rem;
+  font-size: 0.77rem;
+  font-weight: 800;
+  text-align: left;
+  color: rgb(100, 116, 139);
+  transition: all 0.18s ease;
+}
+
+.calendar-filter-chip:hover {
+  border-color: rgba(148, 163, 184, 0.8);
+  color: rgb(51, 65, 85);
+}
+
+.calendar-filter-chip--active {
+  border-color: rgba(20, 184, 166, 0.22);
+  background: rgba(240, 253, 250, 0.95);
+  color: rgb(15, 118, 110);
 }
 
 .month-weekdays {
@@ -2698,6 +3163,23 @@ const getDayColor = (index) => {
   .applicant-search-field {
     width: 100%;
     min-width: 0;
+  }
+
+  .calendar-layout {
+    flex-direction: column;
+  }
+
+  .calendar-filter-panel {
+    width: 100%;
+  }
+
+  .calendar-filter-panel__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .calendar-filter-chip {
+    width: auto;
   }
 }
 
