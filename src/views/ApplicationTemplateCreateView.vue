@@ -220,233 +220,292 @@ const saveButtonText = computed(() => (isEditMode.value ? '수정' : '적용'))
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto space-y-6">
-    <div v-if="loading" class="text-center py-12 text-gray-500">로딩 중...</div>
+  <div class="mx-auto max-w-6xl px-4 py-4 md:px-6 md:py-5">
+    <div
+      v-if="loading"
+      class="rounded-[28px] border border-slate-200 bg-white px-6 py-16 text-center text-sm font-bold text-slate-500 shadow-sm"
+    >
+      로딩 중...
+    </div>
 
     <template v-else>
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">{{ pageTitle }}</h1>
-        <p class="mt-2 text-gray-600">지원서 템플릿의 제목과 상태를 설정하고, 추가 질문을 구성해 주세요.</p>
-      </div>
+      <div class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-200 px-5 py-5 md:px-7 md:py-6">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 flex-1 space-y-4">
+              <h1 class="text-3xl font-extrabold tracking-[-0.04em] text-slate-900">{{ pageTitle }}</h1>
 
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <label class="block text-sm font-bold text-gray-900 mb-2">제목</label>
-        <input
-          v-model="templateTitle"
-          type="text"
-          placeholder="지원서 템플릿 제목을 입력해 주세요"
-          class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-        />
-
-        <div class="mt-4">
-          <label class="block text-sm font-bold text-gray-900 mb-2">상태</label>
-          <select
-            v-model="templateStatus"
-            class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-          >
-            <option :value="TEMPLATE_STATUS.IN_USE">{{ TEMPLATE_STATUS.IN_USE }}</option>
-            <option :value="TEMPLATE_STATUS.UNUSED">{{ TEMPLATE_STATUS.UNUSED }}</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div class="flex items-center justify-between mb-4">
-          <label class="text-sm font-bold text-gray-900">질문 구성</label>
-        </div>
-
-        <div class="space-y-3 mb-6">
-          <div
-            v-for="field in defaultFields"
-            :key="field.id"
-            class="flex items-center gap-4 px-4 py-3 bg-gray-50 rounded-lg border border-gray-200"
-          >
-            <div class="flex items-center gap-2 text-gray-400">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </div>
-            <div class="flex-1">
-              <span class="text-gray-700 font-medium">{{ field.label }}</span>
-              <span v-if="field.options?.length" class="text-gray-400 ml-2">{{ field.options.join(' / ') }}</span>
-              <span v-if="field.placeholder" class="text-gray-400 ml-2">{{ field.placeholder }}</span>
-            </div>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-gray-600" @click.prevent>
-                <input type="checkbox" :checked="field.required" readonly class="w-4 h-4 text-brand-600 rounded border-gray-300 pointer-events-none" />
-                필수
-              </label>
-              <span class="text-xs text-gray-400 bg-gray-200 px-2 py-1 rounded">기본</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="border-t border-gray-200 my-6"></div>
-
-        <div class="space-y-4 mb-6">
-          <div
-            v-for="(field, index) in customFields"
-            :key="field.id || `${field.label}-${index}`"
-            class="px-4 py-3 bg-white rounded-lg border border-gray-200 hover:border-brand-300 transition-colors"
-          >
-            <div class="flex items-center gap-4">
-              <div class="flex items-center gap-2 text-gray-400 cursor-move">
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </div>
-              <div class="flex-1">
-                <input
-                  v-model="field.label"
-                  type="text"
-                  class="w-full bg-transparent border-none focus:ring-0 p-0 text-gray-900 font-medium"
-                  placeholder="질문을 입력해 주세요"
-                />
-                <span class="text-xs text-gray-400">{{ getFieldTypeLabel(field) }}</span>
-              </div>
-              <div class="flex items-center gap-3">
-                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-                  <input type="checkbox" v-model="field.required" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" />
-                  필수
-                </label>
-                <button @click="removeField(index)" class="p-1 text-gray-400 hover:text-red-500 transition-colors">
-                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <div v-if="field.type === 'text'" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label class="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" v-model="field.multiline" class="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" />
-                장문 입력(체크 시 textarea)
-              </label>
-              <div>
-                <label class="text-xs text-gray-500">글자수 제한</label>
-                <input
-                  v-model.number="field.maxLength"
-                  type="number"
-                  min="1"
-                  class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-            </div>
-
-            <div v-if="field.type === 'select' || field.type === 'checkbox'" class="mt-3">
-              <div class="flex items-center justify-between mb-2">
-                <label class="text-xs font-semibold text-gray-600">옵션 목록</label>
-                <button
-                  type="button"
-                  @click="addOption(field)"
-                  class="text-xs px-2 py-1 rounded border border-brand-200 text-brand-700 hover:bg-brand-50"
-                >
-                  + 옵션 추가
-                </button>
-              </div>
-
-              <div class="space-y-2">
-                <div v-for="(option, optionIndex) in field.options" :key="`${field.id}-opt-${optionIndex}`" class="flex items-center gap-2">
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div>
+                  <label class="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">제목</label>
                   <input
-                    v-model="field.options[optionIndex]"
+                    v-model="templateTitle"
                     type="text"
-                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                    :placeholder="`옵션 ${optionIndex + 1}`"
+                    placeholder="지원서 템플릿 제목"
+                    class="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
                   />
-                  <button
-                    type="button"
-                    @click="removeOption(field, optionIndex)"
-                    class="p-2 text-gray-400 hover:text-red-500"
+                </div>
+
+                <div>
+                  <label class="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">상태</label>
+                  <select
+                    v-model="templateStatus"
+                    class="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
                   >
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                    <option :value="TEMPLATE_STATUS.IN_USE">{{ TEMPLATE_STATUS.IN_USE }}</option>
+                    <option :value="TEMPLATE_STATUS.UNUSED">{{ TEMPLATE_STATUS.UNUSED }}</option>
+                  </select>
                 </div>
               </div>
             </div>
 
-            <div v-if="field.type === 'file'" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label class="text-xs text-gray-500">허용 확장자(쉼표 구분)</label>
-                <input
-                  v-model="field.accept"
-                  type="text"
-                  placeholder=".pdf,.doc,.docx,.jpg,.png"
-                  class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-              <div>
-                <label class="text-xs text-gray-500">최대 파일 크기(MB)</label>
-                <input
-                  v-model.number="field.maxFileSizeMB"
-                  type="number"
-                  min="1"
-                  class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <div class="flex-1 relative">
-            <input
-              v-model="newFieldLabel"
-              type="text"
-              placeholder="+ 질문 항목을 추가해 주세요"
-              class="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-              @focus="showFieldTypeDropdown = false"
-            />
-          </div>
-          <div class="relative">
-            <button
-              @click="showFieldTypeDropdown = !showFieldTypeDropdown"
-              class="flex items-center gap-2 px-4 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium"
-            >
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              필드 추가
-            </button>
-
-            <div
-              v-if="showFieldTypeDropdown"
-              class="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-10"
-            >
+            <div class="flex items-center justify-end gap-2">
               <button
-                v-for="option in fieldTypeOptions"
-                :key="option.value"
-                @click="addField(option.value)"
-                class="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-3"
+                @click="handleCancel"
+                class="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-800"
               >
-                {{ option.label }}
+                취소
+              </button>
+              <button
+                @click="handleSave"
+                class="inline-flex h-12 items-center justify-center rounded-xl bg-brand-600 px-4 text-sm font-bold text-white transition-colors hover:bg-brand-700"
+              >
+                {{ saveButtonText }}
               </button>
             </div>
           </div>
         </div>
-      </div>
 
-      <p class="text-sm text-gray-500 text-center">
-        지원서를 제출하면 '<span class="text-brand-600 underline cursor-pointer">개인정보</span>' 처리방침에 동의하게 됩니다.
-      </p>
+        <div class="px-5 py-5 md:px-7 md:py-6">
+          <div class="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+            <div class="border-b border-slate-200 px-5 py-4">
+              <h2 class="text-lg font-black tracking-[-0.03em] text-slate-900">질문 구성</h2>
+            </div>
 
-      <div class="flex items-center justify-end gap-3 pt-4">
-        <button @click="handleCancel" class="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium">취소</button>
-        <button @click="handleSave" class="px-6 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-medium">{{ saveButtonText }}</button>
+            <div class="space-y-6 px-5 py-5">
+              <section class="space-y-3">
+                <h3 class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">기본 항목</h3>
+
+                <div class="space-y-3">
+                  <div
+                    v-for="field in defaultFields"
+                    :key="field.id"
+                    class="flex items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3"
+                  >
+                    <div class="flex items-center gap-2 text-slate-400">
+                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <span class="font-medium text-slate-700">{{ field.label }}</span>
+                      <span v-if="field.options?.length" class="ml-2 text-slate-400">{{ field.options.join(' / ') }}</span>
+                      <span v-if="field.placeholder" class="ml-2 text-slate-400">{{ field.placeholder }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <label class="flex items-center gap-2 text-sm text-slate-600" @click.prevent>
+                        <input
+                          type="checkbox"
+                          :checked="field.required"
+                          readonly
+                          class="h-4 w-4 rounded border-slate-300 text-brand-600 pointer-events-none"
+                        />
+                        필수
+                      </label>
+                      <span class="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200">기본</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <div class="border-t border-slate-200"></div>
+
+              <section class="space-y-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 class="text-xs font-black uppercase tracking-[0.14em] text-slate-500">추가 질문</h3>
+
+                  <div class="flex items-center gap-3">
+                    <div class="relative flex-1 sm:min-w-[18rem]">
+                      <input
+                        v-model="newFieldLabel"
+                        type="text"
+                        placeholder="질문 항목 추가"
+                        class="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                        @focus="showFieldTypeDropdown = false"
+                      />
+                    </div>
+
+                    <div class="relative">
+                      <button
+                        @click="showFieldTypeDropdown = !showFieldTypeDropdown"
+                        class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-sm font-bold text-white transition-colors hover:bg-slate-800"
+                      >
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        필드 추가
+                      </button>
+
+                      <div
+                        v-if="showFieldTypeDropdown"
+                        class="absolute right-0 z-10 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-2 shadow-[0_20px_45px_-28px_rgba(15,23,42,0.35)]"
+                      >
+                        <button
+                          v-for="option in fieldTypeOptions"
+                          :key="option.value"
+                          @click="addField(option.value)"
+                          class="flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          {{ option.label }}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <div
+                    v-for="(field, index) in customFields"
+                    :key="field.id || `${field.label}-${index}`"
+                    class="rounded-xl border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-brand-300"
+                  >
+                    <div class="flex items-center gap-4">
+                      <div class="flex cursor-move items-center gap-2 text-slate-400">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                      </div>
+
+                      <div class="flex-1">
+                        <input
+                          v-model="field.label"
+                          type="text"
+                          class="w-full border-none bg-transparent p-0 font-medium text-slate-900 focus:ring-0"
+                          placeholder="질문 입력"
+                        />
+                        <span class="text-xs text-slate-400">{{ getFieldTypeLabel(field) }}</span>
+                      </div>
+
+                      <div class="flex items-center gap-3">
+                        <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+                          <input
+                            type="checkbox"
+                            v-model="field.required"
+                            class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                          />
+                          필수
+                        </label>
+                        <button @click="removeField(index)" class="p-1 text-slate-400 transition-colors hover:text-rose-500">
+                          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div v-if="field.type === 'text'" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <label class="flex items-center gap-2 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          v-model="field.multiline"
+                          class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        장문 입력(체크 시 textarea)
+                      </label>
+                      <div>
+                        <label class="text-xs text-slate-500">글자수 제한</label>
+                        <input
+                          v-model.number="field.maxLength"
+                          type="number"
+                          min="1"
+                          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                        />
+                      </div>
+                    </div>
+
+                    <div v-if="field.type === 'select' || field.type === 'checkbox'" class="mt-3">
+                      <div class="mb-2 flex items-center justify-between">
+                        <label class="text-xs font-semibold text-slate-600">옵션 목록</label>
+                        <button
+                          type="button"
+                          @click="addOption(field)"
+                          class="rounded-lg border border-brand-200 px-2 py-1 text-xs font-bold text-brand-700 hover:bg-brand-50"
+                        >
+                          + 옵션 추가
+                        </button>
+                      </div>
+
+                      <div class="space-y-2">
+                        <div
+                          v-for="(option, optionIndex) in field.options"
+                          :key="`${field.id}-opt-${optionIndex}`"
+                          class="flex items-center gap-2"
+                        >
+                          <input
+                            v-model="field.options[optionIndex]"
+                            type="text"
+                            class="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                            :placeholder="`옵션 ${optionIndex + 1}`"
+                          />
+                          <button
+                            type="button"
+                            @click="removeOption(field, optionIndex)"
+                            class="p-2 text-slate-400 hover:text-rose-500"
+                          >
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="field.type === 'file'" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div>
+                        <label class="text-xs text-slate-500">허용 확장자(쉼표 구분)</label>
+                        <input
+                          v-model="field.accept"
+                          type="text"
+                          placeholder=".pdf,.doc,.docx,.jpg,.png"
+                          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                        />
+                      </div>
+                      <div>
+                        <label class="text-xs text-slate-500">최대 파일 크기(MB)</label>
+                        <input
+                          v-model.number="field.maxFileSizeMB"
+                          type="number"
+                          min="1"
+                          class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="customFields.length === 0"
+                    class="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-12 text-center text-sm font-bold text-slate-400"
+                  >
+                    추가 질문이 없습니다.
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
-  </div>
 
-  <ConfirmModal
-    :show="modal.show"
-    :title="modal.title"
-    :message="modal.message"
-    :type="modal.type"
-    :show-cancel="modal.showCancel"
-    :confirm-text="modal.confirmText"
-    :cancel-text="modal.cancelText"
-    @confirm="onModalConfirm"
-    @cancel="onModalCancel"
-  />
+    <ConfirmModal
+      :show="modal.show"
+      :title="modal.title"
+      :message="modal.message"
+      :type="modal.type"
+      :show-cancel="modal.showCancel"
+      :confirm-text="modal.confirmText"
+      :cancel-text="modal.cancelText"
+      @confirm="onModalConfirm"
+      @cancel="onModalCancel"
+    />
+  </div>
 </template>

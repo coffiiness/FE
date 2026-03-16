@@ -372,11 +372,11 @@ const emptyMessage = computed(() => {
             <table class="min-w-full table-fixed">
               <thead class="border-b border-slate-200 bg-slate-50/80">
                 <tr class="text-left">
-                  <th class="w-[28%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">지원자</th>
-                  <th class="w-[34%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">공고</th>
+                  <th class="w-[26%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">지원자</th>
+                  <th class="w-[32%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">공고</th>
                   <th class="w-[18%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">진행 상태</th>
                   <th class="w-[14%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">지원일</th>
-                  <th class="w-[12%] px-6 py-4 text-right text-xs font-black uppercase tracking-[0.14em] text-slate-500"></th>
+                  <th class="w-[10%] px-6 py-4 text-right text-xs font-black uppercase tracking-[0.14em] text-slate-500"></th>
                 </tr>
               </thead>
 
@@ -422,7 +422,7 @@ const emptyMessage = computed(() => {
                   <td class="px-6 py-4 text-right">
                     <button
                       @click="goToDetail(applicant.detailId)"
-                      class="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-50 hover:text-brand-800"
+                      class="inline-flex items-center whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-50 hover:text-brand-800"
                     >
                       상세
                     </button>
