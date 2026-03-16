@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import AuthShell from '@/components/auth/AuthShell.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -14,6 +15,13 @@ const password = ref('')
 const passwordConfirm = ref('')
 const error = ref('')
 const loading = ref(false)
+
+const goToLogin = () => {
+  router.push({
+    path: '/login',
+    query: route.query.redirect ? { redirect: route.query.redirect } : {}
+  })
+}
 
 const handleSubmit = async () => {
   error.value = ''
@@ -48,140 +56,168 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-white">
-    <!-- Left Section: Stylish Background & Branding -->
-    <div class="hidden lg:flex lg:w-1/2 bg-slate-900 relative justify-center items-center overflow-hidden">
-        <!-- Background Pattern/Gradient -->
-        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-900 to-brand-950 opacity-90 z-0"></div>
-        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0"></div>
-        
-        <!-- Decorative Shapes -->
-        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-500/20 rounded-full blur-3xl animate-pulse"></div>
-        <div class="absolute bottom-1/4 right-1/4 w-80 h-80 bg-brand-500/10 rounded-full blur-3xl"></div>
+  <AuthShell
+    eyebrow="Create your account"
+    title="회원가입"
+    description="조직 계정을 만들고 자동화된 채용 운영을 시작하세요."
+  >
+    <form class="space-y-5" @submit.prevent="handleSubmit">
+      <label class="block">
+        <span class="mb-2 block text-sm font-bold text-slate-800">이름</span>
+        <input
+          id="nickname"
+          v-model="nickname"
+          type="text"
+          required
+          class="auth-input"
+          placeholder="홍길동"
+        />
+      </label>
 
-        <!-- Content -->
-        <div class="relative z-10 text-center px-10">
-            <h1 class="text-5xl font-extrabold text-white mb-6 tracking-tight leading-tight">
-                Join the <br/> <span class="text-brand-400">Revolution.</span>
-            </h1>
-            <p class="text-lg text-slate-300 max-w-md mx-auto leading-relaxed">
-                복잡한 채용 일정, CalFit으로 간편하게 시작하세요.
-            </p>
-            
-            <!-- Illustration Placeholder (CSS-only minimal graphic) -->
-             <div class="mt-12 flex justify-center">
-                 <div class="relative w-48 h-48">
-                    <div class="absolute inset-0 bg-brand-500 rounded-full opacity-20 animate-ping"></div>
-                    <div class="absolute inset-0 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full shadow-2xl flex items-center justify-center">
-                        <span class="text-6xl">🚀</span>
-                    </div>
-                 </div>
-            </div>
-        </div>
-    </div>
+      <label class="block">
+        <span class="mb-2 block text-sm font-bold text-slate-800">이메일</span>
+        <input
+          id="email"
+          v-model="email"
+          type="email"
+          required
+          class="auth-input"
+          placeholder="name@company.com"
+        />
+      </label>
 
-    <!-- Right Section: Signup Form -->
-    <div class="flex flex-1 flex-col justify-center px-4 sm:px-6 lg:px-20 xl:px-24 bg-white">
-      <div class="mx-auto w-full max-w-sm lg:w-96">
-        
-        <div class="mb-10">
-           <h2 class="text-3xl font-bold tracking-tight text-slate-900">
-             계정 만들기
-           </h2>
-           <p class="mt-2 text-sm text-slate-500">
-             30일 무료 체험을 시작하세요. 언제든 취소 가능합니다.
-           </p>
-        </div>
+      <label class="block">
+        <span class="mb-2 block text-sm font-bold text-slate-800">비밀번호</span>
+        <input
+          id="password"
+          v-model="password"
+          type="password"
+          required
+          class="auth-input"
+          placeholder="••••••••"
+        />
+      </label>
 
-        <form class="space-y-5" @submit.prevent="handleSubmit">
-          <div>
-            <label for="nickname" class="block text-sm font-semibold text-slate-700">이름</label>
-            <div class="mt-1">
-              <input
-                id="nickname"
-                v-model="nickname"
-                type="text"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="홍길동"
-              />
-            </div>
-          </div>
+      <label class="block">
+        <span class="mb-2 block text-sm font-bold text-slate-800">비밀번호 확인</span>
+        <input
+          id="passwordConfirm"
+          v-model="passwordConfirm"
+          type="password"
+          required
+          class="auth-input"
+          placeholder="••••••••"
+        />
+      </label>
 
-          <div>
-            <label for="email" class="block text-sm font-semibold text-slate-700">이메일</label>
-            <div class="mt-1">
-              <input
-                id="email"
-                v-model="email"
-                type="email"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="name@company.com"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label for="password" class="block text-sm font-semibold text-slate-700">비밀번호</label>
-            <div class="mt-1">
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label for="passwordConfirm" class="block text-sm font-semibold text-slate-700">비밀번호 확인</label>
-            <div class="mt-1">
-              <input
-                id="passwordConfirm"
-                v-model="passwordConfirm"
-                type="password"
-                required
-                class="block w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-3 text-slate-900 placeholder-slate-400 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-brand-500 sm:text-sm transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-          </div>
-
-          <div v-if="error" class="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md border border-red-100">
-            {{ error }}
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              :disabled="loading"
-              class="flex w-full justify-center rounded-lg border border-transparent bg-brand-600 py-3 px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
-            >
-               <span v-if="loading" class="flex items-center">
-                  <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  가입 중...
-                </span>
-                <span v-else>회원가입 완료</span>
-            </button>
-          </div>
-        </form>
-
-        <div class="mt-8 text-center">
-            <p class="text-sm text-slate-500">
-                이미 계정이 있으신가요? 
-                <button @click="router.push({ path: '/login', query: route.query.redirect ? { redirect: route.query.redirect } : {} })" class="font-semibold text-brand-600 hover:text-brand-500 hover:underline">
-                    로그인하기
-                </button>
-            </p>
-        </div>
-
+      <div v-if="error" class="auth-error">
+        {{ error }}
       </div>
-    </div>
-  </div>
+
+      <button
+        type="submit"
+        :disabled="loading"
+        class="auth-submit"
+      >
+        <span v-if="loading" class="inline-flex items-center justify-center gap-2">
+          <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          가입 중...
+        </span>
+        <span v-else>회원가입 완료</span>
+      </button>
+    </form>
+
+    <template #footer>
+      <span>이미 계정이 있으신가요?</span>
+      <button type="button" class="auth-footer-link" @click="goToLogin">
+        로그인하기
+      </button>
+    </template>
+  </AuthShell>
 </template>
+
+<style scoped>
+.auth-input {
+  width: 100%;
+  height: 3.9rem;
+  padding: 0 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.96);
+  color: #0f172a;
+  font-size: 1.03rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+.auth-input::placeholder {
+  color: #94a3b8;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: rgba(13, 148, 136, 0.42);
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+  background: #ffffff;
+}
+
+.auth-error {
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.18);
+  border-radius: 0.95rem;
+  background: #fff4f4;
+  color: #c2410c;
+  font-size: 0.93rem;
+  font-weight: 600;
+}
+
+.auth-submit {
+  width: 100%;
+  height: 3.95rem;
+  border: 0;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.98), rgba(13, 148, 136, 0.98));
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  box-shadow: 0 18px 40px rgba(13, 148, 136, 0.22);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.auth-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 42px rgba(13, 148, 136, 0.28);
+}
+
+.auth-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.auth-footer-link {
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.auth-footer-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 767px) {
+  .auth-input,
+  .auth-submit {
+    height: 3.55rem;
+  }
+}
+</style>
