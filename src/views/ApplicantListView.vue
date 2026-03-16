@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { recruitmentApi } from '@/api/recruitment'
 import { applicationBoardApi } from '@/api/applicationBoard'
+import { applicantApi } from '@/api/applicant'
 
 const router = useRouter()
 
@@ -301,126 +302,149 @@ const emptyMessage = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div class="flex flex-wrap items-center gap-3">
-        <div class="relative">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="이름, 이메일 검색..."
-            class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 w-64"
-          />
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-
-        <select
-          v-model="selectedJob"
-          class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-        >
-          <option value="">모든 공고</option>
-          <option v-for="job in jobs" :key="job" :value="job">{{ job }}</option>
-        </select>
-
-        <select
-          v-model="selectedStatus"
-          class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white"
-        >
-          <option value="">모든 상태</option>
-          <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
-        </select>
-      </div>
-
-      <button
-        @click="exportToExcel"
-        :disabled="isExporting || loading"
-        class="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors sm:ml-auto disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        엑셀 다운로드
-      </button>
-    </div>
-
-    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <table class="w-full">
-        <thead class="bg-gray-50 border-b border-gray-200">
-          <tr>
-            <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">지원자</th>
-            <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">공고</th>
-            <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">진행 상태</th>
-            <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">다음 일정</th>
-            <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">지원일</th>
-            <th class="px-6 py-4 text-right text-sm font-semibold text-gray-600"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100">
-          <tr
-            v-for="applicant in filteredApplicants"
-            :key="applicant.id"
-            class="hover:bg-gray-50 transition-colors"
-          >
-            <td class="px-6 py-4">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-medium">
-                  {{ getInitial(applicant.name) }}
-                </div>
-                <div>
-                  <button
-                    @click="goToDetail(applicant.detailId)"
-                    class="font-medium text-gray-900 hover:text-brand-600 transition-colors text-left"
-                  >
-                    {{ applicant.name }}
-                  </button>
-                  <p class="text-sm text-gray-500">{{ applicant.email }}</p>
-                </div>
+  <div class="mx-auto max-w-[110rem] px-4 py-4 md:px-6 md:py-5">
+    <section class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-200 px-5 py-5 md:px-7 md:py-6">
+        <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
+              <div class="relative min-w-[18rem] flex-1 xl:w-[26rem] xl:flex-none">
+                <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
+                <input
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="지원자 이름/이메일 검색"
+                  class="h-12 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+                />
               </div>
-            </td>
 
-            <td class="px-6 py-4 text-gray-700">{{ applicant.job }}</td>
-
-            <td class="px-6 py-4">
-              <span
-                :class="[getStatusStyle(applicant.status), 'px-3 py-1 rounded-full text-sm font-medium border']"
+              <select
+                v-model="selectedJob"
+                class="h-12 min-w-[11rem] rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
               >
-                {{ applicant.status }}
+                <option value="">전체 공고</option>
+                <option v-for="job in jobs" :key="job" :value="job">{{ job }}</option>
+              </select>
+
+              <select
+                v-model="selectedStatus"
+                class="h-12 min-w-[10rem] rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-100"
+              >
+                <option value="">전체 상태</option>
+                <option v-for="status in statuses" :key="status" :value="status">{{ status }}</option>
+              </select>
+
+              <span class="inline-flex items-center self-center rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">
+                전체 {{ applicants.length }}명
               </span>
-            </td>
+              <span class="inline-flex items-center self-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-600">
+                현재 {{ totalCount }}명 표시
+              </span>
+          </div>
 
-            <td class="px-6 py-4 text-gray-700">
-              {{ applicant.nextSchedule || '-' }}
-            </td>
-
-            <td class="px-6 py-4 text-gray-700">{{ applicant.appliedDate }}</td>
-
-            <td class="px-6 py-4 text-right">
-              <div class="flex items-center justify-end gap-3">
-                <button
-                  @click="goToDetail(applicant.detailId)"
-                  class="text-brand-600 hover:text-brand-700 text-sm font-medium"
-                >
-                  상세
-                </button>
-              </div>
-            </td>
-          </tr>
-
-          <tr v-if="filteredApplicants.length === 0">
-            <td colspan="6" class="px-6 py-12 text-center text-gray-500">
-              {{ emptyMessage }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-        <p class="text-sm text-gray-600">
-          총 {{ totalCount }}명 중 {{ startIndex }}-{{ endIndex }}
-        </p>
+          <button
+            @click="exportToExcel"
+            :disabled="isExporting || loading"
+            class="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {{ isExporting ? '내보내는 중' : '엑셀 다운로드' }}
+          </button>
+        </div>
       </div>
-    </div>
+
+      <div class="px-5 py-5 md:px-7 md:py-6">
+        <div class="overflow-hidden rounded-[24px] border border-slate-200 bg-white">
+          <div v-if="loading" class="flex min-h-[24rem] items-center justify-center bg-slate-50/60 px-6">
+            <p class="text-sm font-bold text-slate-500">지원자 목록을 불러오는 중입니다.</p>
+          </div>
+
+          <div v-else-if="loadError" class="flex min-h-[24rem] items-center justify-center bg-rose-50 px-6">
+            <p class="text-sm font-bold text-rose-600">{{ loadError }}</p>
+          </div>
+
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full table-fixed">
+              <thead class="border-b border-slate-200 bg-slate-50/80">
+                <tr class="text-left">
+                  <th class="w-[28%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">지원자</th>
+                  <th class="w-[34%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">공고</th>
+                  <th class="w-[18%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">진행 상태</th>
+                  <th class="w-[14%] px-6 py-4 text-xs font-black uppercase tracking-[0.14em] text-slate-500">지원일</th>
+                  <th class="w-[12%] px-6 py-4 text-right text-xs font-black uppercase tracking-[0.14em] text-slate-500"></th>
+                </tr>
+              </thead>
+
+              <tbody class="divide-y divide-slate-100">
+                <tr
+                  v-for="applicant in filteredApplicants"
+                  :key="applicant.id"
+                  class="transition-colors hover:bg-slate-50/70"
+                >
+                  <td class="px-6 py-4">
+                    <div class="flex items-center gap-3">
+                      <div class="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-black text-slate-600">
+                        {{ getInitial(applicant.name) }}
+                      </div>
+                      <div class="min-w-0">
+                        <button
+                          @click="goToDetail(applicant.detailId)"
+                          class="truncate text-left text-base font-extrabold tracking-[-0.02em] text-slate-900 transition-colors hover:text-brand-700"
+                        >
+                          {{ applicant.name }}
+                        </button>
+                        <p class="truncate text-sm font-medium text-slate-500">{{ applicant.email }}</p>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td class="px-6 py-4">
+                    <p class="line-clamp-2 text-sm font-semibold leading-6 text-slate-700">{{ applicant.job }}</p>
+                  </td>
+
+                  <td class="px-6 py-4">
+                    <span
+                      :class="[getStatusStyle(applicant.status), 'inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold']"
+                    >
+                      {{ applicant.status }}
+                    </span>
+                  </td>
+
+                  <td class="px-6 py-4 text-sm font-semibold text-slate-600">
+                    {{ applicant.appliedDate }}
+                  </td>
+
+                  <td class="px-6 py-4 text-right">
+                    <button
+                      @click="goToDetail(applicant.detailId)"
+                      class="inline-flex items-center rounded-lg px-3 py-1.5 text-sm font-bold text-brand-700 transition-colors hover:bg-brand-50 hover:text-brand-800"
+                    >
+                      상세
+                    </button>
+                  </td>
+                </tr>
+
+                <tr v-if="filteredApplicants.length === 0">
+                  <td colspan="5" class="px-6 py-16 text-center text-sm font-bold text-slate-500">
+                    {{ emptyMessage }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex items-center justify-between border-t border-slate-200 bg-slate-50/80 px-6 py-4">
+            <p class="text-sm font-semibold text-slate-500">
+              총 {{ totalCount }}명 중 {{ startIndex }}-{{ endIndex }}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </template>

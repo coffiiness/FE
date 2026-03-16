@@ -251,19 +251,8 @@ onBeforeUnmount(() => {
   <div class="mx-auto max-w-[110rem] px-4 py-4 md:px-6 md:py-5">
     <section class="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
       <div class="border-b border-slate-200 px-5 py-5 md:px-7 md:py-6">
-        <div class="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-          <div class="space-y-3">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-3xl font-extrabold tracking-[-0.04em] text-slate-900">알림</h1>
-              <span class="inline-flex items-center rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">
-                읽지 않음 {{ unreadCount }}건
-              </span>
-              <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-500">
-                목록 {{ notifications.length }}건
-              </span>
-            </div>
-
-            <div class="flex flex-wrap gap-2">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div class="flex flex-wrap items-center gap-2">
               <button
                 v-for="filter in NOTIFICATION_FILTERS"
                 :key="filter.value"
@@ -277,19 +266,24 @@ onBeforeUnmount(() => {
               >
                 {{ filter.label }}
               </button>
-            </div>
+              <span class="inline-flex items-center rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">
+                읽지 않음 {{ unreadCount }}건
+              </span>
+              <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-500">
+                목록 {{ notifications.length }}건
+              </span>
           </div>
 
-          <div class="flex flex-wrap gap-2 xl:justify-end">
+          <div class="flex flex-wrap items-center gap-2 xl:justify-end">
             <button
-              class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+              class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
               :disabled="notifications.length === 0 || isMarkingAllRead"
               @click="handleReadAll"
             >
               전체 읽음
             </button>
             <button
-              class="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
+              class="rounded-full border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
               :disabled="notifications.length === 0 || isRemovingAll"
               @click="handleDeleteAll"
             >
@@ -310,7 +304,6 @@ onBeforeUnmount(() => {
 
         <div v-else-if="notifications.length === 0" class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-20 text-center">
           <p class="text-sm font-medium text-slate-400">표시할 알림이 없습니다.</p>
-          <p class="mt-2 text-xs text-slate-400">새로운 공지나 일정 변경이 생기면 여기서 바로 확인할 수 있습니다.</p>
         </div>
 
         <div v-else class="space-y-3">
