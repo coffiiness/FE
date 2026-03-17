@@ -2751,7 +2751,6 @@ const handleApplicantResumeDownload = async () => {
                 규칙 {{ selectedProcessRules.length }}개
               </span>
             </div>
-            <p class="text-sm text-slate-500 mt-1">이 단계에 들어올 때 실행할 규칙을 여러 개 관리합니다. 새 규칙 추가는 기존 규칙을 덮어쓰지 않고 이어서 등록됩니다.</p>
           </div>
           <button @click="closeRuleModal" class="w-9 h-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2793,9 +2792,6 @@ const handleApplicantResumeDownload = async () => {
                   {{ template.label }} ({{ template.code }})
                 </option>
               </select>
-              <p v-if="selectedRuleStageType" class="mt-1 text-[11px] text-slate-400">
-                추천 stageType: {{ selectedRuleStageType }}
-              </p>
               <p
                 v-if="automationForm.templateCode && getAutomationTemplateDescription(automationForm.templateCode)"
                 class="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500"
@@ -2853,9 +2849,6 @@ const handleApplicantResumeDownload = async () => {
                     <button type="button" @click="openRuleModal(rule.recruitmentProcessId, rule)" class="text-xs font-bold text-brand-600">수정</button>
                     <button type="button" @click="deleteAutomationRule(rule.ruleId)" class="text-xs font-bold text-rose-600">삭제</button>
                   </div>
-                </div>
-                <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-500">
-                  액션 타입과 템플릿이 각각 독립된 규칙으로 저장됩니다.
                 </div>
               </article>
             </div>
