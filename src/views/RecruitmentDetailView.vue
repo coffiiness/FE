@@ -275,7 +275,22 @@ const labels = {
 }
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
-const interviewerPalette = ['#2563eb', '#10b981', '#6366f1']
+const interviewerPalette = ['#0f766e', '#2563eb', '#7c3aed', '#ea580c', '#dc2626', '#0891b2', '#65a30d', '#db2777']
+
+const getPaletteColor = (seed = 0) => {
+  const paletteSize = interviewerPalette.length
+  const index = Math.abs(Number(seed) || 0) % paletteSize
+  return interviewerPalette[index] || '#64748b'
+}
+
+const hashString = (value) => {
+  return String(value || '')
+    .split('')
+    .reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 0)
+}
+
+const stripMeSuffix = (value) => String(value || '').replace(/\s*\(나\)\s*$/, '').trim()
+const normalizeInterviewerColorKey = (value) => stripMeSuffix(normalizeDisplayName(value)).toLowerCase()
 
 // --- Recruitment Data from API ---
 const recruitment = computed(() => {
@@ -448,17 +463,15 @@ const buildInterviewerList = (recruitmentData, employees = []) => {
     addCandidate(interviewer)
   })
 
-  return result.map((member, idx) => ({
-    ...member,
-    bgClass: 'bg-blue-600',
-    borderClass: 'border-blue-700',
-    badgeTextClass: 'text-blue-700',
-    lightBgClass: 'bg-blue-50',
-    lightBorderClass: 'border-blue-100',
-    color: interviewerPalette[idx % interviewerPalette.length],
-    displayName: getInterviewerLabel(member),
-    checked: member.checked !== false
-  }))
+  return result.map((member, idx) => {
+    const color = getPaletteColor(idx)
+    return {
+      ...member,
+      color,
+      displayName: getInterviewerLabel(member),
+      checked: member.checked !== false
+    }
+  })
 }
 
 // Initialize interviewers based on recruitment data
@@ -763,7 +776,8 @@ const selectedDayCalendarEvents = computed(() =>
     attendees: booking.attendees || [],
     applicantName: booking.entryType === 'BUSY' ? '' : booking.applicantName,
     isAllDay: booking.isAllDay === true,
-    isBusy: booking.entryType === 'BUSY'
+    isBusy: booking.entryType === 'BUSY',
+    color: getInterviewerColor(booking.interviewerId, booking.interviewerName)
   }))
 )
 
@@ -1573,10 +1587,54 @@ const getInterviewerName = (id) => {
   return emp ? emp.name : '미지정'
 }
 
-const getInterviewerColor = (id) => {
-  // Simple hash for color
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
-  return colors[id % colors.length] || '#64748b'
+const interviewerColorById = computed(() =>
+  new Map(
+    interviewers.value
+      .map((member) => [getMemberUserId(member), member.color])
+      .filter(([id, color]) => Number.isFinite(id) && id > 0 && !!color)
+  )
+)
+
+const interviewerColorByName = computed(() =>
+  new Map(
+    interviewers.value
+      .flatMap((member) => {
+        const candidates = [
+          normalizeInterviewerColorKey(member?.displayName),
+          normalizeInterviewerColorKey(member?.name)
+        ].filter(Boolean)
+
+        return candidates.map((candidate) => [candidate, member.color])
+      })
+      .filter(([name, color]) => !!name && !!color)
+  )
+)
+
+const getInterviewerColor = (id, name = '') => {
+  const targetId = toPositiveNumber(id)
+  if (targetId && interviewerColorById.value.has(targetId)) {
+    return interviewerColorById.value.get(targetId)
+  }
+
+  const candidateNames = getUniqueNames(splitNames(name))
+    .map((candidate) => normalizeInterviewerColorKey(candidate))
+    .filter(Boolean)
+
+  for (const candidateName of candidateNames) {
+    if (interviewerColorByName.value.has(candidateName)) {
+      return interviewerColorByName.value.get(candidateName)
+    }
+  }
+
+  if (targetId) {
+    return getPaletteColor(targetId)
+  }
+
+  if (candidateNames.length > 0) {
+    return getPaletteColor(hashString(candidateNames[0]))
+  }
+
+  return '#64748b'
 }
 
 const openDayDetail = (day) => {
@@ -2093,7 +2151,10 @@ const handleApplicantResumeDownload = async () => {
                     :class="{ 'calendar-filter-chip--active': allInterviewersChecked }"
                     @click="setAllInterviewersChecked(true)"
                   >
-                    전체 면접관
+                    <span class="calendar-filter-chip__content">
+                      <span class="calendar-filter-chip__dot calendar-filter-chip__dot--all"></span>
+                      <span>전체 면접관</span>
+                    </span>
                   </button>
 
                   <button
@@ -2104,7 +2165,10 @@ const handleApplicantResumeDownload = async () => {
                     :class="{ 'calendar-filter-chip--active': member.checked !== false }"
                     @click="toggleInterviewerChecked(getMemberUserId(member) ?? member.id)"
                   >
-                    {{ member.displayName || getInterviewerLabel(member) }}
+                    <span class="calendar-filter-chip__content">
+                      <span class="calendar-filter-chip__dot" :style="{ backgroundColor: member.color }"></span>
+                      <span>{{ member.displayName || getInterviewerLabel(member) }}</span>
+                    </span>
                   </button>
                 </div>
               </aside>
@@ -2155,8 +2219,8 @@ const handleApplicantResumeDownload = async () => {
                           :key="booking.id"
                           class="month-event-chip"
                           :style="{
-                            backgroundColor: `${getInterviewerColor(booking.interviewerId)}18`,
-                            color: getInterviewerColor(booking.interviewerId)
+                            backgroundColor: `${getInterviewerColor(booking.interviewerId, booking.interviewerName)}18`,
+                            color: getInterviewerColor(booking.interviewerId, booking.interviewerName)
                           }"
                           @click.stop="openInterviewDetail(booking)"
                         >
@@ -2212,8 +2276,8 @@ const handleApplicantResumeDownload = async () => {
                                class="absolute left-1 right-1 z-20 cursor-pointer overflow-hidden rounded-lg border-l-4 p-1.5 transition-transform hover:scale-[1.02]"
                                :style="{
                                  ...getEventStyle(evt),
-                                 backgroundColor: `${getInterviewerColor(evt.interviewerId)}`,
-                                 borderColor: getInterviewerColor(evt.interviewerId),
+                                 backgroundColor: `${getInterviewerColor(evt.interviewerId, evt.interviewerName)}`,
+                                 borderColor: getInterviewerColor(evt.interviewerId, evt.interviewerName),
                                  color: '#fff'
                                }">
                             <div class="flex flex-col h-full justify-center">
@@ -2245,8 +2309,8 @@ const handleApplicantResumeDownload = async () => {
                         <div class="flex-1 min-w-0">
                           <span class="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest mb-1"
                                 :style="{
-                                  backgroundColor: `${getInterviewerColor(evt.interviewerId)}20`,
-                                  color: getInterviewerColor(evt.interviewerId)
+                                  backgroundColor: `${getInterviewerColor(evt.interviewerId, evt.interviewerName)}20`,
+                                  color: getInterviewerColor(evt.interviewerId, evt.interviewerName)
                                 }">
                             {{ evt.interviewerName || getInterviewerName(evt.interviewerId) }}
                           </span>
@@ -3010,6 +3074,24 @@ const handleApplicantResumeDownload = async () => {
   text-align: left;
   color: rgb(100, 116, 139);
   transition: all 0.18s ease;
+}
+
+.calendar-filter-chip__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.calendar-filter-chip__dot {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
+.calendar-filter-chip__dot--all {
+  background: linear-gradient(135deg, #0f766e 0%, #2563eb 28%, #7c3aed 52%, #ea580c 76%, #db2777 100%);
 }
 
 .calendar-filter-chip:hover {
