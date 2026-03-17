@@ -142,13 +142,13 @@ const handleSubmit = async () => {
 <style scoped>
 .auth-input {
   width: 100%;
-  height: 3.9rem;
+  height: 3.2rem;
   padding: 0 1rem;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.96);
   color: #0f172a;
-  font-size: 1.03rem;
+  font-size: 0.95rem;
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
@@ -167,23 +167,23 @@ const handleSubmit = async () => {
 }
 
 .auth-error {
-  padding: 0.95rem 1rem;
+  padding: 0.8rem 0.9rem;
   border: 1px solid rgba(248, 113, 113, 0.18);
   border-radius: 0.95rem;
   background: #fff4f4;
   color: #c2410c;
-  font-size: 0.93rem;
+  font-size: 0.86rem;
   font-weight: 600;
 }
 
 .auth-submit {
   width: 100%;
-  height: 3.95rem;
+  height: 3.2rem;
   border: 0;
   border-radius: 1rem;
   background: linear-gradient(180deg, rgba(20, 184, 166, 0.98), rgba(13, 148, 136, 0.98));
   color: #ffffff;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   box-shadow: 0 18px 40px rgba(13, 148, 136, 0.22);
@@ -217,7 +217,7 @@ const handleSubmit = async () => {
 @media (max-width: 767px) {
   .auth-input,
   .auth-submit {
-    height: 3.55rem;
+    height: 3.05rem;
   }
 }
 </style>

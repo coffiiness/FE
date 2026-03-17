@@ -16,7 +16,7 @@ const props = defineProps({
   },
   maxWidth: {
     type: String,
-    default: '42rem'
+    default: '33.6rem'
   }
 })
 
@@ -38,25 +38,11 @@ const hasFooter = computed(() => Boolean(slots.footer))
 
     <header class="auth-shell__header">
       <div class="auth-shell__brand">
-        <svg class="auth-shell__brand-mark" viewBox="0 0 128 128" aria-hidden="true">
-          <path
-            d="M108 20H62C35 20 16 39 16 66c0 19 9 34 23 42V92c-9-6-15-16-15-31 0-22 15-33 40-33h35z"
-            fill="url(#auth-shell-mark-gradient)"
-          />
-          <path
-            d="M54 44h46l-10 14H63v18h27l-10 14H63v26l-15-2V58H37z"
-            fill="url(#auth-shell-mark-gradient)"
-          />
-          <defs>
-            <linearGradient id="auth-shell-mark-gradient" x1="18" y1="18" x2="112" y2="116" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#2dd4bf" />
-              <stop offset="1" stop-color="#0f766e" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <div class="auth-shell__brand-wordmark">
-          <span class="auth-shell__brand-cal">Cal</span><span class="auth-shell__brand-fit">Fit</span>
-        </div>
+        <img
+          class="auth-shell__brand-image"
+          src="/headerLogo.PNG"
+          alt="Header logo"
+        />
       </div>
     </header>
 
@@ -174,35 +160,13 @@ const hasFooter = computed(() => Boolean(slots.footer))
 .auth-shell__brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
 }
 
-.auth-shell__brand-mark {
-  width: 2.35rem;
-  height: 2.35rem;
-  flex-shrink: 0;
-}
-
-.auth-shell__brand-wordmark {
-  font-size: 1.62rem;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.auth-shell__brand-cal {
-  color: #2dd4bf;
-}
-
-.auth-shell__brand-fit {
-  color: #f8fafc;
-  text-shadow:
-    1px 0 0 rgba(15, 23, 42, 0.44),
-    -1px 0 0 rgba(15, 23, 42, 0.44),
-    0 1px 0 rgba(15, 23, 42, 0.44),
-    0 -1px 0 rgba(15, 23, 42, 0.44),
-    0 2px 10px rgba(15, 23, 42, 0.18);
+.auth-shell__brand-image {
+  display: block;
+  width: auto;
+  height: 2.5rem;
+  object-fit: contain;
 }
 
 .auth-shell__content {
@@ -211,7 +175,7 @@ const hasFooter = computed(() => Boolean(slots.footer))
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 5.5rem 1.5rem 3rem;
+  padding: 4.5rem 1.5rem 2.5rem;
 }
 
 .auth-card {
@@ -224,7 +188,7 @@ const hasFooter = computed(() => Boolean(slots.footer))
 }
 
 .auth-card__copy {
-  padding: 3.1rem 3.1rem 1.4rem;
+  padding: 2.45rem 2.45rem 1.1rem;
 }
 
 .auth-card__eyebrow {
@@ -241,7 +205,7 @@ const hasFooter = computed(() => Boolean(slots.footer))
 
 .auth-card__title {
   margin-top: 1.15rem;
-  font-size: clamp(2.1rem, 3.4vw, 3rem);
+  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: -0.05em;
@@ -250,14 +214,14 @@ const hasFooter = computed(() => Boolean(slots.footer))
 
 .auth-card__description {
   margin-top: 0.85rem;
-  max-width: 29rem;
-  font-size: 1rem;
-  line-height: 1.7;
+  max-width: 24rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
   color: #667085;
 }
 
 .auth-card__body {
-  padding: 0 3.1rem 2rem;
+  padding: 0 2.45rem 1.65rem;
 }
 
 .auth-card__footer {
@@ -265,13 +229,13 @@ const hasFooter = computed(() => Boolean(slots.footer))
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 1.45rem 1.75rem 1.65rem;
+  padding: 1.2rem 1.4rem 1.35rem;
   border-top: 1px solid rgba(226, 232, 240, 0.8);
   border-bottom-left-radius: 1.75rem;
   border-bottom-right-radius: 1.75rem;
   background: rgba(248, 250, 255, 0.86);
   color: #667085;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
 }
 
 @keyframes auth-shell-beam-float {
@@ -311,16 +275,11 @@ const hasFooter = computed(() => Boolean(slots.footer))
   }
 
   .auth-shell__brand {
-    gap: 0.3rem;
+    max-width: 100%;
   }
 
-  .auth-shell__brand-mark {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .auth-shell__brand-wordmark {
-    font-size: 1.42rem;
+  .auth-shell__brand-image {
+    height: 2.1rem;
   }
 
   .auth-shell__content {
@@ -332,7 +291,7 @@ const hasFooter = computed(() => Boolean(slots.footer))
   }
 
   .auth-card__copy {
-    padding: 2rem 1.4rem 1.1rem;
+    padding: 1.75rem 1.2rem 1rem;
   }
 
   .auth-card__description {
@@ -340,7 +299,7 @@ const hasFooter = computed(() => Boolean(slots.footer))
   }
 
   .auth-card__body {
-    padding: 0 1.4rem 1.4rem;
+    padding: 0 1.2rem 1.2rem;
   }
 
   .auth-card__footer {
