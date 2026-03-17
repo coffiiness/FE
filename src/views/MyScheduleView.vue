@@ -37,6 +37,7 @@ const { getToday } = scheduleStore
 const selectedDate = ref(getToday())
 const selectedEventToEdit = ref(null)
 const selectedEventDetail = ref(null)
+const suppressDetailModalUntil = ref(0)
 const targetDeleteId = ref(null)
 const route = useRoute()
 const router = useRouter()
@@ -453,6 +454,10 @@ const handleDateClick = async (date) => {
 }
 
 const openDetailModal = async (event) => {
+  if (Date.now() < suppressDetailModalUntil.value) {
+    return
+  }
+
   try {
     const detail = await scheduleStore.getScheduleDetail(event.id)
     const resolvedEvent = detail ? { ...event, ...detail } : event
@@ -582,8 +587,11 @@ const handleSave = async (formData) => {
       await scheduleStore.createSchedule(formData)
     }
 
+    suppressDetailModalUntil.value = Date.now() + 500
     isFormModalOpen.value = false
+    isListModalOpen.value = false
     isDetailModalOpen.value = false
+    selectedEventToEdit.value = null
     selectedEventDetail.value = null
     await loadSchedules()
 
