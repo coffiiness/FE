@@ -830,6 +830,55 @@ const currentWeekDays = computed(() => {
   return week
 })
 
+const toDateOnly = (value) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+const getFirstScheduleDateInVisibleMonth = (referenceDate = calendarState.currentMonth) => {
+  const anchor = toDateOnly(referenceDate)
+  if (!anchor) return null
+
+  const targetYear = anchor.getFullYear()
+  const targetMonth = anchor.getMonth()
+
+  const candidates = schedules.value
+    .map((schedule) => toDateOnly(schedule?.date))
+    .filter(
+      (date) =>
+        date &&
+        date.getFullYear() === targetYear &&
+        date.getMonth() === targetMonth
+    )
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  return candidates[0] || null
+}
+
+const syncCalendarAnchorForDetailView = () => {
+  if (currentView.value === 'MONTH') return
+
+  const currentAnchor = toDateOnly(calendarState.currentMonth)
+  const selectedAnchor = toDateOnly(selectedDay.value)
+  const canUseSelectedAnchor =
+    currentAnchor &&
+    selectedAnchor &&
+    currentAnchor.getFullYear() === selectedAnchor.getFullYear() &&
+    currentAnchor.getMonth() === selectedAnchor.getMonth()
+
+  const nextAnchor =
+    (canUseSelectedAnchor ? selectedAnchor : null) ||
+    getFirstScheduleDateInVisibleMonth(currentAnchor) ||
+    currentAnchor
+
+  if (!nextAnchor) return
+
+  calendarState.currentMonth = new Date(nextAnchor)
+  selectedDay.value = new Date(nextAnchor)
+}
+
 // --- Helper for Week View Styles ---
 const getEventStyle = (booking) => {
   if (!booking.startTime || !booking.endTime) return {}
@@ -1551,7 +1600,11 @@ const getInterviewerColor = (id) => {
 }
 
 const openDayDetail = (day) => {
-  selectedDay.value = day
+  const normalizedDay = toDateOnly(day)
+  if (normalizedDay) {
+    selectedDay.value = normalizedDay
+    calendarState.currentMonth = new Date(normalizedDay)
+  }
   isInterviewDetailModalOpen.value = false
   isInterviewListModalOpen.value = true
 }
@@ -1748,6 +1801,21 @@ watch(
   async () => {
     await loadInterviewSchedules()
   }
+)
+
+watch(
+  () => currentView.value,
+  () => {
+    syncCalendarAnchorForDetailView()
+  }
+)
+
+watch(
+  schedules,
+  () => {
+    syncCalendarAnchorForDetailView()
+  },
+  { deep: true }
 )
 
 onMounted(async () => {
