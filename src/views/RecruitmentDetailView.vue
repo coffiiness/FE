@@ -597,25 +597,62 @@ const normalizeApplicantGender = (gender) => {
 }
 
 const parseApplicantJsonSafely = (value) => {
-  if (typeof value !== 'string' || !value.trim()) return null
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
+  let parsed = value
+
+  for (let i = 0; i < 3; i += 1) {
+    if (typeof parsed !== 'string' || !parsed.trim()) break
+    try {
+      parsed = JSON.parse(parsed)
+    } catch {
+      return null
+    }
   }
+
+  return parsed
+}
+
+const formatApplicantAnswerValue = (value) => {
+  if (value == null || value === '') return null
+  if (Array.isArray(value)) {
+    const items = value.map((item) => formatApplicantAnswerValue(item)).filter(Boolean)
+    return items.length > 0 ? items.join(', ') : null
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value)
+  }
+  if (typeof value === 'string') {
+    const parsed = parseApplicantJsonSafely(value)
+    if (parsed != null) {
+      return formatApplicantAnswerValue(parsed)
+    }
+  }
+  return String(value)
+}
+
+const shouldSkipApplicantFallbackAnswer = (label) => {
+  if (!label) return false
+  return ['shortBio', 'portfolioUrl', 'portfolio'].includes(label)
 }
 
 const toApplicantAnswerList = (detail) => {
   const answerList = []
+  const seenAnswers = new Set()
+
   const pushAnswer = (label, value) => {
-    if (value == null || value === '') return
-    answerList.push({ label, value: String(value) })
+    const formattedValue = formatApplicantAnswerValue(value)
+    if (formattedValue == null || formattedValue === '') return
+    const dedupeKey = `${label}::${formattedValue}`
+    if (seenAnswers.has(dedupeKey)) return
+    seenAnswers.add(dedupeKey)
+    answerList.push({ label, value: formattedValue })
   }
 
   pushAnswer('간단 자기소개', detail?.shortBio ?? detail?.selfIntroduction)
   pushAnswer('포트폴리오 URL', detail?.portfolioUrl ?? detail?.portfolio)
 
-  if (Array.isArray(detail?.answers)) {
+  const hasStructuredAnswers = Array.isArray(detail?.answers) && detail.answers.length > 0
+
+  if (hasStructuredAnswers) {
     detail.answers.forEach((item, index) => {
       const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
       const value = item?.value ?? item?.answer
@@ -623,23 +660,27 @@ const toApplicantAnswerList = (detail) => {
     })
   }
 
-  const parsedFormFields = parseApplicantJsonSafely(detail?.formFields)
-  if (Array.isArray(parsedFormFields)) {
-    parsedFormFields.forEach((item, index) => {
-      const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
-      const value = item?.value ?? item?.answer
-      pushAnswer(label, value)
-    })
-  } else if (parsedFormFields && typeof parsedFormFields === 'object') {
-    Object.entries(parsedFormFields).forEach(([label, value]) => {
-      pushAnswer(label, value)
-    })
-  }
+  if (!hasStructuredAnswers) {
+    const parsedFormFields = parseApplicantJsonSafely(detail?.formFields)
+    if (Array.isArray(parsedFormFields)) {
+      parsedFormFields.forEach((item, index) => {
+        const label = item?.label ?? item?.question ?? `답변 ${index + 1}`
+        const value = item?.value ?? item?.answer
+        pushAnswer(label, value)
+      })
+    } else if (parsedFormFields && typeof parsedFormFields === 'object') {
+      Object.entries(parsedFormFields).forEach(([label, value]) => {
+        if (shouldSkipApplicantFallbackAnswer(label)) return
+        pushAnswer(label, value)
+      })
+    }
 
-  if (detail?.answerMap && typeof detail.answerMap === 'object') {
-    Object.entries(detail.answerMap).forEach(([label, value]) => {
-      pushAnswer(label, value)
-    })
+    if (detail?.answerMap && typeof detail.answerMap === 'object') {
+      Object.entries(detail.answerMap).forEach(([label, value]) => {
+        if (shouldSkipApplicantFallbackAnswer(label)) return
+        pushAnswer(label, value)
+      })
+    }
   }
 
   return answerList
