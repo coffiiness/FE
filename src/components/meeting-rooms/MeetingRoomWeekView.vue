@@ -408,8 +408,24 @@ onBeforeUnmount(() => {
   background: rgba(255, 255, 255, 0.98);
 }
 
+.week-time-grid__day::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(226, 232, 240, 0.8);
+  pointer-events: none;
+  z-index: 3;
+}
+
 .week-time-grid__day:last-child {
   border-right: 0;
+}
+
+.week-time-grid__day:last-child::after {
+  display: none;
 }
 
 .week-time-grid__slot {
