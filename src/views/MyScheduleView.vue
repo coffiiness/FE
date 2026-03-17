@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import ScheduleListModal from '@/components/schedule/ScheduleListModal.vue'
 import ScheduleCreateModal from '@/components/schedule/ScheduleCreateModal.vue'
 import ScheduleDetailDrawer from '@/components/schedule/ScheduleDetailDrawer.vue'
@@ -37,12 +37,16 @@ const { getToday } = scheduleStore
 const selectedDate = ref(getToday())
 const selectedEventToEdit = ref(null)
 const selectedEventDetail = ref(null)
+const suppressDetailModalUntil = ref(0)
 const targetDeleteId = ref(null)
+const pendingCreateRange = ref({ startTime: '', endTime: '' })
+const weekDragSelection = ref(null)
 const route = useRoute()
 const router = useRouter()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 const meetingRooms = ref([])
+const meetingRoomReservations = ref([])
 
 // [유틸] 현재 뷰 기준으로 API 조회 범위 계산
 const getVisibleRange = () => {
@@ -67,6 +71,31 @@ const getVisibleRange = () => {
 const loadSchedules = async () => {
   const { startDate, endDate } = getVisibleRange()
   await scheduleStore.fetchSchedules(startDate, endDate)
+}
+
+const addOneDay = (dateString) => {
+  const date = new Date(`${dateString}T00:00:00`)
+  date.setDate(date.getDate() + 1)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const loadMeetingRoomReservations = async () => {
+  try {
+    const { startDate, endDate } = getVisibleRange()
+    const response = await meetingRoomApi.listReservations({
+      fromDatetime: `${startDate}T00:00:00`,
+      toDatetime: `${addOneDay(endDate)}T00:00:00`
+    })
+    const data = response?.data?.data
+    meetingRoomReservations.value = Array.isArray(data) ? data : []
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 예약 목록 조회 실패:', detail || error?.message, error)
+    meetingRoomReservations.value = []
+  }
 }
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
@@ -277,6 +306,50 @@ const getEventStyle = (event, eventIndex = 0) => {
   }
 }
 
+const toTimeInputValue = (hour) => `${String(hour).padStart(2, '0')}:00`
+
+const resetPendingCreateRange = () => {
+  pendingCreateRange.value = { startTime: '', endTime: '' }
+}
+
+const clearWeekDragSelection = () => {
+  weekDragSelection.value = null
+}
+
+const startWeekSlotSelection = (date, slotIndex) => {
+  weekDragSelection.value = {
+    date,
+    startIndex: slotIndex,
+    endIndex: slotIndex
+  }
+}
+
+const updateWeekSlotSelection = (date, slotIndex) => {
+  if (!weekDragSelection.value || weekDragSelection.value.date !== date) {
+    return
+  }
+
+  weekDragSelection.value = {
+    ...weekDragSelection.value,
+    endIndex: slotIndex
+  }
+}
+
+const isWeekSlotSelected = (date, slotIndex) => {
+  if (!weekDragSelection.value || weekDragSelection.value.date !== date) {
+    return false
+  }
+
+  const rangeStart = Math.min(weekDragSelection.value.startIndex, weekDragSelection.value.endIndex)
+  const rangeEnd = Math.max(weekDragSelection.value.startIndex, weekDragSelection.value.endIndex)
+  return slotIndex >= rangeStart && slotIndex <= rangeEnd
+}
+
+const getWeekSlotClass = (date, slotIndex) =>
+  isWeekSlotSelected(date, slotIndex)
+    ? 'week-time-grid__slot--selected'
+    : 'week-time-grid__slot--interactive'
+
 const getEventClass = (type) => {
   switch (type) {
     case 'INTERVIEW': return 'bg-indigo-50 text-indigo-700 border-indigo-100'
@@ -453,6 +526,10 @@ const handleDateClick = async (date) => {
 }
 
 const openDetailModal = async (event) => {
+  if (Date.now() < suppressDetailModalUntil.value) {
+    return
+  }
+
   try {
     const detail = await scheduleStore.getScheduleDetail(event.id)
     const resolvedEvent = detail ? { ...event, ...detail } : event
@@ -498,8 +575,16 @@ onMounted(async () => {
     selectedDate.value = queryDate
   }
 
-  await Promise.all([loadSchedules(), loadMeetingRooms()])
+  await Promise.all([loadSchedules(), loadMeetingRooms(), loadMeetingRoomReservations()])
   await openScheduleFromRouteQuery()
+})
+
+onMounted(() => {
+  document.addEventListener('mouseup', finalizeWeekSlotSelection)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', finalizeWeekSlotSelection)
 })
 
 watch(
@@ -514,8 +599,16 @@ watch(
 watch(
   () => selectedDate.value,
   async () => {
-    await loadSchedules()
+    clearWeekDragSelection()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
     await openScheduleFromRouteQuery()
+  }
+)
+
+watch(
+  () => currentView.value,
+  () => {
+    clearWeekDragSelection()
   }
 )
 
@@ -535,7 +628,7 @@ watch(
   }
 )
 
-const openCreateForm = async (date = null) => {
+const openCreateForm = async (date = null, initialRange = null) => {
   const loaded = await ensureMeetingRoomsLoaded()
   if (!loaded) {
     openAlertModal({
@@ -546,6 +639,12 @@ const openCreateForm = async (date = null) => {
 
   selectedDate.value = date || selectedDate.value
   selectedEventToEdit.value = null
+  pendingCreateRange.value = initialRange
+    ? {
+        startTime: String(initialRange.startTime || ''),
+        endTime: String(initialRange.endTime || '')
+      }
+    : { startTime: '', endTime: '' }
   isFormModalOpen.value = true
 }
 
@@ -562,6 +661,7 @@ const openEditForm = async (event) => {
     })
   }
 
+  resetPendingCreateRange()
   try {
     const detail = await scheduleStore.getScheduleDetail(event.id)
     selectedEventToEdit.value = detail ? { ...event, ...detail } : event
@@ -574,6 +674,22 @@ const openEditForm = async (event) => {
   isFormModalOpen.value = true
 }
 
+const finalizeWeekSlotSelection = async () => {
+  if (!weekDragSelection.value) {
+    return
+  }
+
+  const { date, startIndex, endIndex } = weekDragSelection.value
+  const rangeStart = Math.min(startIndex, endIndex)
+  const rangeEnd = Math.max(startIndex, endIndex) + 1
+  clearWeekDragSelection()
+
+  await openCreateForm(date, {
+    startTime: toTimeInputValue(rangeStart + 9),
+    endTime: toTimeInputValue(rangeEnd + 9)
+  })
+}
+
 const handleSave = async (formData) => {
   try {
     if (formData.id) {
@@ -582,10 +698,14 @@ const handleSave = async (formData) => {
       await scheduleStore.createSchedule(formData)
     }
 
+    suppressDetailModalUntil.value = Date.now() + 500
     isFormModalOpen.value = false
+    isListModalOpen.value = false
     isDetailModalOpen.value = false
+    selectedEventToEdit.value = null
     selectedEventDetail.value = null
-    await loadSchedules()
+    resetPendingCreateRange()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
 
     openAlertModal({
       title: '일정 저장 완료',
@@ -638,7 +758,8 @@ const confirmDelete = async () => {
   try {
     await scheduleStore.deleteSchedule(scheduleId)
     isFormModalOpen.value = false
-    await loadSchedules()
+    resetPendingCreateRange()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
   } catch (err) {
     const detail = toErrorText(err)
     console.error('일정 삭제 실패:', detail || err?.message, err)
@@ -894,7 +1015,14 @@ const confirmDisconnectGoogleCalendar = () => {
                 :key="dayIdx"
                 class="week-time-grid__day"
               >
-                <div v-for="time in timeSlots" :key="time" class="week-time-grid__slot"></div>
+                <div
+                  v-for="(time, slotIdx) in timeSlots"
+                  :key="time"
+                  class="week-time-grid__slot"
+                  :class="getWeekSlotClass(day.fullDate, slotIdx)"
+                  @mousedown.prevent="startWeekSlotSelection(day.fullDate, slotIdx)"
+                  @mouseenter="updateWeekSlotSelection(day.fullDate, slotIdx)"
+                ></div>
 
                 <button
                   v-for="(evt, eventIndex) in getTimedEventsForDate(day.fullDate)"
@@ -1055,10 +1183,13 @@ const confirmDisconnectGoogleCalendar = () => {
     <ScheduleCreateModal
       :isOpen="isFormModalOpen"
       :initialDate="selectedDate"
+      :initialStartTime="pendingCreateRange.startTime"
+      :initialEndTime="pendingCreateRange.endTime"
       :initialData="selectedEventToEdit"
       :roomOptions="meetingRooms"
       :existingSchedules="allSchedules"
-      @close="isFormModalOpen = false"
+      :existingReservations="meetingRoomReservations"
+      @close="isFormModalOpen = false; resetPendingCreateRange()"
       @save="handleSave"
     />
     <ConfirmModal
@@ -1512,6 +1643,21 @@ const confirmDisconnectGoogleCalendar = () => {
 .week-time-grid__slot {
   height: 56px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.84);
+}
+
+.week-time-grid__slot--interactive {
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.week-time-grid__slot--interactive:hover {
+  background: rgba(20, 184, 166, 0.06);
+}
+
+.week-time-grid__slot--selected {
+  cursor: pointer;
+  background: rgba(20, 184, 166, 0.16);
+  box-shadow: inset 0 0 0 2px rgba(20, 184, 166, 0.32);
 }
 
 .week-event {

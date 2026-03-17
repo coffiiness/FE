@@ -1,11 +1,13 @@
 <script setup>
 import { reactive, watch, ref, computed, onMounted } from 'vue'
+import AttendeeAvailabilityPanel from '@/components/schedule/AttendeeAvailabilityPanel.vue'
 import { memberApi } from '@/api/member'
 import { groupApi } from '@/api/group'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
+  rooms: { type: Array, default: () => [] },
   selectedDate: { type: Date, default: null },
   selectedHour: { type: Number, default: null },
   selectedEndHour: { type: Number, default: null }
@@ -23,6 +25,22 @@ const formError = ref('')
 const submitError = ref('')
 const organizerUserId = ref(null)
 const organizerName = computed(() => getCurrentUserName() || '미지정')
+const selectedRoomId = ref('')
+const selectedParticipantUserIds = computed(() =>
+  [...new Set(
+    selectedParticipants.value
+      .map((participant) => Number(participant?.userId))
+      .filter((userId) => Number.isFinite(userId) && userId > 0)
+  )]
+)
+const currentRoom = computed(() => {
+  if (selectedRoomId.value) {
+    const matchedRoom = props.rooms.find((room) => String(room.id) === String(selectedRoomId.value))
+    if (matchedRoom) return matchedRoom
+  }
+
+  return props.room ?? null
+})
 
 const parseDateOnly = (value) => {
   const [year, month, day] = String(value || '').split('-').map(Number)
@@ -246,6 +264,9 @@ watch(
     endHour12.value = endParts.hour12
     organizerUserId.value = getCurrentUserId()
     state.organizer = organizerName.value
+    selectedRoomId.value =
+      props.room?.id ??
+      (props.rooms.length === 1 ? props.rooms[0]?.id ?? '' : '')
     selectedParticipants.value = []
     submitError.value =
       props.selectedHour !== null && isPastDateTime(state.date, state.startTime)
@@ -292,8 +313,8 @@ watch([endMeridiem, endHour12], ([period, hour]) => {
 const handleSubmit = () => {
   formError.value = ''
   submitError.value = ''
-  if (!props.room) {
-    formError.value = '회의실 정보를 확인해주세요.'
+  if (!currentRoom.value) {
+    formError.value = '회의실을 선택해주세요.'
     return
   }
   if (!String(state.title || '').trim()) {
@@ -341,7 +362,7 @@ const handleSubmit = () => {
   const fixedOrganizerName = organizerName.value
 
   emit('confirm', {
-    roomId: props.room.id,
+    roomId: currentRoom.value.id,
     title: state.title.trim(),
     description: state.description,
     startTime: startDateTime,
@@ -373,12 +394,12 @@ const handleSubmit = () => {
           >
             <span
               class="h-3 w-3 rounded-full"
-              :style="{ backgroundColor: room?.color || '#94a3b8' }"
+              :style="{ backgroundColor: currentRoom?.color || '#94a3b8' }"
             ></span>
             <div>
-              <p class="text-sm font-black text-slate-950">{{ room?.name }}</p>
+              <p class="text-sm font-black text-slate-950">{{ currentRoom?.name || '회의실 미선택' }}</p>
               <p class="mt-0.5 text-sm font-semibold text-slate-500">
-                {{ room?.capacity }}인 · {{ room?.floor }}층
+                {{ currentRoom ? `${currentRoom.capacity}인 · ${currentRoom.floor}층` : '예약할 회의실을 선택해주세요.' }}
               </p>
             </div>
           </div>
@@ -415,6 +436,16 @@ const handleSubmit = () => {
             rows="4"
             placeholder="필요한 메모가 있으면 입력하세요"
           ></textarea>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-black text-slate-900">회의실 *</label>
+          <select v-model="selectedRoomId" class="booking-select w-full">
+            <option value="">회의실을 선택하세요</option>
+            <option v-for="option in rooms" :key="option.id" :value="option.id">
+              {{ option.name }} ({{ option.capacity }}인 · {{ option.floor }}층)
+            </option>
+          </select>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -562,6 +593,14 @@ const handleSubmit = () => {
                 class="flex-1 bg-transparent focus:outline-none text-sm text-slate-700 placeholder-slate-300 min-w-[80px] h-full py-1"
             >
           </div>
+
+          <AttendeeAvailabilityPanel
+            :is-open="open"
+            :date="state.date"
+            :attendee-ids="selectedParticipantUserIds"
+            :start-time="state.startTime"
+            :end-time="state.endTime"
+          />
         </div>
       </div>
       <p v-if="formError" class="px-6 pt-3 text-sm font-semibold text-rose-600 sm:px-7">

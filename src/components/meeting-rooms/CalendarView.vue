@@ -157,35 +157,6 @@ const handleDayBookingClick = (booking) => {
 
 <template>
   <section class="meeting-calendar-surface">
-      <div class="meeting-calendar-surface__head">
-        <div>
-          <h2 class="surface-title">{{ currentMonthLabel }}</h2>
-        </div>
-
-        <div class="surface-head-actions">
-          <select v-model="state.selectedRoom" class="room-select">
-            <option value="all">{{ labels.allRooms }}</option>
-            <option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option>
-          </select>
-
-          <div class="surface-head-nav">
-            <button type="button" class="icon-button" @click="goPrevMonth">
-              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <button type="button" class="toolbar-button toolbar-button-subtle" @click="goToday">
-              {{ labels.todayMove }}
-            </button>
-            <button type="button" class="icon-button" @click="goNextMonth">
-              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div class="month-weekdays">
         <div
           v-for="(day, idx) in koDays"

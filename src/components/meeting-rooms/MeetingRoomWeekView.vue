@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   rooms: { type: Array, required: true },
@@ -8,7 +8,7 @@ const props = defineProps({
   selectedDate: { type: String, default: '' }
 })
 
-const emit = defineEmits(['dateClick', 'bookingClick'])
+const emit = defineEmits(['dateClick', 'bookingClick', 'timeRangeSelect'])
 
 const koDays = ['일', '월', '화', '수', '목', '금', '토']
 const SLOT_HEIGHT = 56
@@ -49,6 +49,7 @@ const weekDays = computed(() => {
 })
 
 const today = computed(() => formatDate(new Date()))
+const dragSelection = ref(null)
 
 const roomById = computed(() => {
   const entries = props.rooms.map((room) => [room.id, room])
@@ -100,6 +101,95 @@ const dayLayouts = computed(() => {
 
 const getDayLayouts = (fullDate) => dayLayouts.value.get(fullDate) || []
 
+const isPastSlot = (fullDate, hour) => {
+  const target = parseDateOnly(fullDate)
+  target.setHours(hour, 0, 0, 0)
+  return target < new Date()
+}
+
+const clearDragSelection = () => {
+  dragSelection.value = null
+}
+
+const canSelectRange = (fullDate, startHour, endHour) => {
+  const rangeStart = Math.min(startHour, endHour)
+  const rangeEnd = Math.max(startHour, endHour)
+
+  for (let hour = rangeStart; hour <= rangeEnd; hour += 1) {
+    if (isPastSlot(fullDate, hour)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+const startSlotSelection = (fullDate, hour) => {
+  if (isPastSlot(fullDate, hour)) {
+    return
+  }
+
+  dragSelection.value = {
+    fullDate,
+    startHour: hour,
+    endHour: hour
+  }
+}
+
+const updateSlotSelection = (fullDate, hour) => {
+  if (!dragSelection.value || dragSelection.value.fullDate !== fullDate) {
+    return
+  }
+
+  if (!canSelectRange(fullDate, dragSelection.value.startHour, hour)) {
+    return
+  }
+
+  dragSelection.value = {
+    ...dragSelection.value,
+    endHour: hour
+  }
+}
+
+const finalizeSlotSelection = () => {
+  if (!dragSelection.value) {
+    return
+  }
+
+  const { fullDate, startHour, endHour } = dragSelection.value
+  const rangeStart = Math.min(startHour, endHour)
+  const rangeEnd = Math.max(startHour, endHour) + 1
+
+  clearDragSelection()
+  emit('timeRangeSelect', {
+    date: fullDate,
+    startHour: rangeStart,
+    endHour: rangeEnd
+  })
+}
+
+const isDragSelected = (fullDate, hour) => {
+  if (!dragSelection.value || dragSelection.value.fullDate !== fullDate) {
+    return false
+  }
+
+  const rangeStart = Math.min(dragSelection.value.startHour, dragSelection.value.endHour)
+  const rangeEnd = Math.max(dragSelection.value.startHour, dragSelection.value.endHour)
+  return hour >= rangeStart && hour <= rangeEnd
+}
+
+const getSlotClasses = (fullDate, hour) => {
+  if (isDragSelected(fullDate, hour)) {
+    return 'cursor-pointer bg-emerald-100/90 ring-2 ring-inset ring-emerald-300'
+  }
+
+  if (isPastSlot(fullDate, hour)) {
+    return 'cursor-not-allowed bg-slate-100/75'
+  }
+
+  return 'cursor-pointer hover:bg-emerald-50/70'
+}
+
 const getBookingStyle = (layout) => {
   const baseHour = Number(props.hours[0] || 8)
   const totalHours = props.hours.length
@@ -140,6 +230,16 @@ const formatBookingTime = (booking) => {
 }
 
 const gridHeight = computed(() => `${props.hours.length * SLOT_HEIGHT}px`)
+
+watch(() => props.selectedDate, clearDragSelection)
+
+onMounted(() => {
+  document.addEventListener('mouseup', finalizeSlotSelection)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', finalizeSlotSelection)
+})
 </script>
 
 <template>
@@ -180,6 +280,9 @@ const gridHeight = computed(() => `${props.hours.length * SLOT_HEIGHT}px`)
             v-for="hour in hours"
             :key="`${day.fullDate}-${hour}`"
             class="week-time-grid__slot"
+            :class="getSlotClasses(day.fullDate, hour)"
+            @mousedown.prevent="startSlotSelection(day.fullDate, hour)"
+            @mouseenter="updateSlotSelection(day.fullDate, hour)"
           ></div>
 
           <button
@@ -206,7 +309,11 @@ const gridHeight = computed(() => `${props.hours.length * SLOT_HEIGHT}px`)
 
 <style scoped>
 .week-shell {
+  max-height: calc(100vh - 15rem);
+  max-height: calc(100dvh - 15rem);
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(226, 232, 240, 0.92);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);

@@ -510,44 +510,7 @@ const getBookingSummaryText = (booking) => {
     .join(' · ')
 }
 const loadBusySchedulesByMonth = async (startDate, endDate, attendeeIds) => {
-  const start = new Date(`${startDate}T00:00:00`)
-  const end = new Date(`${endDate}T00:00:00`)
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
-    return []
-  }
-
-  const merged = new Map()
-  const cursor = new Date(start)
-
-  while (cursor <= end) {
-    const date = toYmd(cursor)
-    const daily = await scheduleStore.getAttendeeAvailability(date, attendeeIds)
-
-    daily.forEach((attendee) => {
-      const current = merged.get(attendee.attendeeId) || {
-        attendeeId: attendee.attendeeId,
-        attendeeName: attendee.attendeeName,
-        busySchedules: []
-      }
-
-      current.busySchedules.push(...(Array.isArray(attendee.busySchedules) ? attendee.busySchedules : []))
-      merged.set(attendee.attendeeId, current)
-    })
-
-    cursor.setDate(cursor.getDate() + 1)
-  }
-
-  return [...merged.values()].map((attendee) => ({
-    ...attendee,
-    busySchedules: attendee.busySchedules.filter((schedule, index, schedules) =>
-      index === schedules.findIndex((candidate) =>
-        candidate.scheduleId === schedule.scheduleId &&
-        candidate.startDateTime === schedule.startDateTime &&
-        candidate.endDateTime === schedule.endDateTime
-      )
-    )
-  }))
+  return scheduleStore.getAttendeeAvailabilityRange(startDate, endDate, attendeeIds)
 }
 
 const formatApplicantDate = (value) => {
@@ -1746,9 +1709,22 @@ const normalizeBusyScheduleEntry = (attendee, schedule) => {
   }
 }
 
+let interviewScheduleRequestId = 0
+let interviewScheduleLoadingKey = ''
+
 const loadInterviewSchedules = async () => {
+  const yearMonth = toYearMonth(calendarState.currentMonth)
+  const selectedIds = selectedInterviewerIds.value
+  const loadKey = `${jobId}:${yearMonth}:${selectedIds.join(',')}`
+
+  if (interviewScheduleLoadingKey === loadKey) {
+    return
+  }
+
+  const requestId = ++interviewScheduleRequestId
+  interviewScheduleLoadingKey = loadKey
+
   try {
-    const yearMonth = toYearMonth(calendarState.currentMonth)
     const raw = await recruitmentStore.fetchInterviewSchedules(jobId, yearMonth)
     const normalizedInterviewSchedules = Array.isArray(raw)
       ? raw.map(normalizeSchedule).filter(Boolean)
@@ -1758,9 +1734,13 @@ const loadInterviewSchedules = async () => {
         .map((schedule) => Number(schedule.id))
         .filter((id) => Number.isFinite(id) && id > 0)
     )
+
+    if (requestId !== interviewScheduleRequestId) {
+      return
+    }
+
     apiSchedules.value = normalizedInterviewSchedules
 
-    const selectedIds = selectedInterviewerIds.value
     if (selectedIds.length === 0) {
       return
     }
@@ -1787,14 +1767,24 @@ const loadInterviewSchedules = async () => {
           .filter(Boolean)
       )
 
+      if (requestId !== interviewScheduleRequestId) {
+        return
+      }
+
       apiSchedules.value = [...normalizedInterviewSchedules, ...busySchedules]
     } catch (availabilityError) {
       // 면접관 개인 일정 조회에 실패해도 공고 면접 일정은 그대로 보여준다.
       console.error('면접관 일정 조회 실패:', availabilityError)
     }
   } catch (error) {
-    console.error('면접 일정 조회 실패:', error)
-    apiSchedules.value = []
+    if (requestId === interviewScheduleRequestId) {
+      console.error('면접 일정 조회 실패:', error)
+      apiSchedules.value = []
+    }
+  } finally {
+    if (interviewScheduleLoadingKey === loadKey) {
+      interviewScheduleLoadingKey = ''
+    }
   }
 }
 

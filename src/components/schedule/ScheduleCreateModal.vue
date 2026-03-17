@@ -4,13 +4,17 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import AttendeeAvailabilityPanel from '@/components/schedule/AttendeeAvailabilityPanel.vue'
 import { memberApi } from '@/api/member'
 import { groupApi } from '@/api/group'
+import { meetingRoomApi } from '@/api/meetingRoom'
 
 const props = defineProps({
   isOpen: Boolean,
   initialDate: String,
+  initialStartTime: { type: String, default: '' },
+  initialEndTime: { type: String, default: '' },
   initialData: { type: Object, default: null },
   roomOptions: { type: Array, default: () => [] },
-  existingSchedules: { type: Array, default: () => [] }
+  existingSchedules: { type: Array, default: () => [] },
+  existingReservations: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['close', 'save'])
@@ -101,6 +105,9 @@ const lastTimedRange = ref({ startTime: '13:00', endTime: '14:00' })
 const attendeeInput = ref('')
 const validationModalOpen = ref(false)
 const validationMessage = ref('')
+const roomReservations = ref([])
+const roomReservationsLoading = ref(false)
+let roomReservationRequestId = 0
 
 const toggleGroup = (groupId) => {
   selectedGroupId.value = String(selectedGroupId.value) === String(groupId) ? null : String(groupId)
@@ -223,6 +230,102 @@ const normalizeTimeInput = (timeValue, fallback = '00:00') => {
   return hour.padStart(2, '0') + ':' + minute.padStart(2, '0')
 }
 
+const formatDateInput = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const extractDateInput = (value) => {
+  const text = String(value || '')
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10)
+  }
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return ''
+  }
+
+  return formatDateInput(parsed)
+}
+
+const extractTimeInput = (value, fallback = '00:00') => {
+  const text = String(value || '')
+  const match = text.match(/(\d{2}:\d{2})/)
+  if (match?.[1]) {
+    return match[1]
+  }
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return fallback
+  }
+
+  return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`
+}
+
+const buildRoomScheduleKey = (schedule) => {
+  if (!schedule) return ''
+  const roomId = Number(schedule.roomId)
+  const date = String(schedule.date || '')
+  const timeKey = schedule.isAllDay ? 'ALL_DAY' : `${schedule.startTime}-${schedule.endTime}`
+  return `${roomId}:${date}:${timeKey}`
+}
+
+const normalizeScheduleLike = (schedule) => {
+  const roomId = Number(schedule?.roomId)
+  const date = String(schedule?.date || '')
+
+  if (!Number.isFinite(roomId) || !date) {
+    return null
+  }
+
+  return {
+    id: schedule.id,
+    roomId,
+    date,
+    title: schedule.title || '제목 없음',
+    startTime: normalizeTimeInput(schedule.startTime),
+    endTime: normalizeTimeInput(schedule.endTime),
+    isAllDay: schedule.isAllDay === true,
+    isCurrent: false
+  }
+}
+
+const normalizeReservationLike = (reservation) => {
+  const roomId = Number(reservation?.meetingRoomId)
+  const date = extractDateInput(reservation?.startDatetime)
+
+  if (!Number.isFinite(roomId) || !date) {
+    return null
+  }
+
+  return {
+    id: `reservation-${reservation.id}`,
+    roomId,
+    date,
+    title: reservation?.title || (reservation?.interviewScheduleId ? '면접 일정' : '회의실 예약'),
+    startTime: extractTimeInput(reservation?.startDatetime),
+    endTime: extractTimeInput(reservation?.endDatetime),
+    isAllDay: false,
+    isCurrent: false
+  }
+}
+
+const currentEditingRoomScheduleKey = computed(() => {
+  if (!props.initialData) return ''
+
+  return buildRoomScheduleKey({
+    roomId: props.initialData.roomId,
+    date: props.initialData.date,
+    startTime: normalizeTimeInput(props.initialData.startTime),
+    endTime: normalizeTimeInput(props.initialData.endTime),
+    isAllDay: props.initialData.isAllDay === true
+  })
+})
+
 // 종일 일정 여부에 따라 충돌 계산용 시간을 정규화한다.
 const getEffectiveTimeRange = (target) => {
   if (target?.isAllDay === true) {
@@ -239,25 +342,38 @@ const roomSchedulesOnDate = computed(() => {
   const selectedRoomId = Number(form.value.roomId)
   if (!Number.isFinite(selectedRoomId) || !form.value.date) return []
 
-  const editingScheduleId = Number(props.initialData?.id)
+  const merged = new Map()
 
-  return props.existingSchedules
-    .filter((schedule) => {
-      const scheduleRoomId = Number(schedule?.roomId)
-      if (!Number.isFinite(scheduleRoomId) || scheduleRoomId !== selectedRoomId) return false
-      if (schedule?.date !== form.value.date) return false
-      if (Number.isFinite(editingScheduleId) && Number(schedule?.id) === editingScheduleId) {
-        return false
-      }
-      return true
+  props.existingSchedules
+    .map(normalizeScheduleLike)
+    .filter(Boolean)
+    .filter((schedule) => schedule.roomId === selectedRoomId && schedule.date === form.value.date)
+    .forEach((schedule) => {
+      const key = buildRoomScheduleKey(schedule)
+      if (!key) return
+      merged.set(key, {
+        ...schedule,
+        isCurrent: key === currentEditingRoomScheduleKey.value
+      })
     })
-    .map((schedule) => ({
-      id: schedule.id,
-      title: schedule.title || '제목 없음',
-      startTime: normalizeTimeInput(schedule.startTime),
-      endTime: normalizeTimeInput(schedule.endTime),
-      isAllDay: schedule.isAllDay === true
-    }))
+
+  const reservationSource =
+    props.existingReservations.length > 0 ? props.existingReservations : roomReservations.value
+
+  reservationSource
+    .map(normalizeReservationLike)
+    .filter(Boolean)
+    .filter((schedule) => schedule.roomId === selectedRoomId && schedule.date === form.value.date)
+    .forEach((schedule) => {
+      const key = buildRoomScheduleKey(schedule)
+      if (!key || merged.has(key)) return
+      merged.set(key, {
+        ...schedule,
+        isCurrent: key === currentEditingRoomScheduleKey.value
+      })
+    })
+
+  return Array.from(merged.values())
     .sort((a, b) => (toMinutes(a.startTime) ?? 0) - (toMinutes(b.startTime) ?? 0))
 })
 
@@ -267,6 +383,10 @@ const roomSchedulesWithOverlap = computed(() => {
 
   return roomSchedulesOnDate.value.map((schedule) => {
     if (!hasRange) {
+      return { ...schedule, isOverlap: false }
+    }
+
+    if (schedule.isCurrent) {
       return { ...schedule, isOverlap: false }
     }
 
@@ -284,6 +404,58 @@ const roomSchedulesWithOverlap = computed(() => {
 const overlappingRoomSchedules = computed(() =>
   roomSchedulesWithOverlap.value.filter((schedule) => schedule.isOverlap)
 )
+
+const loadRoomReservations = async () => {
+  if (props.existingReservations.length > 0) {
+    roomReservationRequestId += 1
+    roomReservations.value = []
+    roomReservationsLoading.value = false
+    return
+  }
+
+  const selectedRoomId = Number(form.value.roomId)
+  const selectedDate = String(form.value.date || '')
+
+  if (!props.isOpen || !isMeetingType.value || !Number.isFinite(selectedRoomId) || !selectedDate) {
+    roomReservationRequestId += 1
+    roomReservations.value = []
+    roomReservationsLoading.value = false
+    return
+  }
+
+  const requestId = ++roomReservationRequestId
+  roomReservationsLoading.value = true
+
+  try {
+    const start = `${selectedDate}T00:00:00`
+    const endDate = parseDateOnly(selectedDate)
+    endDate.setDate(endDate.getDate() + 1)
+    const end = `${formatDateInput(endDate)}T00:00:00`
+    const response = await meetingRoomApi.listReservations({
+      fromDatetime: start,
+      toDatetime: end
+    })
+    const data = Array.isArray(response?.data?.data) ? response.data.data : []
+
+    if (requestId !== roomReservationRequestId) {
+      return
+    }
+
+    roomReservations.value = data.filter(
+      (reservation) => Number(reservation?.meetingRoomId) === selectedRoomId
+    )
+  } catch {
+    if (requestId !== roomReservationRequestId) {
+      return
+    }
+
+    roomReservations.value = []
+  } finally {
+    if (requestId === roomReservationRequestId) {
+      roomReservationsLoading.value = false
+    }
+  }
+}
 
 watch(
   () => props.isOpen,
@@ -315,11 +487,14 @@ watch(
         endTime: props.initialData.isAllDay === true ? '14:00' : initialEndTime
       }
     } else {
+      const initialStartTime = normalizeTimeInput(props.initialStartTime, '13:00')
+      const initialEndTime = normalizeTimeInput(props.initialEndTime, '14:00')
+
       form.value = {
         title: '',
         date: props.initialDate || new Date().toISOString().split('T')[0],
-        startTime: '13:00',
-        endTime: '14:00',
+        startTime: initialStartTime,
+        endTime: initialEndTime,
         type: 'MEETING',
         description: '',
         roomId: null,
@@ -329,7 +504,7 @@ watch(
         attendeeIds: []
       }
 
-      lastTimedRange.value = { startTime: '13:00', endTime: '14:00' }
+      lastTimedRange.value = { startTime: initialStartTime, endTime: initialEndTime }
     }
 
     attendeeInput.value = ''
@@ -375,6 +550,13 @@ watch(
     }
 
     lastTimedRange.value = { startTime: normalizedStart, endTime: normalizedEnd }
+  }
+)
+
+watch(
+  () => [props.isOpen, isMeetingType.value, form.value.roomId, form.value.date],
+  async () => {
+    await loadRoomReservations()
   }
 )
 
@@ -575,7 +757,11 @@ onMounted(() => {
                 현재 입력 시간과 겹치는 예약이 {{ overlappingRoomSchedules.length }}건 있습니다.
               </p>
 
-              <p v-if="roomSchedulesWithOverlap.length === 0" class="text-[11px] text-slate-500">
+              <p v-if="roomReservationsLoading" class="text-[11px] text-slate-500">
+                회의실 예약 일정을 불러오는 중입니다.
+              </p>
+
+              <p v-else-if="roomSchedulesWithOverlap.length === 0" class="text-[11px] text-slate-500">
                 해당 날짜에는 예약된 일정이 없습니다.
               </p>
 
@@ -588,7 +774,10 @@ onMounted(() => {
                 >
                   <div class="flex items-center justify-between gap-2">
                     <span class="font-bold text-slate-700">{{ schedule.isAllDay ? '종일' : schedule.startTime + ' - ' + schedule.endTime }}</span>
-                    <span v-if="schedule.isOverlap" class="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">겹침</span>
+                    <div class="flex items-center gap-1">
+                      <span v-if="schedule.isCurrent" class="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">현재 일정</span>
+                      <span v-if="schedule.isOverlap" class="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">겹침</span>
+                    </div>
                   </div>
                   <p class="mt-1 truncate text-slate-600">{{ schedule.title }}</p>
                 </div>
