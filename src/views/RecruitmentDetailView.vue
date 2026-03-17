@@ -687,6 +687,12 @@ const automationTriggerOptions = [
 const automationActionOptions = [
   { label: '이메일', value: 'EMAIL' }
 ]
+const automationTriggerLabelMap = {
+  ON_ENTER: '진입 시'
+}
+const automationActionLabelMap = {
+  EMAIL: '이메일'
+}
 const stageTypeMeta = {
   DOCUMENT: { label: '서류', badge: 'bg-sky-100 text-sky-700 border-sky-200', column: 'border-sky-200 bg-sky-50/40' },
   INTERVIEW: { label: '면접', badge: 'bg-violet-100 text-violet-700 border-violet-200', column: 'border-violet-200 bg-violet-50/30' },
@@ -901,6 +907,17 @@ const selectedRuleProcess = computed(() =>
 const selectedProcessRules = computed(() =>
   automationRules.value.filter((rule) => rule.recruitmentProcessId === ruleModalProcessId.value)
 )
+const automationRuleCountsByProcess = computed(() => {
+  const counts = {}
+
+  automationRules.value.forEach((rule) => {
+    const processId = Number(rule?.recruitmentProcessId)
+    if (!Number.isFinite(processId)) return
+    counts[processId] = (counts[processId] || 0) + 1
+  })
+
+  return counts
+})
 const selectedRuleStageType = computed(() => selectedRuleProcess.value?.stageType || '')
 const filteredAutomationTemplates = computed(() => {
   const stageType = selectedRuleStageType.value
@@ -1277,6 +1294,62 @@ const normalizeAutomationRule = (rule) => ({
   payload: normalizeAutomationRulePayload(rule?.payload)
 })
 
+const getAutomationTriggerLabel = (triggerType) => automationTriggerLabelMap[triggerType] || triggerType || '-'
+
+const getAutomationActionLabel = (actionType) => automationActionLabelMap[actionType] || actionType || '-'
+
+const getAutomationTemplateMeta = (templateCode) => {
+  const code = String(templateCode || '').trim()
+  if (!code) return null
+
+  return automationTemplates.value.find((template) => template.code === code) || null
+}
+
+const getAutomationTemplateLabel = (templateCode) => {
+  const template = getAutomationTemplateMeta(templateCode)
+  return template?.label || templateCode || '-'
+}
+
+const getAutomationTemplateDescription = (templateCode) => {
+  const template = getAutomationTemplateMeta(templateCode)
+  return template?.description || ''
+}
+
+const getAutomationRuleSummary = (rule) => {
+  const templateCode = rule?.payload?.templateCode || ''
+  const templateLabel = getAutomationTemplateLabel(templateCode)
+  const templateDescription = getAutomationTemplateDescription(templateCode)
+
+  return {
+    triggerLabel: getAutomationTriggerLabel(rule?.triggerType),
+    actionLabel: getAutomationActionLabel(rule?.actionType),
+    templateCode,
+    templateLabel,
+    templateDescription
+  }
+}
+
+const buildAutomationDuplicateRuleMessage = (baseMessage) => {
+  const message = String(baseMessage || '')
+  const guidance = '현재 서버에서 중복 규칙을 허용하지 않고 있습니다. 같은 단계의 기존 규칙을 수정하거나 삭제한 뒤 다시 시도해 주세요.'
+  return message ? `${message} ${guidance}` : guidance
+}
+
+const isAutomationDuplicateRuleError = (error) => {
+  const status = Number(error?.response?.status)
+  const message = String(
+    error?.response?.data?.error?.message ||
+    error?.response?.data?.message ||
+    ''
+  ).toLowerCase()
+
+  return status === 409 ||
+    message.includes('duplicate') ||
+    message.includes('already exists') ||
+    message.includes('중복') ||
+    message.includes('이미 존재')
+}
+
 const loadAutomationRules = async () => {
   if (!canMoveApplicants.value) return
 
@@ -1346,10 +1419,14 @@ const submitAutomationRule = async () => {
     await loadAutomationRules()
     closeRuleModal()
   } catch (error) {
-    automationError.value =
+    const baseMessage =
       error?.response?.data?.error?.message ||
       error?.response?.data?.message ||
       '자동화 규칙 저장에 실패했습니다.'
+
+    automationError.value = isAutomationDuplicateRuleError(error)
+      ? buildAutomationDuplicateRuleMessage(baseMessage)
+      : baseMessage
   } finally {
     automationSaving.value = false
   }
@@ -2330,6 +2407,12 @@ const handleApplicantResumeDownload = async () => {
               </div>
               <div class="flex items-center gap-2 relative">
                 <span class="bg-slate-100 px-2 py-0.5 rounded text-xs font-bold text-slate-500">{{ getApplicantsByProcess(process.id).length }}</span>
+                <span
+                  v-if="canMoveApplicants"
+                  class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700"
+                >
+                  규칙 {{ automationRuleCountsByProcess[process.id] || 0 }}
+                </span>
                 <button
                   v-if="canMoveApplicants"
                   type="button"
@@ -2598,8 +2681,13 @@ const handleApplicantResumeDownload = async () => {
         <div class="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
             <p class="text-xs font-bold text-slate-500 mb-1">AUTOMATION</p>
-            <h3 class="text-xl font-bold text-slate-900">{{ selectedRuleProcess?.stageName || '프로세스' }}</h3>
-            <p class="text-sm text-slate-500 mt-1">이 단계에 들어올 때 실행할 규칙을 관리합니다.</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-xl font-bold text-slate-900">{{ selectedRuleProcess?.stageName || '프로세스' }}</h3>
+              <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-700">
+                규칙 {{ selectedProcessRules.length }}개
+              </span>
+            </div>
+            <p class="text-sm text-slate-500 mt-1">이 단계에 들어올 때 실행할 규칙을 여러 개 관리합니다. 새 규칙 추가는 기존 규칙을 덮어쓰지 않고 이어서 등록됩니다.</p>
           </div>
           <button @click="closeRuleModal" class="w-9 h-9 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2644,6 +2732,12 @@ const handleApplicantResumeDownload = async () => {
               <p v-if="selectedRuleStageType" class="mt-1 text-[11px] text-slate-400">
                 추천 stageType: {{ selectedRuleStageType }}
               </p>
+              <p
+                v-if="automationForm.templateCode && getAutomationTemplateDescription(automationForm.templateCode)"
+                class="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-5 text-slate-500"
+              >
+                {{ getAutomationTemplateDescription(automationForm.templateCode) }}
+              </p>
             </div>
             <div v-if="automationError" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
               {{ automationError }}
@@ -2651,6 +2745,14 @@ const handleApplicantResumeDownload = async () => {
             <div class="flex gap-2">
               <button type="submit" :disabled="automationSaving" class="flex-1 rounded-xl bg-slate-900 text-white px-3 py-2.5 text-sm font-bold disabled:opacity-60">
                 {{ editingRuleId ? '규칙 수정' : '규칙 추가' }}
+              </button>
+              <button
+                v-if="editingRuleId"
+                type="button"
+                @click="openRuleModal(ruleModalProcessId)"
+                class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-600"
+              >
+                새 규칙으로 전환
               </button>
               <button type="button" @click="closeRuleModal" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-bold text-slate-600">
                 닫기
@@ -2663,19 +2765,33 @@ const handleApplicantResumeDownload = async () => {
               자동화 규칙을 불러오는 중입니다.
             </div>
             <div v-else-if="selectedProcessRules.length === 0" class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
-              이 단계에 연결된 규칙이 없습니다.
+              이 단계에 연결된 규칙이 없습니다. 첫 번째 규칙을 추가해 보세요.
             </div>
             <div v-else class="space-y-3">
-              <article v-for="rule in selectedProcessRules" :key="rule.ruleId" class="rounded-xl border border-slate-200 p-4">
-                <div class="flex items-start justify-between gap-3 mb-2">
+              <article v-for="rule in selectedProcessRules" :key="rule.ruleId" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex items-start justify-between gap-3 mb-3">
                   <div>
-                    <p class="text-sm font-bold text-slate-900">{{ rule.triggerType }} -> {{ rule.actionType }}</p>
-                    <p class="text-xs text-slate-500 mt-1">templateCode: {{ rule.payload?.templateCode || '-' }}</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-700">
+                        {{ getAutomationRuleSummary(rule).triggerLabel }}
+                      </span>
+                      <span class="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                        {{ getAutomationRuleSummary(rule).actionLabel }}
+                      </span>
+                    </div>
+                    <p class="mt-3 text-sm font-bold text-slate-900">{{ getAutomationRuleSummary(rule).templateLabel }}</p>
+                    <p class="mt-1 text-xs font-medium text-slate-500">템플릿 코드: {{ getAutomationRuleSummary(rule).templateCode || '-' }}</p>
+                    <p v-if="getAutomationRuleSummary(rule).templateDescription" class="mt-2 text-xs leading-5 text-slate-500">
+                      {{ getAutomationRuleSummary(rule).templateDescription }}
+                    </p>
                   </div>
                   <div class="flex gap-2">
                     <button type="button" @click="openRuleModal(rule.recruitmentProcessId, rule)" class="text-xs font-bold text-brand-600">수정</button>
                     <button type="button" @click="deleteAutomationRule(rule.ruleId)" class="text-xs font-bold text-rose-600">삭제</button>
                   </div>
+                </div>
+                <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-500">
+                  액션 타입과 템플릿이 각각 독립된 규칙으로 저장됩니다.
                 </div>
               </article>
             </div>
