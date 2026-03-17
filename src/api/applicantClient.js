@@ -32,6 +32,11 @@ applicantApi.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
 
+    const workspaceId = getApplicantWorkspaceId()
+    if (workspaceId) {
+      config.headers['X-Tenant-ID'] = workspaceId
+    }
+
     return config
   },
   (error) => Promise.reject(error)
