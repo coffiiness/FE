@@ -208,10 +208,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-[8px] border border-slate-200 bg-white">
+  <div class="meeting-room-timeline-shell overflow-hidden rounded-[8px] border border-slate-200 bg-white">
 
-    <div class="meeting-room-timeline flex flex-col">
-        <div class="sticky top-0 z-20 flex min-w-[1200px] border-b border-slate-200 bg-white">
+    <div class="meeting-room-timeline__scroll flex-1 overflow-auto">
+      <div class="meeting-room-timeline flex min-w-[1200px] flex-col">
+        <div class="sticky top-0 z-20 flex border-b border-slate-200 bg-white">
           <div class="flex w-48 items-center gap-2 border-r border-slate-200 bg-white p-4 text-sm font-black text-slate-800">
             <span class="h-2 w-2 rounded-full bg-slate-400"></span>
             <span>회의실</span>
@@ -245,8 +246,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-      <div class="meeting-room-timeline__scroll flex-1 overflow-auto">
-        <div v-for="room in pagedRooms" :key="room.id" class="flex min-w-[1200px] border-b border-slate-200 transition-colors hover:bg-slate-50/60">
+        <div v-for="room in pagedRooms" :key="room.id" class="flex border-b border-slate-200 transition-colors hover:bg-slate-50/60">
           <div class="sticky left-0 z-[20] w-48 border-r border-slate-200 bg-white p-4 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.18)]">
             <div class="flex items-start gap-3">
               <div class="mt-1 h-3 w-3 flex-shrink-0 rounded-full" :style="{ backgroundColor: room.color }" />
@@ -321,7 +321,17 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.meeting-room-timeline-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 15rem);
+  max-height: calc(100dvh - 15rem);
+  min-height: 0;
+}
+
 .meeting-room-timeline__scroll {
+  min-height: 0;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.58) transparent;
 }

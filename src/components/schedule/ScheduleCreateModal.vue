@@ -648,11 +648,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <Transition name="fade">
-    <div v-if="isOpen" class="fixed inset-0 z-[70] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="$emit('close')"></div>
+  <Teleport to="body">
+    <Transition name="fade">
+      <div v-if="isOpen" class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" @click="$emit('close')"></div>
 
-      <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden transform transition-all scale-100 max-h-[90vh] flex flex-col">
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden transform transition-all scale-100 max-h-[90vh] flex flex-col">
         <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
           <h3 class="text-lg font-bold text-slate-800">
             {{ initialData ? '일정 수정' : '새 일정 생성' }}
@@ -888,9 +889,10 @@ onMounted(() => {
             {{ initialData ? '수정 완료' : '일정 생성' }}
           </button>
         </div>
+        </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 
   <ConfirmModal
       :show="validationModalOpen"
