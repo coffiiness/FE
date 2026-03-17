@@ -9,6 +9,8 @@ import { meetingRoomApi } from '@/api/meetingRoom'
 const props = defineProps({
   isOpen: Boolean,
   initialDate: String,
+  initialStartTime: { type: String, default: '' },
+  initialEndTime: { type: String, default: '' },
   initialData: { type: Object, default: null },
   roomOptions: { type: Array, default: () => [] },
   existingSchedules: { type: Array, default: () => [] },
@@ -485,11 +487,14 @@ watch(
         endTime: props.initialData.isAllDay === true ? '14:00' : initialEndTime
       }
     } else {
+      const initialStartTime = normalizeTimeInput(props.initialStartTime, '13:00')
+      const initialEndTime = normalizeTimeInput(props.initialEndTime, '14:00')
+
       form.value = {
         title: '',
         date: props.initialDate || new Date().toISOString().split('T')[0],
-        startTime: '13:00',
-        endTime: '14:00',
+        startTime: initialStartTime,
+        endTime: initialEndTime,
         type: 'MEETING',
         description: '',
         roomId: null,
@@ -499,7 +504,7 @@ watch(
         attendeeIds: []
       }
 
-      lastTimedRange.value = { startTime: '13:00', endTime: '14:00' }
+      lastTimedRange.value = { startTime: initialStartTime, endTime: initialEndTime }
     }
 
     attendeeInput.value = ''
