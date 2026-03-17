@@ -44,6 +44,7 @@ const router = useRouter()
 const notificationStore = useNotificationStore()
 const { acceptedSchedules } = storeToRefs(notificationStore)
 const meetingRooms = ref([])
+const meetingRoomReservations = ref([])
 
 // [유틸] 현재 뷰 기준으로 API 조회 범위 계산
 const getVisibleRange = () => {
@@ -68,6 +69,31 @@ const getVisibleRange = () => {
 const loadSchedules = async () => {
   const { startDate, endDate } = getVisibleRange()
   await scheduleStore.fetchSchedules(startDate, endDate)
+}
+
+const addOneDay = (dateString) => {
+  const date = new Date(`${dateString}T00:00:00`)
+  date.setDate(date.getDate() + 1)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const loadMeetingRoomReservations = async () => {
+  try {
+    const { startDate, endDate } = getVisibleRange()
+    const response = await meetingRoomApi.listReservations({
+      fromDatetime: `${startDate}T00:00:00`,
+      toDatetime: `${addOneDay(endDate)}T00:00:00`
+    })
+    const data = response?.data?.data
+    meetingRoomReservations.value = Array.isArray(data) ? data : []
+  } catch (error) {
+    const detail = toErrorText(error)
+    console.error('회의실 예약 목록 조회 실패:', detail || error?.message, error)
+    meetingRoomReservations.value = []
+  }
 }
 
 // [우측 사이드바] 실제 '오늘' 이후의 일정만 필터링
@@ -503,7 +529,7 @@ onMounted(async () => {
     selectedDate.value = queryDate
   }
 
-  await Promise.all([loadSchedules(), loadMeetingRooms()])
+  await Promise.all([loadSchedules(), loadMeetingRooms(), loadMeetingRoomReservations()])
   await openScheduleFromRouteQuery()
 })
 
@@ -519,7 +545,7 @@ watch(
 watch(
   () => selectedDate.value,
   async () => {
-    await loadSchedules()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
     await openScheduleFromRouteQuery()
   }
 )
@@ -593,7 +619,7 @@ const handleSave = async (formData) => {
     isDetailModalOpen.value = false
     selectedEventToEdit.value = null
     selectedEventDetail.value = null
-    await loadSchedules()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
 
     openAlertModal({
       title: '일정 저장 완료',
@@ -646,7 +672,7 @@ const confirmDelete = async () => {
   try {
     await scheduleStore.deleteSchedule(scheduleId)
     isFormModalOpen.value = false
-    await loadSchedules()
+    await Promise.all([loadSchedules(), loadMeetingRoomReservations()])
   } catch (err) {
     const detail = toErrorText(err)
     console.error('일정 삭제 실패:', detail || err?.message, err)
@@ -1066,6 +1092,7 @@ const confirmDisconnectGoogleCalendar = () => {
       :initialData="selectedEventToEdit"
       :roomOptions="meetingRooms"
       :existingSchedules="allSchedules"
+      :existingReservations="meetingRoomReservations"
       @close="isFormModalOpen = false"
       @save="handleSave"
     />
