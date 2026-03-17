@@ -418,6 +418,8 @@ const handleMonthDateClick = (date) => {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  min-width: 0;
+  min-height: 0;
 }
 
 .meeting-schedule-board__head {

@@ -309,7 +309,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .week-shell {
+  max-height: calc(100vh - 15rem);
+  max-height: calc(100dvh - 15rem);
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(226, 232, 240, 0.92);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
