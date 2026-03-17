@@ -3,10 +3,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { careerApi } from '@/api/career'
 import { useApplicantAuth } from '@/composables/useApplicantAuth'
+import { useModal } from '@/composables/useModal'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, logout } = useApplicantAuth()
+const { modal, openModal, onModalConfirm, onModalCancel } = useModal()
 
 const companySlug = computed(() => route.params.companySlug)
 
@@ -100,7 +103,27 @@ const filteredJobs = computed(() => {
 })
 
 const goToApply = (recruitmentId) => {
-  router.push(`/careers/${companySlug.value}/${recruitmentId}/apply`)
+  const targetPath = `/careers/${companySlug.value}/${recruitmentId}/apply`
+
+  if (isAuthenticated.value) {
+    router.push(targetPath)
+    return
+  }
+
+  openModal({
+    title: '로그인이 필요합니다',
+    message: '지원서를 작성하려면 먼저 로그인해주세요.',
+    type: 'warning',
+    showCancel: true,
+    confirmText: '로그인하기',
+    cancelText: '닫기',
+    onConfirm: () => {
+      router.push({
+        path: `/careers/${companySlug.value}/login`,
+        query: { redirect: targetPath }
+      })
+    }
+  })
 }
 
 const toggleCareerType = (type) => {
@@ -211,4 +234,16 @@ const handleAuthAction = () => {
       </div>
     </div>
   </div>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    :cancel-text="modal.cancelText"
+    @confirm="onModalConfirm"
+    @cancel="onModalCancel"
+  />
 </template>
