@@ -273,6 +273,38 @@ const getExportErrorMessage = (error) => {
   )
 }
 
+const generateClientExcel = async () => {
+  const XLSX = await import('xlsx')
+  const rows = filteredApplicants.value.map((a) => ({
+    '지원자명': a.name || '-',
+    '이메일': a.email || '-',
+    '공고': a.job || '-',
+    '진행 상태': a.status || '-',
+    '다음 일정': a.nextSchedule || '-',
+    '지원일': a.appliedDate || '-'
+  }))
+
+  if (rows.length === 0) {
+    rows.push({ '지원자명': '', '이메일': '', '공고': '', '진행 상태': '', '다음 일정': '', '지원일': '' })
+  }
+
+  const ws = XLSX.utils.json_to_sheet(rows)
+  ws['!cols'] = [
+    { wch: 15 }, { wch: 30 }, { wch: 25 },
+    { wch: 12 }, { wch: 18 }, { wch: 14 }
+  ]
+
+  if (rows.length === 1 && !rows[0]['지원자명']) {
+    const range = XLSX.utils.decode_range(ws['!ref'])
+    range.e.r = 0
+    ws['!ref'] = XLSX.utils.encode_range(range)
+  }
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '지원자 목록')
+  XLSX.writeFile(wb, getDefaultExportFilename())
+}
+
 const exportToExcel = async () => {
   if (isExporting.value) return
 
@@ -287,8 +319,12 @@ const exportToExcel = async () => {
 
     const filename = getFilenameFromContentDisposition(response?.headers?.['content-disposition']) || getDefaultExportFilename()
     triggerDownload(blob, filename)
-  } catch (error) {
-    alert(getExportErrorMessage(error))
+  } catch {
+    try {
+      await generateClientExcel()
+    } catch {
+      alert(getExportErrorMessage(null))
+    }
   } finally {
     isExporting.value = false
   }
