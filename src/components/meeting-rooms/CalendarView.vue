@@ -3,10 +3,11 @@ import { computed, reactive, watch } from 'vue'
 
 const props = defineProps({
   rooms: { type: Array, required: true },
-  bookings: { type: Array, required: true }
+  bookings: { type: Array, required: true },
+  selectedDate: { type: String, default: '' }
 })
 
-const emit = defineEmits(['dateClick', 'bookingClick', 'roomChange'])
+const emit = defineEmits(['dateClick', 'bookingClick', 'roomChange', 'dateChange'])
 
 const labels = {
   allRooms: '\uC804\uCCB4 \uD68C\uC758\uC2E4',
@@ -28,11 +29,37 @@ const state = reactive({
   selectedRoom: 'all'
 })
 
+const parseDateOnly = (value) => {
+  const [year, month, day] = String(value || '').split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return new Date()
+  }
+
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+
+const formatDate = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 watch(
   () => state.selectedRoom,
   (value) => {
     emit('roomChange', value)
   }
+)
+
+watch(
+  () => props.selectedDate,
+  (value) => {
+    if (!value) return
+    const next = parseDateOnly(value)
+    state.currentMonth = new Date(next.getFullYear(), next.getMonth(), 1)
+  },
+  { immediate: true }
 )
 
 const monthStart = computed(() => new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth(), 1))
@@ -71,14 +98,27 @@ const getBookingsForDay = (day) => {
 const isSameDay = (a, b) => a.toDateString() === b.toDateString()
 const isSameMonth = (a, b) => a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()
 
+const syncParentDate = (monthDate) => {
+  const selected = props.selectedDate ? parseDateOnly(props.selectedDate) : new Date()
+  const lastDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate()
+  const next = new Date(monthDate.getFullYear(), monthDate.getMonth(), Math.min(selected.getDate(), lastDate))
+  emit('dateChange', formatDate(next))
+}
+
 const goPrevMonth = () => {
-  state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1)
+  const nextMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() - 1, 1)
+  state.currentMonth = nextMonth
+  syncParentDate(nextMonth)
 }
 const goNextMonth = () => {
-  state.currentMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 1)
+  const nextMonth = new Date(state.currentMonth.getFullYear(), state.currentMonth.getMonth() + 1, 1)
+  state.currentMonth = nextMonth
+  syncParentDate(nextMonth)
 }
 const goToday = () => {
-  state.currentMonth = new Date()
+  const nextMonth = new Date()
+  state.currentMonth = nextMonth
+  emit('dateChange', formatDate(nextMonth))
 }
 
 const formatTime = (date) => {

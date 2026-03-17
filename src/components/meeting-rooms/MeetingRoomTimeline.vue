@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   rooms: { type: Array, required: true },
@@ -8,7 +8,7 @@ const props = defineProps({
   selectedDate: { type: String, default: '' }
 })
 
-const emit = defineEmits(['timeSlotClick', 'bookingClick'])
+const emit = defineEmits(['timeSlotClick', 'timeRangeSelect', 'bookingClick'])
 
 const isSameDate = (a, b) =>
   a.getFullYear() === b.getFullYear() &&
@@ -25,6 +25,9 @@ const isPastSlot = (hour) => {
   target.setHours(hour, 0, 0, 0)
   return target < new Date()
 }
+
+const canSelectSlot = (roomId, hour) =>
+  !isPastSlot(hour) && getBookingsForRoomAndHour(roomId, hour).length === 0
 
 const rangesOverlap = (targetStart, targetEnd, slotStart, slotEnd) =>
   targetStart < slotEnd && slotStart < targetEnd
@@ -62,6 +65,89 @@ const getSlotFillStyle = (roomId, hour) => {
   return {
     backgroundColor: `${color}12`
   }
+}
+
+const dragSelection = ref(null)
+
+const clearDragSelection = () => {
+  dragSelection.value = null
+}
+
+const canSelectRange = (roomId, startHour, endHour) => {
+  const rangeStart = Math.min(startHour, endHour)
+  const rangeEnd = Math.max(startHour, endHour)
+
+  for (let hour = rangeStart; hour <= rangeEnd; hour += 1) {
+    if (!canSelectSlot(roomId, hour)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+const startSlotSelection = (roomId, hour) => {
+  if (!canSelectSlot(roomId, hour)) {
+    return
+  }
+
+  dragSelection.value = {
+    roomId,
+    startHour: hour,
+    endHour: hour
+  }
+}
+
+const updateSlotSelection = (roomId, hour) => {
+  if (!dragSelection.value || dragSelection.value.roomId !== roomId) {
+    return
+  }
+
+  if (!canSelectRange(roomId, dragSelection.value.startHour, hour)) {
+    return
+  }
+
+  dragSelection.value = {
+    ...dragSelection.value,
+    endHour: hour
+  }
+}
+
+const finalizeSlotSelection = () => {
+  if (!dragSelection.value) {
+    return
+  }
+
+  const { roomId, startHour, endHour } = dragSelection.value
+  const rangeStart = Math.min(startHour, endHour)
+  const rangeEnd = Math.max(startHour, endHour) + 1
+
+  clearDragSelection()
+  emit('timeRangeSelect', roomId, rangeStart, rangeEnd)
+}
+
+const isDragSelected = (roomId, hour) => {
+  if (!dragSelection.value || dragSelection.value.roomId !== roomId) {
+    return false
+  }
+
+  const rangeStart = Math.min(dragSelection.value.startHour, dragSelection.value.endHour)
+  const rangeEnd = Math.max(dragSelection.value.startHour, dragSelection.value.endHour)
+  return hour >= rangeStart && hour <= rangeEnd
+}
+
+const getSlotClasses = (roomId, hour) => {
+  if (isDragSelected(roomId, hour)) {
+    return 'cursor-pointer bg-emerald-100/90 ring-2 ring-inset ring-emerald-300'
+  }
+
+  if (getBookingsForRoomAndHour(roomId, hour).length === 0) {
+    return isPastSlot(hour)
+      ? 'cursor-not-allowed bg-slate-100/70'
+      : 'cursor-pointer hover:bg-emerald-50/50'
+  }
+
+  return 'bg-slate-50/40'
 }
 
 const calculateBookingWidth = (booking) => {
@@ -109,6 +195,16 @@ const lastHourLabel = computed(() => {
 const trailingSpacerStyle = computed(() => ({
   width: props.hours.length ? `${100 / props.hours.length}%` : '0%'
 }))
+
+watch(() => props.selectedDate, clearDragSelection)
+
+onMounted(() => {
+  document.addEventListener('mouseup', finalizeSlotSelection)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mouseup', finalizeSlotSelection)
+})
 </script>
 
 <template>
@@ -167,11 +263,10 @@ const trailingSpacerStyle = computed(() => ({
                 v-for="hour in hours"
                 :key="hour"
                 class="flex-1 border-r last:border-r-0 relative min-h-[80px] z-0"
-                :class="getBookingsForRoomAndHour(room.id, hour).length === 0
-                  ? (isPastSlot(hour) ? 'cursor-not-allowed bg-slate-100/70' : 'cursor-pointer hover:bg-emerald-50/50')
-                  : 'bg-slate-50/40'"
+                :class="getSlotClasses(room.id, hour)"
                 :style="getSlotFillStyle(room.id, hour)"
-                @click="getBookingsForRoomAndHour(room.id, hour).length === 0 && !isPastSlot(hour) && emit('timeSlotClick', room.id, hour)"
+                @mousedown.prevent="startSlotSelection(room.id, hour)"
+                @mouseenter="updateSlotSelection(room.id, hour)"
               />
               <div class="absolute inset-0 z-10 pointer-events-none">
                 <div
