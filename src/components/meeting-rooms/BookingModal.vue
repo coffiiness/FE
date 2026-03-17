@@ -7,7 +7,8 @@ const props = defineProps({
   open: { type: Boolean, required: true },
   room: { type: Object, default: null },
   selectedDate: { type: Date, default: null },
-  selectedHour: { type: Number, default: null }
+  selectedHour: { type: Number, default: null },
+  selectedEndHour: { type: Number, default: null }
 })
 
 const emit = defineEmits(['close', 'confirm'])
@@ -42,7 +43,7 @@ const isPastDateTime = (dateValue, timeValue) => {
 
 const getInitialBookingHour = (baseDate, selectedHour) => {
   if (selectedHour !== null && selectedHour !== undefined) {
-    return Math.max(0, Math.min(22, selectedHour))
+    return Math.max(8, Math.min(20, selectedHour))
   }
 
   const now = new Date()
@@ -57,6 +58,14 @@ const getInitialBookingHour = (baseDate, selectedHour) => {
 
   const nextHour = now.getMinutes() > 0 || now.getSeconds() > 0 ? now.getHours() + 1 : now.getHours()
   return Math.max(9, Math.min(20, nextHour))
+}
+
+const getInitialBookingEndHour = (startHour, selectedEndHour) => {
+  if (selectedEndHour !== null && selectedEndHour !== undefined) {
+    return Math.max(startHour + 1, Math.min(21, selectedEndHour))
+  }
+
+  return Math.min(startHour + 1, 21)
 }
 
 const groupedMembers = computed(() => {
@@ -225,11 +234,12 @@ watch(
     if (!open) return
     const baseDate = props.selectedDate || new Date()
     const defaultHour = getInitialBookingHour(baseDate, props.selectedHour)
+    const defaultEndHour = getInitialBookingEndHour(defaultHour, props.selectedEndHour)
     state.date = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`
     state.startTime = `${String(defaultHour).padStart(2, '0')}:00`
-    state.endTime = `${String(defaultHour + 1).padStart(2, '0')}:00`
+    state.endTime = `${String(defaultEndHour).padStart(2, '0')}:00`
     const startParts = to12HourParts(defaultHour)
-    const endParts = to12HourParts(defaultHour + 1)
+    const endParts = to12HourParts(defaultEndHour)
     startMeridiem.value = startParts.period
     startHour12.value = startParts.hour12
     endMeridiem.value = endParts.period

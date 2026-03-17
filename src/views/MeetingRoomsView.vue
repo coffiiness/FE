@@ -70,6 +70,7 @@ const selectedRoom = ref(null)
 const selectedBooking = ref(null)
 const selectedDate = ref(null)
 const selectedHour = ref(null)
+const selectedEndHour = ref(null)
 const selectedListDate = ref('')
 const calendarRoomFilter = ref('all')
 const reservationTitleMap = ref({})
@@ -766,6 +767,19 @@ const handleTimeSlotClick = (roomId, hour) => {
   selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
   selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = hour
+  selectedEndHour.value = hour + 1
+  bookingModalOpen.value = true
+}
+
+const handleTimeRangeSelect = (roomId, startHour, endHour) => {
+  if (isPastReservationSlot(dateValue.value, startHour)) {
+    openErrorModal('예약 불가', '이미 지난 시간은 예약할 수 없습니다.')
+    return
+  }
+  selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
+  selectedDate.value = parseDateOnly(dateValue.value)
+  selectedHour.value = startHour
+  selectedEndHour.value = endHour
   bookingModalOpen.value = true
 }
 
@@ -786,6 +800,7 @@ const handleBookRoomClick = (room) => {
   selectedRoom.value = room
   selectedDate.value = parseDateOnly(dateValue.value)
   selectedHour.value = null
+  selectedEndHour.value = null
   roomDetailOpen.value = false
 
   setTimeout(() => {
@@ -830,6 +845,8 @@ const handleBookingConfirm = async (booking) => {
       endTime: new Date(saved.endDatetime)
     })
     bookingModalOpen.value = false
+    selectedHour.value = null
+    selectedEndHour.value = null
     successModalOpen.value = true
   } catch (error) {
     const detail = toReservationErrorMessage(error)
@@ -1023,8 +1040,9 @@ const openCreateRoom = () => {
         :selectedDate="dateValue"
           :hours="hours"
           :dateValue="dateValue"
-          :handlers="{
+        :handlers="{
           handleTimeSlotClick,
+          handleTimeRangeSelect,
           handleBookingClick,
           handleRoomClick,
           handleBookRoomClick,
@@ -1043,7 +1061,8 @@ const openCreateRoom = () => {
         :room="selectedRoom"
         :selectedDate="selectedDate"
         :selectedHour="selectedHour"
-        @close="bookingModalOpen = false"
+        :selectedEndHour="selectedEndHour"
+        @close="bookingModalOpen = false; selectedHour = null; selectedEndHour = null"
         @confirm="handleBookingConfirm"
     />
 
