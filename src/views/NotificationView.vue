@@ -5,6 +5,7 @@ import {
   buildNotificationFallbackRoute,
   formatNotificationDateTime,
   formatNotificationTimeAgo,
+  getNotificationCategoryLabel,
   getNotificationVisualType,
   NOTIFICATION_FILTERS,
   useNotificationStore
@@ -20,7 +21,7 @@ const route = useRoute()
 const router = useRouter()
 const store = useNotificationStore()
 const scheduleStore = useScheduleStore()
-const { notifications, loadingList, activeFilter, hasNext, isMarkingAllRead, isRemovingAll, unreadCount } = storeToRefs(store)
+const { notifications, filteredNotifications, filteredUnreadCount, unreadCountsByCategory, loadingList, activeFilter, hasNext, isMarkingAllRead, isRemovingAll } = storeToRefs(store)
 const pageError = ref('')
 const loadingMore = ref(false)
 const showScheduleModal = ref(false)
@@ -45,6 +46,12 @@ const getNotificationIconClass = (item) => {
   if (visualType === 'interview') {
     return 'bg-emerald-50 text-emerald-600'
   }
+  if (visualType === 'schedule') {
+    return 'bg-sky-50 text-sky-600'
+  }
+  if (visualType === 'meeting-room') {
+    return 'bg-violet-50 text-violet-600'
+  }
   if (visualType === 'kanban') {
     return 'bg-indigo-50 text-indigo-600'
   }
@@ -53,21 +60,33 @@ const getNotificationIconClass = (item) => {
 
 const tabToFilterMap = {
   all: 'ALL',
-  announcement: 'ANNOUNCEMENT',
   interview: 'INTERVIEW',
-  system: 'SYSTEM'
+  schedule: 'SCHEDULE',
+  announcement: 'ANNOUNCEMENT',
+  meetingRoom: 'MEETING_ROOM'
 }
 
 const filterToTabMap = {
   ALL: 'all',
-  ANNOUNCEMENT: 'announcement',
   INTERVIEW: 'interview',
-  SYSTEM: 'system'
+  SCHEDULE: 'schedule',
+  ANNOUNCEMENT: 'announcement',
+  MEETING_ROOM: 'meetingRoom'
 }
 
 const selectedFilter = computed(() => tabToFilterMap[route.query.tab] || 'ALL')
 const cancelledScheduleModalTitle = computed(() => '일정이 취소되었습니다.')
 const cancelledScheduleModalMessage = computed(() => '')
+const selectedFilterLabel = computed(() => {
+  return NOTIFICATION_FILTERS.find((filter) => filter.value === activeFilter.value)?.label || '전체'
+})
+const emptyStateMessage = computed(() => {
+  if (activeFilter.value === 'INTERVIEW') return '면접 알림이 없습니다.'
+  if (activeFilter.value === 'SCHEDULE') return '일정 알림이 없습니다.'
+  if (activeFilter.value === 'ANNOUNCEMENT') return '공지 알림이 없습니다.'
+  if (activeFilter.value === 'MEETING_ROOM') return '회의실 알림이 없습니다.'
+  return '표시할 알림이 없습니다.'
+})
 
 const syncFromRoute = async () => {
   try {
@@ -117,19 +136,19 @@ const getNotificationCardClass = (item) => {
   if (visualType === 'interview') {
     return 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-300'
   }
+  if (visualType === 'schedule') {
+    return 'border-sky-200 bg-sky-50/70 hover:border-sky-300'
+  }
+  if (visualType === 'meeting-room') {
+    return 'border-violet-200 bg-violet-50/70 hover:border-violet-300'
+  }
   if (visualType === 'kanban') {
     return 'border-indigo-200 bg-indigo-50/70 hover:border-indigo-300'
   }
   return 'border-sky-200 bg-sky-50/70 hover:border-sky-300'
 }
 
-const getNotificationTypeLabel = (item) => {
-  const visualType = getNotificationVisualType(item)
-  if (visualType === 'announcement') return '공지'
-  if (visualType === 'interview') return '면접'
-  if (visualType === 'kanban') return '지원자'
-  return '시스템'
-}
+const getNotificationTypeLabel = (item) => getNotificationCategoryLabel(item)
 
 const getNotificationTypePillClass = (item) => {
   const visualType = getNotificationVisualType(item)
@@ -138,6 +157,12 @@ const getNotificationTypePillClass = (item) => {
   }
   if (visualType === 'interview') {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  }
+  if (visualType === 'schedule') {
+    return 'border-sky-200 bg-sky-50 text-sky-700'
+  }
+  if (visualType === 'meeting-room') {
+    return 'border-violet-200 bg-violet-50 text-violet-700'
   }
   if (visualType === 'kanban') {
     return 'border-indigo-200 bg-indigo-50 text-indigo-700'
@@ -257,20 +282,31 @@ onBeforeUnmount(() => {
                 v-for="filter in NOTIFICATION_FILTERS"
                 :key="filter.value"
                 @click="setFilter(filter.value)"
-                class="rounded-full border px-4 py-2 text-sm font-semibold transition-colors"
+                class="rounded-full border px-4 py-2 text-sm font-semibold transition-all"
                 :class="
                   activeFilter === filter.value
-                    ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                    ? 'border-slate-900 bg-slate-900 text-white shadow-sm ring-2 ring-slate-900/10'
+                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-800'
                 "
               >
-                {{ filter.label }}
+                <span>{{ filter.label }}</span>
+                <span
+                  v-if="unreadCountsByCategory[filter.value] > 0"
+                  class="inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-extrabold leading-none"
+                  :class="
+                    activeFilter === filter.value
+                      ? 'bg-white/20 text-white'
+                      : 'bg-slate-200 text-slate-700'
+                  "
+                >
+                  {{ unreadCountsByCategory[filter.value] }}
+                </span>
               </button>
               <span class="inline-flex items-center rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">
-                읽지 않음 {{ unreadCount }}건
+                {{ selectedFilterLabel }} 미읽음 {{ filteredUnreadCount }}건
               </span>
               <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-bold text-slate-500">
-                목록 {{ notifications.length }}건
+                목록 {{ filteredNotifications.length }}건
               </span>
           </div>
 
@@ -302,13 +338,13 @@ onBeforeUnmount(() => {
           알림을 불러오는 중입니다.
         </div>
 
-        <div v-else-if="notifications.length === 0" class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-20 text-center">
-          <p class="text-sm font-medium text-slate-400">표시할 알림이 없습니다.</p>
-        </div>
-
         <div v-else class="space-y-3">
+          <div v-if="filteredNotifications.length === 0" class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 px-6 py-20 text-center">
+            <p class="text-sm font-medium text-slate-400">{{ emptyStateMessage }}</p>
+          </div>
+
           <article
-            v-for="item in notifications"
+            v-for="item in filteredNotifications"
             :key="item.id"
             class="group relative flex cursor-pointer gap-4 rounded-[24px] border p-4 transition-all md:p-5"
             :class="getNotificationCardClass(item)"
@@ -338,6 +374,12 @@ onBeforeUnmount(() => {
               </svg>
               <svg v-else-if="getNotificationVisualType(item) === 'interview'" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <svg v-else-if="getNotificationVisualType(item) === 'schedule'" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <svg v-else-if="getNotificationVisualType(item) === 'meeting-room'" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-4l-3 3-3-3H5a2 2 0 01-2-2V7z" />
               </svg>
               <svg v-else-if="getNotificationVisualType(item) === 'kanban'" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h7v12H4V6zm9 0h7v5h-7V6zm0 7h7v5h-7v-5z" />

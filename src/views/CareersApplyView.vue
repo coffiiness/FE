@@ -1,16 +1,20 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { careerApi } from '@/api/career'
 import applicantClient from '@/api/applicantClient'
 import { useApplicantAuth } from '@/composables/useApplicantAuth'
+import { useModal } from '@/composables/useModal'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, applicant, logout } = useApplicantAuth()
+const { modal, openModal, onModalConfirm, onModalCancel } = useModal()
 
 const companySlug = computed(() => route.params.companySlug)
 const jobId = computed(() => route.params.jobId)
+const applyRoutePath = computed(() => `/careers/${companySlug.value}/${jobId.value}/apply`)
 
 const companyName = ref('')
 const applyForm = ref(null)
@@ -18,6 +22,7 @@ const loading = ref(true)
 const submitting = ref(false)
 const errorMsg = ref('')
 const successMsg = ref('')
+const authPromptShown = ref(false)
 
 const formData = ref({
   name: '',
@@ -192,7 +197,36 @@ const uploadApplicationFiles = async (applicationId, applicantId) => {
   }
 }
 
+const promptLoginBeforeApply = () => {
+  if (authPromptShown.value || isAuthenticated.value) return
+
+  authPromptShown.value = true
+  loading.value = false
+  openModal({
+    title: '로그인이 필요합니다',
+    message: '지원서를 작성하려면 먼저 로그인해주세요.',
+    type: 'warning',
+    showCancel: true,
+    confirmText: '로그인하기',
+    cancelText: '공고 목록으로',
+    onConfirm: () => {
+      router.push({
+        path: `/careers/${companySlug.value}/login`,
+        query: { redirect: applyRoutePath.value }
+      })
+    },
+    onCancel: () => {
+      router.push(`/careers/${companySlug.value}`)
+    }
+  })
+}
+
 onMounted(async () => {
+  if (!isAuthenticated.value) {
+    promptLoginBeforeApply()
+    return
+  }
+
   try {
     const companiesRes = await careerApi.getCompanies()
     const companies = companiesRes.data?.data || []
@@ -222,6 +256,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+})
+
+watch(isAuthenticated, (nextValue) => {
+  if (!nextValue) return
+  authPromptShown.value = false
 })
 
 const company = computed(() => ({
@@ -270,7 +309,7 @@ const handleSubmit = async () => {
   successMsg.value = ''
 
   if (!isAuthenticated.value) {
-    router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })
+    promptLoginBeforeApply()
     return
   }
 
@@ -401,16 +440,6 @@ const getValueLength = (value) => (value ? String(value).length : 0)
     </main>
 
     <main v-else class="max-w-2xl mx-auto px-6 py-8">
-      <div v-if="!isAuthenticated" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 flex items-start justify-between gap-4">
-        <div class="text-sm">지원서를 제출하려면 먼저 로그인해 주세요.</div>
-        <button
-          @click="router.push({ path: `/careers/${companySlug.value}/login`, query: { redirect: route.fullPath } })"
-          class="shrink-0 px-3 py-1.5 text-xs font-semibold text-amber-900 border border-amber-300 rounded-md hover:bg-amber-100 transition-colors"
-        >
-          로그인
-        </button>
-      </div>
-
       <div v-if="successMsg" class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800 text-sm font-medium">{{ successMsg }}</div>
 
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -576,5 +605,17 @@ const getValueLength = (value) => (value ? String(value).length : 0)
       </div>
     </main>
   </div>
+
+  <ConfirmModal
+    :show="modal.show"
+    :title="modal.title"
+    :message="modal.message"
+    :type="modal.type"
+    :show-cancel="modal.showCancel"
+    :confirm-text="modal.confirmText"
+    :cancel-text="modal.cancelText"
+    @confirm="onModalConfirm"
+    @cancel="onModalCancel"
+  />
 </template>
 

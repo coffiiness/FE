@@ -4,10 +4,38 @@ import { notificationApi } from '@/api/notification'
 
 export const NOTIFICATION_FILTERS = [
   { label: '전체', value: 'ALL' },
-  { label: '공지사항', value: 'ANNOUNCEMENT' },
   { label: '면접', value: 'INTERVIEW' },
-  { label: '시스템', value: 'SYSTEM' }
+  { label: '일정', value: 'SCHEDULE' },
+  { label: '공지', value: 'ANNOUNCEMENT' },
+  { label: '회의실', value: 'MEETING_ROOM' }
 ]
+
+const NOTIFICATION_TYPE_TO_CATEGORY = {
+  INTERVIEW_REQUESTED: 'INTERVIEW',
+  INTERVIEW_UPDATED: 'INTERVIEW',
+  INTERVIEW_CANCELLED: 'INTERVIEW',
+  SCHEDULE_INVITED: 'SCHEDULE',
+  SCHEDULE_UPDATED: 'SCHEDULE',
+  SCHEDULE_CANCELLED: 'SCHEDULE',
+  ANNOUNCEMENT_CREATED: 'ANNOUNCEMENT',
+  MEETING_ROOM_RESERVED: 'MEETING_ROOM'
+}
+
+const NOTIFICATION_CATEGORY_LABELS = {
+  ALL: '전체',
+  INTERVIEW: '면접',
+  SCHEDULE: '일정',
+  ANNOUNCEMENT: '공지',
+  MEETING_ROOM: '회의실'
+}
+
+const createCategoryCountMap = () => ({
+  ALL: 0,
+  INTERVIEW: 0,
+  SCHEDULE: 0,
+  ANNOUNCEMENT: 0,
+  MEETING_ROOM: 0
+})
 
 const DEFAULT_DROPDOWN_SIZE = 5
 const DEFAULT_PAGE_SIZE = 20
@@ -22,17 +50,9 @@ const toDate = (value) => {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-const getFilterValue = (item) => {
-  const targetType = String(item?.targetType || '').toUpperCase()
+const getCategoryValue = (item) => {
   const type = String(item?.type || '').toUpperCase()
-
-  if (targetType === 'ANNOUNCEMENT' || type.startsWith('ANNOUNCEMENT')) {
-    return 'ANNOUNCEMENT'
-  }
-  if (targetType.startsWith('INTERVIEW') || type.startsWith('INTERVIEW')) {
-    return 'INTERVIEW'
-  }
-  return 'SYSTEM'
+  return NOTIFICATION_TYPE_TO_CATEGORY[type] || null
 }
 
 export const formatNotificationTimeAgo = (value) => {
@@ -70,12 +90,19 @@ export const buildNotificationFallbackRoute = (item) => {
 
 export const getNotificationVisualType = (item) => {
   const type = String(item?.type || '').toUpperCase()
-  const filterType = String(item?.filterType || '').toUpperCase()
+  const category = String(item?.uiCategory || '').toUpperCase()
 
-  if (filterType === 'ANNOUNCEMENT') return 'announcement'
+  if (category === 'ANNOUNCEMENT') return 'announcement'
+  if (category === 'INTERVIEW') return 'interview'
+  if (category === 'SCHEDULE') return 'schedule'
+  if (category === 'MEETING_ROOM') return 'meeting-room'
   if (type === 'APPLICATION_PROCESS_CHANGED') return 'kanban'
-  if (filterType === 'INTERVIEW') return 'interview'
   return 'system'
+}
+
+export const getNotificationCategoryLabel = (item) => {
+  const category = String(item?.uiCategory || '').toUpperCase()
+  return NOTIFICATION_CATEGORY_LABELS[category] || '기타'
 }
 
 const normalizeNotification = (item = {}) => ({
@@ -89,7 +116,7 @@ const normalizeNotification = (item = {}) => ({
   isRead: Boolean(item.isRead),
   readAt: item.readAt || null,
   createdAt: item.createdAt || null,
-  filterType: getFilterValue(item)
+  uiCategory: getCategoryValue(item)
 })
 
 const extractContents = (response) => {
@@ -158,6 +185,29 @@ export const useNotificationStore = defineStore('notification', () => {
   let toastTimer = null
 
   const unreadCount = computed(() => unreadCountValue.value)
+  const filteredNotifications = computed(() => {
+    if (activeFilter.value === 'ALL') {
+      return notifications.value
+    }
+
+    return notifications.value.filter((item) => item.uiCategory === activeFilter.value)
+  })
+  const unreadCountsByCategory = computed(() => {
+    const counts = createCategoryCountMap()
+
+    notifications.value.forEach((item) => {
+      if (item.isRead) return
+
+      counts.ALL += 1
+
+      if (item.uiCategory && counts[item.uiCategory] != null) {
+        counts[item.uiCategory] += 1
+      }
+    })
+
+    return counts
+  })
+  const filteredUnreadCount = computed(() => unreadCountsByCategory.value[activeFilter.value] ?? 0)
 
   const fetchUnreadCount = async () => {
     const response = await notificationApi.getUnreadCount()
@@ -191,8 +241,7 @@ export const useNotificationStore = defineStore('notification', () => {
     try {
       const response = await notificationApi.getList({
         page,
-        size,
-        ...(filter !== 'ALL' ? { type: filter } : {})
+        size
       })
       const { contents, hasNext: next } = extractContents(response)
 
@@ -508,6 +557,9 @@ export const useNotificationStore = defineStore('notification', () => {
 
   return {
     notifications,
+    filteredNotifications,
+    unreadCountsByCategory,
+    filteredUnreadCount,
     dropdownNotifications,
     acceptedSchedules,
     unreadCount,
