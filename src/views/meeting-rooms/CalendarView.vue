@@ -271,6 +271,7 @@ const handleMonthDateClick = (date) => {
         :selectedDate="selectedDate"
         @dateClick="handleMonthDateClick"
         @bookingClick="handlers.handleBookingClick"
+        @timeRangeSelect="handlers.handleTimeRangeSelect"
       />
 
       <MeetingRoomTimeline

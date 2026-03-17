@@ -771,16 +771,36 @@ const handleTimeSlotClick = (roomId, hour) => {
   bookingModalOpen.value = true
 }
 
-const handleTimeRangeSelect = (roomId, startHour, endHour) => {
-  if (isPastReservationSlot(dateValue.value, startHour)) {
-    openErrorModal('예약 불가', '이미 지난 시간은 예약할 수 없습니다.')
-    return
-  }
-  selectedRoom.value = rooms.value.find((r) => r.id === roomId) || null
-  selectedDate.value = parseDateOnly(dateValue.value)
+const openBookingModal = ({ room = null, date = dateValue.value, startHour = null, endHour = null }) => {
+  selectedRoom.value = room
+  selectedDate.value = parseDateOnly(date)
   selectedHour.value = startHour
   selectedEndHour.value = endHour
   bookingModalOpen.value = true
+}
+
+const handleTimeRangeSelect = (roomIdOrPayload, startHour, endHour) => {
+  const rangePayload =
+    typeof roomIdOrPayload === 'object' && roomIdOrPayload !== null
+      ? roomIdOrPayload
+      : {
+          roomId: roomIdOrPayload,
+          date: dateValue.value,
+          startHour,
+          endHour
+        }
+
+  if (isPastReservationSlot(rangePayload.date, rangePayload.startHour)) {
+    openErrorModal('예약 불가', '이미 지난 시간은 예약할 수 없습니다.')
+    return
+  }
+
+  openBookingModal({
+    room: rooms.value.find((r) => r.id === rangePayload.roomId) || null,
+    date: rangePayload.date,
+    startHour: rangePayload.startHour,
+    endHour: rangePayload.endHour
+  })
 }
 
 const handleBookingClick = (booking) => {
@@ -798,24 +818,48 @@ const handleRoomClick = (room) => {
 
 const handleBookRoomClick = (room) => {
   selectedRoom.value = room
-  selectedDate.value = parseDateOnly(dateValue.value)
-  selectedHour.value = null
-  selectedEndHour.value = null
   roomDetailOpen.value = false
 
   setTimeout(() => {
-    bookingModalOpen.value = true
+    openBookingModal({
+      room,
+      date: dateValue.value
+    })
   }, 0)
 }
 
+const handleAddBookingFromList = () => {
+  const preferredRoom =
+    rooms.value.find((room) => room.id === calendarRoomFilter.value) ||
+    (selectedDateEvents.value.length === 1
+      ? rooms.value.find((room) => room.id === selectedDateEvents.value[0].roomId)
+      : null)
+
+  selectedListDate.value = ''
+  detailModalOpen.value = false
+  openBookingModal({
+    room: preferredRoom,
+    date: dateValue.value
+  })
+}
+
 const handleBookingConfirm = async (booking) => {
-  if (!selectedRoom.value?.serverId) return
+  const targetRoom =
+    rooms.value.find((room) => room.id === booking.roomId) ||
+    selectedRoom.value
+
+  if (!targetRoom?.serverId) {
+    openErrorModal('예약 실패', '예약할 회의실을 선택해주세요.')
+    return
+  }
+
+  selectedRoom.value = targetRoom
   try {
     const normalizedAttendees = removeOrganizerFromAttendees(
       booking.attendees || [],
       booking.organizer || getCurrentUser()?.name || ''
     )
-    const response = await meetingRoomApi.reserve(selectedRoom.value.serverId, {
+    const response = await meetingRoomApi.reserve(targetRoom.serverId, {
       title: booking.title || '회의실 예약',
       description: booking.description || '',
       startDatetime: toLocalDateTime(booking.startTime),
@@ -830,8 +874,8 @@ const handleBookingConfirm = async (booking) => {
     bookings.value.push({
       id: `b-${saved.id}`,
       serverId: saved.id,
-      roomId: selectedRoom.value.id,
-      roomServerId: selectedRoom.value.serverId,
+      roomId: targetRoom.id,
+      roomServerId: targetRoom.serverId,
       userId: getCurrentUserId(),
       interviewScheduleId: null,
       title: booking.title || '회의실 예약',
@@ -1059,6 +1103,7 @@ const openCreateRoom = () => {
     <BookingModal
         :open="bookingModalOpen"
         :room="selectedRoom"
+        :rooms="rooms"
         :selectedDate="selectedDate"
         :selectedHour="selectedHour"
         :selectedEndHour="selectedEndHour"
@@ -1078,8 +1123,9 @@ const openCreateRoom = () => {
       :isOpen="Boolean(selectedListDate)"
       :date="selectedListDate"
       :events="selectedDateEvents"
-      :showAddButton="false"
+      :showAddButton="true"
       @close="selectedListDate = ''"
+      @add="handleAddBookingFromList"
       @edit="handleBookingClick"
       @delete="handleBookingDelete"
     />
