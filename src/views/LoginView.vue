@@ -55,25 +55,11 @@ const handleLogin = async () => {
 
     <header class="login-shell__header">
       <div class="login-shell__brand">
-        <svg class="login-shell__brand-mark" viewBox="0 0 128 128" aria-hidden="true">
-          <path
-            d="M108 20H62C35 20 16 39 16 66c0 19 9 34 23 42V92c-9-6-15-16-15-31 0-22 15-33 40-33h35z"
-            fill="url(#calfit-mark-gradient)"
-          />
-          <path
-            d="M54 44h46l-10 14H63v18h27l-10 14H63v26l-15-2V58H37z"
-            fill="url(#calfit-mark-gradient)"
-          />
-          <defs>
-            <linearGradient id="calfit-mark-gradient" x1="18" y1="18" x2="112" y2="116" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#2dd4bf" />
-              <stop offset="1" stop-color="#0f766e" />
-            </linearGradient>
-          </defs>
-        </svg>
-        <div class="login-shell__brand-wordmark">
-          <span class="login-shell__brand-cal">Cal</span><span class="login-shell__brand-fit">Fit</span>
-        </div>
+        <img
+          class="login-shell__brand-image"
+          src="/headerLogo.PNG"
+          alt="Header logo"
+        />
       </div>
     </header>
 
@@ -243,36 +229,14 @@ const handleLogin = async () => {
 .login-shell__brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.38rem;
   padding: 0;
 }
 
-.login-shell__brand-mark {
-  width: 2.35rem;
-  height: 2.35rem;
-  flex-shrink: 0;
-}
-
-.login-shell__brand-wordmark {
-  font-size: 1.62rem;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.login-shell__brand-cal {
-  color: #2dd4bf;
-}
-
-.login-shell__brand-fit {
-  color: #f8fafc;
-  text-shadow:
-    1px 0 0 rgba(15, 23, 42, 0.44),
-    -1px 0 0 rgba(15, 23, 42, 0.44),
-    0 1px 0 rgba(15, 23, 42, 0.44),
-    0 -1px 0 rgba(15, 23, 42, 0.44),
-    0 2px 10px rgba(15, 23, 42, 0.18);
+.login-shell__brand-image {
+  display: block;
+  width: auto;
+  height: 2.5rem;
+  object-fit: contain;
 }
 
 .login-shell__content {
@@ -281,11 +245,11 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 5.5rem 1.5rem 3rem;
+  padding: 4.5rem 1.5rem 2.5rem;
 }
 
 .login-card {
-  width: min(100%, 42rem);
+  width: min(100%, 33.6rem);
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 1.75rem;
   background: rgba(255, 255, 255, 0.94);
@@ -294,7 +258,7 @@ const handleLogin = async () => {
 }
 
 .login-card__copy {
-  padding: 3.1rem 3.1rem 1.4rem;
+  padding: 2.45rem 2.45rem 1.1rem;
 }
 
 .login-card__eyebrow {
@@ -311,7 +275,7 @@ const handleLogin = async () => {
 
 .login-card__title {
   margin-top: 1.15rem;
-  font-size: clamp(2.1rem, 3.4vw, 3rem);
+  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
   line-height: 1.05;
   font-weight: 800;
   letter-spacing: -0.05em;
@@ -320,14 +284,14 @@ const handleLogin = async () => {
 
 .login-card__description {
   margin-top: 0.85rem;
-  max-width: 29rem;
-  font-size: 1rem;
-  line-height: 1.7;
+  max-width: 24rem;
+  font-size: 0.92rem;
+  line-height: 1.6;
   color: var(--login-muted);
 }
 
 .login-form {
-  padding: 0 3.1rem 2rem;
+  padding: 0 2.45rem 1.65rem;
 }
 
 .login-field {
@@ -335,26 +299,26 @@ const handleLogin = async () => {
 }
 
 .login-field + .login-field {
-  margin-top: 1.35rem;
+  margin-top: 1.1rem;
 }
 
 .login-field__label {
   display: block;
   margin-bottom: 0.65rem;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--login-text);
 }
 
 .login-field__input {
   width: 100%;
-  height: 3.9rem;
+  height: 3.2rem;
   padding: 0 1rem;
   border: 1px solid var(--login-border);
   border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.96);
   color: #0f172a;
-  font-size: 1.03rem;
+  font-size: 0.95rem;
   transition:
     border-color 160ms ease,
     box-shadow 160ms ease,
@@ -373,25 +337,25 @@ const handleLogin = async () => {
 }
 
 .login-form__error {
-  margin-top: 1.25rem;
-  padding: 0.95rem 1rem;
+  margin-top: 1rem;
+  padding: 0.8rem 0.9rem;
   border: 1px solid rgba(248, 113, 113, 0.18);
   border-radius: 0.95rem;
   background: #fff4f4;
   color: #c2410c;
-  font-size: 0.93rem;
+  font-size: 0.86rem;
   font-weight: 600;
 }
 
 .login-form__submit {
   width: 100%;
-  height: 3.95rem;
-  margin-top: 1.6rem;
+  height: 3.2rem;
+  margin-top: 1.3rem;
   border: 0;
   border-radius: 1rem;
   background: linear-gradient(180deg, rgba(20, 184, 166, 0.98), rgba(13, 148, 136, 0.98));
   color: #ffffff;
-  font-size: 1.15rem;
+  font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   box-shadow: 0 18px 40px rgba(13, 148, 136, 0.22);
@@ -429,13 +393,13 @@ const handleLogin = async () => {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 1.45rem 1.75rem 1.65rem;
+  padding: 1.2rem 1.4rem 1.35rem;
   border-top: 1px solid rgba(226, 232, 240, 0.8);
   border-bottom-left-radius: 1.75rem;
   border-bottom-right-radius: 1.75rem;
   background: rgba(248, 250, 255, 0.86);
   color: var(--login-muted);
-  font-size: 0.98rem;
+  font-size: 0.9rem;
 }
 
 .login-card__footer-link {
@@ -492,16 +456,11 @@ const handleLogin = async () => {
   }
 
   .login-shell__brand {
-    gap: 0.3rem;
+    max-width: 100%;
   }
 
-  .login-shell__brand-mark {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .login-shell__brand-wordmark {
-    font-size: 1.42rem;
+  .login-shell__brand-image {
+    height: 2.1rem;
   }
 
   .login-shell__content {
@@ -513,7 +472,7 @@ const handleLogin = async () => {
   }
 
   .login-card__copy {
-    padding: 2rem 1.4rem 1.1rem;
+    padding: 1.75rem 1.2rem 1rem;
   }
 
   .login-card__description {
@@ -521,12 +480,12 @@ const handleLogin = async () => {
   }
 
   .login-form {
-    padding: 0 1.4rem 1.4rem;
+    padding: 0 1.2rem 1.2rem;
   }
 
   .login-field__input,
   .login-form__submit {
-    height: 3.55rem;
+    height: 3.05rem;
   }
 
   .login-card__footer {

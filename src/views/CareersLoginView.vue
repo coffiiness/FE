@@ -59,7 +59,7 @@ const handleSubmit = async () => {
     </div>
 
     <header class="relative z-10">
-      <div class="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
+      <div class="mx-auto flex h-16 w-full max-w-4xl items-center justify-between px-6">
         <button type="button" class="text-left" @click="goToCareers">
           <span class="font-display text-2xl font-semibold tracking-[0.16em] text-slate-900">CAREERS</span>
         </button>
@@ -74,8 +74,8 @@ const handleSubmit = async () => {
       </div>
     </header>
 
-    <main class="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center px-6 pb-8 pt-2">
-      <section class="w-full max-w-lg">
+    <main class="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-4xl items-center justify-center px-6 pb-8 pt-2">
+      <section class="w-full max-w-[28rem]">
         <div class="auth-card">
           <div class="card-heading">
             <h1 class="font-display text-[1.5rem] font-semibold tracking-[-0.01em] text-slate-900 md:text-[1.7rem]">로그인</h1>
@@ -150,18 +150,18 @@ const handleSubmit = async () => {
   border-radius: 1.5rem;
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: rgba(255, 255, 255, 0.96);
-  padding: 1.5rem;
+  padding: 1.2rem;
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
 }
 
 .card-heading {
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-  padding-bottom: 0.9rem;
+  padding-bottom: 0.72rem;
 }
 
 .field-label {
   display: block;
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: #334155;
 }
@@ -171,8 +171,9 @@ const handleSubmit = async () => {
   border-radius: 0.9rem;
   border: 1px solid rgba(203, 213, 225, 0.9);
   background: #ffffff;
-  padding: 0.82rem 0.95rem;
+  padding: 0.7rem 0.82rem;
   color: #0f172a;
+  font-size: 0.93rem;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
@@ -191,8 +192,8 @@ const handleSubmit = async () => {
   border-radius: 1rem;
   border: 1px solid #fecdd3;
   background: #fff1f2;
-  padding: 0.9rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.75rem 0.85rem;
+  font-size: 0.82rem;
   color: #be123c;
 }
 
@@ -201,9 +202,9 @@ const handleSubmit = async () => {
   border: 0;
   border-radius: 9999px;
   background: #14b8a6;
-  padding: 0.82rem 1.1rem;
+  padding: 0.72rem 1rem;
   color: #f8fafc;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
   box-shadow: 0 10px 18px rgba(20, 184, 166, 0.18);
@@ -222,8 +223,8 @@ const handleSubmit = async () => {
   border-radius: 9999px;
   border: 1px solid rgba(226, 232, 240, 0.95);
   background: rgba(255, 255, 255, 0.95);
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #334155;
   transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
@@ -241,8 +242,8 @@ const handleSubmit = async () => {
   justify-content: space-between;
   gap: 1rem;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
-  padding-top: 1rem;
-  font-size: 0.875rem;
+  padding-top: 0.85rem;
+  font-size: 0.82rem;
   color: #475569;
 }
 

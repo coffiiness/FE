@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NotificationDropdown from '@/components/NotificationDropdown.vue'
 import NotificationToast from '@/components/NotificationToast.vue'
@@ -14,6 +14,7 @@ const router = useRouter()
 const sidebarOpen = ref(true)
 const openMenus = ref(['채용 관리', '회의실'])
 const sidebarQuery = ref('')
+const sidebarSearchInput = ref(null)
 
 const { user, logout } = useAuth()
 const {
@@ -28,6 +29,10 @@ const userRoleLabel = computed(() => {
   if (memberType.value === 'HR') return '인사담당자'
   if (memberType.value === 'INTERVIEWER') return '면접관'
   return '멤버'
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalSidebarSearchShortcut)
 })
 const workspaceLabel = computed(() => workspaceName.value || '워크스페이스')
 
@@ -52,6 +57,7 @@ onMounted(async () => {
   } catch (error) {
     console.error('알림 초기화 실패:', error)
   }
+  window.addEventListener('keydown', handleGlobalSidebarSearchShortcut)
 })
 
 const isNotificationOpen = ref(false)
@@ -79,15 +85,62 @@ const toggleNotification = async () => {
   }
 }
 
-const toggleSubMenu = (name) => {
+const isEditableTarget = (target) => {
+  if (!(target instanceof HTMLElement)) return false
+  const tagName = target.tagName
+  return (
+    target.isContentEditable ||
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT'
+  )
+}
+
+const focusSidebarSearch = async () => {
   if (!sidebarOpen.value) {
     sidebarOpen.value = true
-    if (!openMenus.value.includes(name)) openMenus.value.push(name)
+    await nextTick()
+  }
+
+  const input = sidebarSearchInput.value
+  if (!input) return
+  input.focus()
+  input.select()
+}
+
+const handleGlobalSidebarSearchShortcut = async (event) => {
+  if (event.defaultPrevented) return
+  if (event.isComposing) return
+  if (event.ctrlKey || event.metaKey || event.altKey) return
+
+  if (event.key === 'Escape') {
+    const input = sidebarSearchInput.value
+    if (document.activeElement === input) {
+      sidebarQuery.value = ''
+      input.blur()
+    }
     return
   }
-  openMenus.value.includes(name)
-      ? openMenus.value = openMenus.value.filter(i => i !== name)
-      : openMenus.value.push(name)
+
+  if (event.key.toLowerCase() !== 'f') return
+  if (isEditableTarget(event.target)) return
+
+  event.preventDefault()
+  await focusSidebarSearch()
+}
+
+const toggleSubMenu = (item) => {
+  if (!sidebarOpen.value) {
+    sidebarOpen.value = true
+    if (!openMenus.value.includes(item.name)) openMenus.value.push(item.name)
+    if (item.children?.[0]?.href) {
+      router.push(item.children[0].href)
+    }
+    return
+  }
+  openMenus.value.includes(item.name)
+      ? openMenus.value = openMenus.value.filter(i => i !== item.name)
+      : openMenus.value.push(item.name)
 }
 
 const navigation = [
@@ -241,33 +294,60 @@ watch(
     <aside
         :class="[
         'bg-brand-900 border-r border-brand-950 text-slate-100 transition-all duration-300 flex flex-col z-50 shrink-0',
-        sidebarOpen ? 'w-72' : 'w-20'
+        sidebarOpen ? 'w-64' : 'w-[4.5rem]'
       ]"
     >
-      <div class="px-4 pt-4 pb-2 border-b border-white/10 shrink-0">
-        <div class="flex items-center gap-3 min-w-0">
-          <div class="h-10 w-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center text-white text-sm font-semibold shrink-0">
+      <div class="relative border-b border-white/10 shrink-0" :class="sidebarOpen ? 'px-4 pt-4 pb-3' : 'px-3 pt-4 pb-3'">
+        <button
+          @click="sidebarOpen = !sidebarOpen"
+          class="absolute -right-3 top-6 z-10 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800"
+          :aria-label="sidebarOpen ? '사이드바 닫기' : '사이드바 열기'"
+        >
+          <svg
+            class="h-4 w-4 transition-transform duration-200"
+            :class="sidebarOpen ? '' : 'rotate-180'"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
+        <div class="flex min-w-0" :class="sidebarOpen ? 'items-center gap-3' : 'justify-center'">
+          <div
+            class="rounded-2xl border border-white/15 bg-white/10 flex items-center justify-center text-white font-semibold shrink-0"
+            :class="sidebarOpen ? 'h-11 w-11 text-sm' : 'h-12 w-12 text-base shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'"
+          >
             {{ userInitial }}
           </div>
           <div v-if="sidebarOpen" class="min-w-0 flex-1">
             <div class="flex items-center gap-2 min-w-0">
-              <p class="text-[15px] font-semibold text-white truncate">{{ workspaceLabel }}</p>
-              <span class="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[11px] font-medium text-brand-100">
+              <div class="group relative min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-white">{{ workspaceLabel }}</p>
+                <div class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-max max-w-56 rounded-lg border border-white/10 bg-slate-950/95 px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-lg shadow-slate-950/20 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                  {{ workspaceLabel }}
+                </div>
+              </div>
+              <span class="shrink-0 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-brand-100">
                 {{ userRoleLabel }}
               </span>
-              <svg class="w-4 h-4 text-brand-100/70 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 9l-7 7-7-7" />
-              </svg>
             </div>
-            <p class="mt-0.5 text-[12px] text-slate-300 truncate">{{ userName }}</p>
+            <div class="group relative mt-1">
+              <p class="truncate text-[12px] text-slate-300/90">{{ userName }}</p>
+              <div class="pointer-events-none absolute left-0 top-full z-20 mt-2 w-max max-w-56 rounded-lg border border-white/10 bg-slate-950/95 px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-lg shadow-slate-950/20 transition-all duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                {{ userName }}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div v-if="sidebarOpen" class="mt-3 relative">
+        <div v-if="sidebarOpen" class="mt-4 relative">
           <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-100/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="m21 21-4.35-4.35M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" />
           </svg>
           <input
+            ref="sidebarSearchInput"
             v-model="sidebarQuery"
             type="text"
             placeholder="메뉴 찾기"
@@ -277,12 +357,12 @@ watch(
         </div>
       </div>
 
-      <nav class="flex-1 px-3 pt-1 pb-3 space-y-1 overflow-y-auto custom-scrollbar">
+      <nav class="flex-1 px-3 pt-3 pb-3 space-y-1.5 overflow-y-auto custom-scrollbar">
         <template v-for="(item, index) in filteredNavigation" :key="item.section || item.name">
           <template v-if="item.section">
             <div
                 v-if="index !== 0"
-                class="px-2 py-3"
+                class="px-2 py-2"
                 :class="{ 'hidden': !sidebarOpen }"
             >
               <div class="border-t border-white/10"></div>
@@ -292,8 +372,12 @@ watch(
           <router-link
               v-else-if="!item.children"
               :to="item.href"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors duration-150 group relative border"
-              :class="isActive(item) ? 'bg-white/12 border-white/10 text-white' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'"
+              class="group relative flex items-center rounded-xl border transition-colors duration-150"
+              :title="sidebarOpen ? undefined : item.name"
+              :class="[
+                sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center px-0 py-3',
+                isActive(item) ? 'bg-white/12 border-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'
+              ]"
           >
             <svg v-if="item.icon === 'home'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -322,9 +406,13 @@ watch(
 
           <div v-else class="space-y-1">
             <button
-                @click="toggleSubMenu(item.name)"
-                class="flex items-center w-full gap-3 px-3 py-2.5 rounded-xl transition-colors duration-150 group border"
-                :class="isActive(item) ? 'bg-white/12 border-white/10 text-white' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'"
+                @click="toggleSubMenu(item)"
+                class="group flex w-full items-center rounded-xl border transition-colors duration-150"
+                :title="sidebarOpen ? undefined : item.name"
+                :class="[
+                  sidebarOpen ? 'gap-3 px-3 py-2.5' : 'justify-center px-0 py-3',
+                  isActive(item) ? 'bg-white/12 border-white/10 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'border-transparent text-slate-300/80 hover:bg-white/8 hover:border-white/10 hover:text-white'
+                ]"
             >
               <svg v-if="item.icon === 'users'" class="w-5 h-5 shrink-0" :class="isActive(item) ? 'text-brand-100' : 'text-white/60 group-hover:text-white'" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -349,7 +437,7 @@ watch(
               </svg>
             </button>
 
-            <div v-if="sidebarOpen && (openMenus.includes(item.name) || sidebarQuery.trim())" class="pl-11 space-y-1">
+            <div v-if="sidebarOpen && (openMenus.includes(item.name) || sidebarQuery.trim())" class="pl-11 space-y-1.5 pt-1">
               <router-link
                   v-for="child in item.children"
                   :key="child.href"
@@ -376,20 +464,6 @@ watch(
       <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-50 shrink-0">
 
         <div class="flex items-center gap-4">
-          <button @click="sidebarOpen = !sidebarOpen" class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-          </button>
-          <!-- Global Back Button -->
-          <button @click="route.path !== '/dashboard' ? router.back() : null" 
-                  class="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
-                  v-if="route.path !== '/dashboard'"
-          >
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
           <h2 class="text-lg font-bold text-slate-800 tracking-tight">{{ currentTitle }}</h2>
         </div>
 
