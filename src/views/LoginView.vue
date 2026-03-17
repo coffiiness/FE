@@ -66,7 +66,7 @@ const handleLogin = async () => {
     <main class="login-shell__content">
       <section class="login-card">
         <div class="login-card__copy">
-          <span class="login-card__eyebrow">Workspace sign in</span>
+          <span class="login-card__eyebrow">Frontend Deploy</span>
           <h1 class="login-card__title">계정에 로그인</h1>
           <p class="login-card__description">
             이메일과 비밀번호를 입력해 채용 운영 화면으로 돌아오세요.
