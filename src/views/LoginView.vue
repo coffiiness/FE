@@ -41,6 +41,12 @@ const handleLogin = async () => {
     loading.value = false
   }
 }
+
+const handleQuickLogin = async (nextEmail, nextPassword) => {
+  email.value = nextEmail
+  password.value = nextPassword
+  await handleLogin()
+}
 </script>
 
 <template>
@@ -116,6 +122,41 @@ const handleLogin = async () => {
             </span>
             <span v-else>로그인</span>
           </button>
+
+          <div class="login-form__quick-actions">
+            <p class="login-form__quick-label">평가용 빠른 로그인</p>
+            <div class="login-form__quick-grid">
+              <button
+                type="button"
+                :disabled="loading"
+                class="login-form__quick-button"
+                @click="handleQuickLogin('hr.kim@coffiiness.com', '1q2w3e4r')"
+              >
+                <span class="login-form__quick-badge">인사담당자</span>
+                <span class="login-form__quick-button-title">채용 운영과 자원 관리용 계정</span>
+              </button>
+
+              <button
+                type="button"
+                :disabled="loading"
+                class="login-form__quick-button"
+                @click="handleQuickLogin('dev.han@coffiiness.com', '1q2w3e4r')"
+              >
+                <span class="login-form__quick-badge">면접관</span>
+                <span class="login-form__quick-button-title">면접 일정과 후보자 확인용 계정</span>
+              </button>
+
+              <button
+                type="button"
+                :disabled="loading"
+                class="login-form__quick-button"
+                @click="handleQuickLogin('admin@calfit.com', '1q2w3e4r')"
+              >
+                <span class="login-form__quick-badge">관리자</span>
+                <span class="login-form__quick-button-title">통계와 리포트 확인용 계정</span>
+              </button>
+            </div>
+          </div>
         </form>
 
         <div class="login-card__footer">
@@ -380,6 +421,94 @@ const handleLogin = async () => {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
+}
+
+.login-form__quick-actions {
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.login-form__quick-label {
+  margin-bottom: 0.7rem;
+  font-size: 0.79rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.login-form__quick-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.login-form__quick-button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(13, 148, 136, 0.16);
+  border-radius: 1rem;
+  background: linear-gradient(180deg, rgba(248, 255, 252, 0.98), rgba(236, 253, 245, 0.94));
+  color: var(--login-accent-strong);
+  text-align: left;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.login-form__quick-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(13, 148, 136, 0.3);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 1), rgba(204, 251, 241, 0.92));
+  box-shadow: 0 14px 30px rgba(13, 148, 136, 0.12);
+}
+
+.login-form__quick-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.login-form__quick-button--disabled {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.95));
+  color: #475569;
+  box-shadow: none;
+}
+
+.login-form__quick-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.login-form__quick-badge--muted {
+  background: rgba(148, 163, 184, 0.18);
+  color: #64748b;
+}
+
+.login-form__quick-button-title {
+  font-size: 0.94rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.login-form__quick-button-meta {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0f766e;
+  opacity: 0.86;
 }
 
 .login-form__spinner {
