@@ -42,9 +42,9 @@ const handleLogin = async () => {
   }
 }
 
-const handleAdminQuickLogin = async () => {
-  email.value = 'admin@calfit.com'
-  password.value = '1q2w3e4r'
+const handleQuickLogin = async (nextEmail, nextPassword) => {
+  email.value = nextEmail
+  password.value = nextPassword
   await handleLogin()
 }
 </script>
@@ -130,20 +130,30 @@ const handleAdminQuickLogin = async () => {
                 type="button"
                 :disabled="loading"
                 class="login-form__quick-button"
-                @click="handleAdminQuickLogin"
+                @click="handleQuickLogin('hr.kim@coffiiness.com', '1q2w3e4r')"
               >
-                <span class="login-form__quick-badge">관리자</span>
-                <span class="login-form__quick-button-title">통계와 리포트 확인용 계정</span>
+                <span class="login-form__quick-badge">인사담당자</span>
+                <span class="login-form__quick-button-title">채용 운영과 자원 관리용 계정</span>
               </button>
 
               <button
                 type="button"
-                disabled
-                class="login-form__quick-button login-form__quick-button--disabled"
+                :disabled="loading"
+                class="login-form__quick-button"
+                @click="handleQuickLogin('dev.han@coffiiness.com', '1q2w3e4r')"
               >
-                <span class="login-form__quick-badge login-form__quick-badge--muted">인사담당자</span>
-                <span class="login-form__quick-button-title">채용 운영과 자원 관리용 계정</span>
-                <span class="login-form__quick-button-meta">계정 정보가 준비되면 바로 연결됩니다</span>
+                <span class="login-form__quick-badge">면접관</span>
+                <span class="login-form__quick-button-title">면접 일정과 후보자 확인용 계정</span>
+              </button>
+
+              <button
+                type="button"
+                :disabled="loading"
+                class="login-form__quick-button"
+                @click="handleQuickLogin('admin@calfit.com', '1q2w3e4r')"
+              >
+                <span class="login-form__quick-badge">관리자</span>
+                <span class="login-form__quick-button-title">통계와 리포트 확인용 계정</span>
               </button>
             </div>
           </div>
