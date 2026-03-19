@@ -2452,8 +2452,9 @@ const handleApplicantResumeDownload = async () => {
           <p class="text-sm font-bold text-slate-500">표시할 전형 프로세스가 없습니다.</p>
         </div>
 
-        <div v-else class="applicant-board-scroll flex h-full min-w-max w-max gap-4 overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
-          <div 
+        <div v-else class="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-2 custom-scrollbar">
+          <div class="applicant-board-scroll flex h-full min-w-max gap-4">
+            <div 
             v-for="process in processes" :key="process.id"
             class="flex h-full min-h-[32rem] w-72 flex-col rounded-2xl border border-slate-200 bg-slate-50/55"
             @dragover.prevent="handleColumnDragOver($event, process.id)"
@@ -2562,6 +2563,7 @@ const handleApplicantResumeDownload = async () => {
               >
                 <p class="text-[11px] font-bold text-slate-400">지원자 없음</p>
               </div>
+            </div>
             </div>
           </div>
 
@@ -3356,6 +3358,8 @@ const handleApplicantResumeDownload = async () => {
 
 .applicant-board-scroll {
   align-items: flex-start;
+  width: max-content;
+  min-height: 100%;
 }
 
 .applicant-search-field {
