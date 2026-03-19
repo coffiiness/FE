@@ -955,6 +955,15 @@ const filteredApplicants = computed(() => {
 })
 
 const getApplicantsByProcess = (pid) => filteredApplicants.value.filter(a => a.processId === pid)
+const getSelectableApplicantsByProcess = (pid) => {
+  if (selectedSourceProcessId.value && selectedSourceProcessId.value !== pid) return []
+
+  return getApplicantsByProcess(pid).filter(
+    (applicant) =>
+      applicant?.applicationId &&
+      movingApplicationId.value !== applicant.applicationId
+  )
+}
 const selectedApplicants = computed(() =>
   applicants.value.filter((applicant) => selectedApplicationIds.value.includes(applicant.applicationId))
 )
@@ -966,6 +975,13 @@ const selectedSourceProcess = computed(() =>
 const bulkProcessOptions = computed(() =>
   processOptions.value.filter((option) => option.value !== selectedSourceProcessId.value)
 )
+const getSelectedApplicantCountByProcess = (pid) =>
+  getApplicantsByProcess(pid).filter((applicant) => selectedApplicationIds.value.includes(applicant.applicationId)).length
+const isProcessFullySelected = (pid) => {
+  const selectableApplicants = getSelectableApplicantsByProcess(pid)
+  return selectableApplicants.length > 0 &&
+    selectableApplicants.every((applicant) => selectedApplicationIds.value.includes(applicant.applicationId))
+}
 
 const normalizeBoardApplicant = (application, processId) => {
   const tags = []
@@ -1094,6 +1110,23 @@ const toggleApplicantSelection = (applicationId) => {
   }
 
   selectedApplicationIds.value = [...selectedApplicationIds.value, applicationId]
+}
+
+const toggleProcessSelection = (processId) => {
+  if (!canMoveApplicants.value || bulkMoving.value) return
+
+  const selectableIds = getSelectableApplicantsByProcess(processId)
+    .map((applicant) => applicant.applicationId)
+    .filter(Boolean)
+
+  if (!selectableIds.length) return
+
+  if (selectableIds.every((applicationId) => selectedApplicationIds.value.includes(applicationId))) {
+    selectedApplicationIds.value = selectedApplicationIds.value.filter((id) => !selectableIds.includes(id))
+    return
+  }
+
+  selectedApplicationIds.value = [...new Set([...selectedApplicationIds.value, ...selectableIds])]
 }
 
 const clearApplicantSelection = () => {
@@ -2503,6 +2536,27 @@ const handleApplicantResumeDownload = async () => {
               </div>
             </div>
             <div class="flex-1 overflow-y-auto p-2.5 space-y-2.5 custom-scrollbar">
+              <div
+                v-if="canMoveApplicants && getApplicantsByProcess(process.id).length > 0"
+                class="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2"
+              >
+                <p class="text-[11px] font-medium text-slate-500">
+                  {{ getSelectedApplicantCountByProcess(process.id) > 0
+                    ? `${getSelectedApplicantCountByProcess(process.id)}명 선택됨`
+                    : '이 단계 지원자 선택' }}
+                </p>
+                <button
+                  type="button"
+                  class="rounded-md px-2.5 py-1 text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                  :class="isProcessFullySelected(process.id)
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  :disabled="bulkMoving || (!!selectedSourceProcessId && selectedSourceProcessId !== process.id)"
+                  @click.stop="toggleProcessSelection(process.id)"
+                >
+                  {{ isProcessFullySelected(process.id) ? '전체해제' : '전체선택' }}
+                </button>
+              </div>
               <div v-for="app in getApplicantsByProcess(process.id)" :key="app.id"
                    :draggable="canMoveApplicants && movingApplicationId !== app.applicationId" @dragstart="onDragStart($event, app.applicationId)" @dragend="onDragEnd"
                    class="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition-all hover:border-brand-300 hover:shadow-[0_16px_30px_-24px_rgba(15,23,42,0.45)] active:cursor-grabbing"
