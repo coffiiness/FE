@@ -60,7 +60,7 @@ const detailSections = computed(() => {
     },
     {
       label: '생성자',
-      value: props.event?.ownerName || '생성자 정보 없음',
+      value: props.event?.ownerName || props.event?.creatorName || '생성자 정보 없음',
       icon: 'owner'
     }
   ]

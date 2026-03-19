@@ -356,6 +356,7 @@ const recruitment = computed(() => {
   return {
     id: job.id,
     title: job.title,
+    shareUrl: job.shareUrl || '',
     period: `${startStr} ~ ${endStr}`,
     status: statusText,
     dday: ddayText,
@@ -767,13 +768,15 @@ const openInterviewDetail = (booking) => {
           interviewScheduleId: booking.interviewScheduleId ?? booking.id,
           type: booking.entryType === 'BUSY' ? (booking.scheduleType || 'OTHERS') : 'INTERVIEW',
           title: booking.entryType === 'BUSY' ? getBookingDisplayTitle(booking) : getBookingPrimaryText(booking),
-          description: booking.description || getBookingSummaryText(booking),
+          description: booking.description || '',
+          summary: getBookingSummaryText(booking),
           date: booking.date,
           time: booking.isAllDay ? '종일' : booking.time,
           startTime: booking.startTime,
           endTime: booking.endTime,
           location: booking.location || '',
-          ownerName: booking.interviewerName || getInterviewerName(booking.interviewerId),
+          creatorName: booking.creatorName || '',
+          ownerName: booking.ownerName || booking.creatorName || '',
           attendees: booking.attendees || [],
           applicantName: booking.entryType === 'BUSY' ? '' : booking.applicantName,
           isAllDay: booking.isAllDay === true,
@@ -813,13 +816,15 @@ const selectedDayCalendarEvents = computed(() =>
     interviewScheduleId: booking.interviewScheduleId ?? booking.id,
     type: booking.entryType === 'BUSY' ? (booking.scheduleType || 'OTHERS') : 'INTERVIEW',
     title: booking.entryType === 'BUSY' ? getBookingDisplayTitle(booking) : getBookingPrimaryText(booking),
-    description: booking.description || getBookingSummaryText(booking),
+    description: booking.description || '',
+    summary: getBookingSummaryText(booking),
     date: booking.date,
     time: booking.isAllDay ? '종일' : booking.time,
     startTime: booking.startTime,
     endTime: booking.endTime,
     location: booking.location || '',
-    ownerName: booking.interviewerName || getInterviewerName(booking.interviewerId),
+    creatorName: booking.creatorName || '',
+    ownerName: booking.ownerName || booking.creatorName || '',
     attendees: booking.attendees || [],
     applicantName: booking.entryType === 'BUSY' ? '' : booking.applicantName,
     isAllDay: booking.isAllDay === true,
@@ -1511,8 +1516,26 @@ const deleteAutomationRule = async (ruleId) => {
 }
 
 const copyRecruitmentLink = () => {
-  const dummyLink = `https://careers.nexus.ai/jobs/${recruitment.value.id}`
-  navigator.clipboard.writeText(dummyLink).then(() => {
+  const workspaceId =
+    localStorage.getItem('workspaceId') ||
+    recruitment.value?.shareUrl?.split('/')?.[2] ||
+    ''
+  const sharePath =
+    recruitment.value?.shareUrl ||
+    (workspaceId && recruitment.value?.id
+      ? `/careers/${workspaceId}/${recruitment.value.id}/apply`
+      : '')
+
+  if (!sharePath) {
+    alert('공고 링크를 생성할 수 없습니다.')
+    return
+  }
+
+  const shareLink = sharePath.startsWith('http')
+    ? sharePath
+    : `${window.location.origin}${sharePath.startsWith('/') ? '' : '/'}${sharePath}`
+
+  navigator.clipboard.writeText(shareLink).then(() => {
     showCopyModal.value = true
   }).catch(err => {
     console.error('링크 복사 실패', err)
@@ -1830,14 +1853,12 @@ const normalizeSchedule = (item) => {
     '-'
 
   const interviewerNames = getUniqueNames(splitNames(interviewerName))
-  const applicantNames = getUniqueNames(splitNames(applicantName))
   const showSelf =
     !!currentUserName.value &&
     interviewerNames.includes(currentUserName.value)
-  const attendees = getUniqueNames([
-    ...interviewerNames.filter((name) => !showSelf || name !== currentUserName.value),
-    ...applicantNames
-  ])
+  const attendees = getUniqueNames(
+    interviewerNames.filter((name) => !showSelf || name !== currentUserName.value)
+  )
 
   return {
     id: item.id,
@@ -1848,6 +1869,7 @@ const normalizeSchedule = (item) => {
     time: `${formatTime(toHm(start))} - ${formatTime(toHm(end))}`,
     interviewerId,
     interviewerName,
+    creatorName: item?.creatorName || '',
     applicantName,
     title: item?.title || `${item?.round || ''} 면접`.trim() || '면접 일정',
     description: item?.description || item?.memo || item?.note || '',

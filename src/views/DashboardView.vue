@@ -192,6 +192,8 @@ const normalizeWeeklySchedule = (item) => {
     title: String(item?.title || '').trim() || '면접 일정',
     applicantName: String(item?.applicantName || '').trim(),
     interviewerName: String(item?.interviewerName || '').trim(),
+    creatorName: String(item?.creatorName || '').trim(),
+    ownerName: String(item?.creatorName || '').trim(),
     date: formatDateKey(start),
     startTime,
     endTime,
