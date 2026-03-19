@@ -141,7 +141,7 @@ const formatEventTime = (value) => {
                   >
                     {{ typeLabel(evt.type) }}
                   </span>
-                  <span v-if="evt.description" class="text-xs text-slate-500 font-medium truncate">{{ evt.description }}</span>
+                  <span v-if="evt.summary || evt.description" class="text-xs text-slate-500 font-medium truncate">{{ evt.summary || evt.description }}</span>
                 </div>
               </div>
 
