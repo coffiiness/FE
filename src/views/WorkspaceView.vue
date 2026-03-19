@@ -9,7 +9,6 @@ const router = useRouter()
 const teamName = ref('')
 const contact = ref('')
 const employeeCount = ref('1 ~ 10명')
-const role = ref('인사 담당자')
 
 const error = ref('')
 const loading = ref(false)
@@ -84,27 +83,16 @@ const handleStart = async () => {
         />
       </label>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-slate-800">직원 수</span>
-          <select v-model="employeeCount" class="auth-input auth-input--select">
-            <option>1 ~ 10명</option>
-            <option>11 ~ 50명</option>
-            <option>51 ~ 300명</option>
-            <option>301 ~ 1,000명</option>
-            <option>1,000명 이상</option>
-          </select>
-        </label>
-
-        <label class="block">
-          <span class="mb-2 block text-sm font-bold text-slate-800">나의 역할</span>
-          <select v-model="role" class="auth-input auth-input--select">
-            <option>인사 담당자</option>
-            <option>면접관</option>
-            <option>대표</option>
-          </select>
-        </label>
-      </div>
+      <label class="block">
+        <span class="mb-2 block text-sm font-bold text-slate-800">직원 수</span>
+        <select v-model="employeeCount" class="auth-input auth-input--select">
+          <option>1 ~ 10명</option>
+          <option>11 ~ 50명</option>
+          <option>51 ~ 300명</option>
+          <option>301 ~ 1,000명</option>
+          <option>1,000명 이상</option>
+        </select>
+      </label>
 
       <div v-if="error" class="auth-error">
         {{ error }}
