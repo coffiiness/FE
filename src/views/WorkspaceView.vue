@@ -9,7 +9,6 @@ const router = useRouter()
 const teamName = ref('')
 const contact = ref('')
 const employeeCount = ref('1 ~ 10명')
-
 const error = ref('')
 const loading = ref(false)
 
@@ -44,7 +43,7 @@ const handleStart = async () => {
   <AuthShell
     eyebrow="Workspace setup"
     title="워크스페이스 생성"
-    description="팀 정보를 입력하고 채용 운영 공간을 바로 시작하세요."
+    description="기본 정보를 입력하고 채용 운영 공간을 바로 시작하세요."
     max-width="48rem"
   >
     <template #copy>
@@ -57,7 +56,7 @@ const handleStart = async () => {
       <span class="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">Workspace setup</span>
       <h1 class="mt-5 text-[clamp(2.1rem,3.4vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.05em] text-slate-900">워크스페이스 생성</h1>
       <p class="mt-3 max-w-2xl text-base leading-7 text-slate-500">
-        팀 규모와 기본 정보를 입력하면 CalFit 대시보드로 바로 연결됩니다.
+        팀 규모와 기본 정보를 입력하면 CalFit 채용 공간이 바로 준비됩니다.
       </p>
     </template>
 
@@ -68,7 +67,7 @@ const handleStart = async () => {
           v-model="teamName"
           type="text"
           required
-          placeholder="예: CalFit 디자인팀"
+          placeholder="예: CalFit 인재팀"
           class="auth-input"
         />
       </label>
@@ -83,16 +82,22 @@ const handleStart = async () => {
         />
       </label>
 
-      <label class="block">
-        <span class="mb-2 block text-sm font-bold text-slate-800">직원 수</span>
-        <select v-model="employeeCount" class="auth-input auth-input--select">
-          <option>1 ~ 10명</option>
-          <option>11 ~ 50명</option>
-          <option>51 ~ 300명</option>
-          <option>301 ~ 1,000명</option>
-          <option>1,000명 이상</option>
-        </select>
-      </label>
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="block">
+          <span class="mb-2 block text-sm font-bold text-slate-800">직원 수</span>
+          <select v-model="employeeCount" class="auth-input auth-input--select">
+            <option>1 ~ 10명</option>
+            <option>11 ~ 50명</option>
+            <option>51 ~ 300명</option>
+            <option>301 ~ 1,000명</option>
+            <option>1,000명 이상</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="rounded-2xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm font-medium text-brand-800">
+        워크스페이스를 생성한 계정은 자동으로 인사담당자로 설정됩니다.
+      </div>
 
       <div v-if="error" class="auth-error">
         {{ error }}
