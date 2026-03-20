@@ -161,7 +161,7 @@ watch(
   <div v-if="shouldShow" class="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <p class="text-[11px] font-bold text-slate-600">선택 참석자 일정 현황</p>
+        <p class="text-[11px] font-bold text-slate-600">선택 인원 일정 현황</p>
         <p class="mt-1 text-[11px] text-slate-500">{{ date }}</p>
       </div>
       <span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500">
@@ -173,18 +173,18 @@ watch(
       v-if="!isLoading && overlappingBusyScheduleCount > 0"
       class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700"
     >
-      현재 입력 시간과 겹치는 참석자 일정이 {{ overlappingBusyScheduleCount }}건 있습니다.
+      현재 입력 시간과 겹치는 일정이 {{ overlappingBusyScheduleCount }}건 있습니다. 다른 시간대를 선택해 주세요.
     </p>
 
     <p v-if="isLoading" class="text-[11px] text-slate-500">
-      참석자 일정 현황을 불러오는 중입니다.
+      일정 현황을 불러오는 중입니다.
     </p>
 
     <p
       v-else-if="hasLoadError"
       class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700"
     >
-      참석자 일정 현황을 불러오지 못했습니다.
+      일정 현황을 불러오지 못했습니다.
     </p>
 
     <div v-else class="space-y-3">
@@ -227,7 +227,7 @@ watch(
         v-if="attendeeCards.length > 0 && attendeeCards.every((attendee) => attendee.busySchedules.length === 0)"
         class="text-[11px] text-slate-500"
       >
-        선택한 참석자에게 등록된 바쁜 일정이 없습니다.
+        선택한 인원에게 등록된 바쁜 일정이 없습니다.
       </p>
     </div>
   </div>
