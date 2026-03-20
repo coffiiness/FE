@@ -70,6 +70,43 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
     </header>
 
     <main class="login-shell__content">
+      <!-- 왼쪽: 빠른 로그인 -->
+      <aside class="quick-panel">
+        <p class="quick-panel__label">평가용 빠른 로그인</p>
+        <div class="quick-panel__grid">
+          <button
+            type="button"
+            :disabled="loading"
+            class="quick-panel__button"
+            @click="handleQuickLogin('hr.kim@coffiiness.com', '1q2w3e4r')"
+          >
+            <span class="quick-panel__badge">인사담당자</span>
+            <span class="quick-panel__button-title">채용 운영과 자원 관리용 계정</span>
+          </button>
+
+          <button
+            type="button"
+            :disabled="loading"
+            class="quick-panel__button"
+            @click="handleQuickLogin('dev.han@coffiiness.com', '1q2w3e4r')"
+          >
+            <span class="quick-panel__badge">면접관</span>
+            <span class="quick-panel__button-title">면접 일정과 후보자 확인용 계정</span>
+          </button>
+
+          <button
+            type="button"
+            :disabled="loading"
+            class="quick-panel__button"
+            @click="handleQuickLogin('admin@calfit.com', '1q2w3e4r')"
+          >
+            <span class="quick-panel__badge">관리자</span>
+            <span class="quick-panel__button-title">통계와 리포트 확인용 계정</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- 중앙: 로그인 카드 -->
       <section class="login-card">
         <div class="login-card__copy">
           <span class="login-card__eyebrow">Workspace sign in</span>
@@ -122,41 +159,6 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
             </span>
             <span v-else>로그인</span>
           </button>
-
-          <div class="login-form__quick-actions">
-            <p class="login-form__quick-label">평가용 빠른 로그인</p>
-            <div class="login-form__quick-grid">
-              <button
-                type="button"
-                :disabled="loading"
-                class="login-form__quick-button"
-                @click="handleQuickLogin('hr.kim@coffiiness.com', '1q2w3e4r')"
-              >
-                <span class="login-form__quick-badge">인사담당자</span>
-                <span class="login-form__quick-button-title">채용 운영과 자원 관리용 계정</span>
-              </button>
-
-              <button
-                type="button"
-                :disabled="loading"
-                class="login-form__quick-button"
-                @click="handleQuickLogin('dev.han@coffiiness.com', '1q2w3e4r')"
-              >
-                <span class="login-form__quick-badge">면접관</span>
-                <span class="login-form__quick-button-title">면접 일정과 후보자 확인용 계정</span>
-              </button>
-
-              <button
-                type="button"
-                :disabled="loading"
-                class="login-form__quick-button"
-                @click="handleQuickLogin('admin@calfit.com', '1q2w3e4r')"
-              >
-                <span class="login-form__quick-badge">관리자</span>
-                <span class="login-form__quick-button-title">통계와 리포트 확인용 계정</span>
-              </button>
-            </div>
-          </div>
         </form>
 
         <div class="login-card__footer">
@@ -166,6 +168,25 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
           </button>
         </div>
       </section>
+
+      <!-- 오른쪽: 채용 홈페이지 -->
+      <aside class="careers-panel">
+        <div class="careers-panel__icon-wrap">
+          <svg class="careers-panel__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" />
+          </svg>
+        </div>
+        <h2 class="careers-panel__title">채용에 지원하고 싶으신가요?</h2>
+        <p class="careers-panel__desc">
+          현재 진행 중인 채용 공고를 확인하고 바로 지원해 보세요.
+        </p>
+        <router-link to="/careers" class="careers-panel__btn">
+          <svg class="careers-panel__btn-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd" />
+          </svg>
+          채용 홈페이지 둘러보기
+        </router-link>
+      </aside>
     </main>
   </div>
 </template>
@@ -286,6 +307,7 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  gap: 1.5rem;
   padding: 4.5rem 1.5rem 2.5rem;
 }
 
@@ -423,37 +445,44 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
   gap: 0.55rem;
 }
 
-.login-form__quick-actions {
-  margin-top: 1.5rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
+/* ── Quick login panel (left side) ── */
+.quick-panel {
+  width: 16rem;
+  flex-shrink: 0;
+  padding: 1.8rem 1.3rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.75rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
 }
 
-.login-form__quick-label {
-  margin-bottom: 0.7rem;
+.quick-panel__label {
+  margin-bottom: 0.85rem;
   font-size: 0.79rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #64748b;
 }
 
-.login-form__quick-grid {
+.quick-panel__grid {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
-.login-form__quick-button {
+.quick-panel__button {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.18rem;
-  padding: 0.95rem 1rem;
+  padding: 0.85rem 0.9rem;
   border: 1px solid rgba(13, 148, 136, 0.16);
   border-radius: 1rem;
   background: linear-gradient(180deg, rgba(248, 255, 252, 0.98), rgba(236, 253, 245, 0.94));
   color: var(--login-accent-strong);
   text-align: left;
+  cursor: pointer;
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -462,26 +491,19 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
     opacity 160ms ease;
 }
 
-.login-form__quick-button:hover:not(:disabled) {
+.quick-panel__button:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(13, 148, 136, 0.3);
   background: linear-gradient(180deg, rgba(240, 253, 250, 1), rgba(204, 251, 241, 0.92));
   box-shadow: 0 14px 30px rgba(13, 148, 136, 0.12);
 }
 
-.login-form__quick-button:disabled {
+.quick-panel__button:disabled {
   cursor: not-allowed;
   opacity: 0.72;
 }
 
-.login-form__quick-button--disabled {
-  border-color: rgba(148, 163, 184, 0.22);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.95));
-  color: #475569;
-  box-shadow: none;
-}
-
-.login-form__quick-badge {
+.quick-panel__badge {
   display: inline-flex;
   align-items: center;
   padding: 0.18rem 0.5rem;
@@ -493,22 +515,10 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
   letter-spacing: 0.02em;
 }
 
-.login-form__quick-badge--muted {
-  background: rgba(148, 163, 184, 0.18);
-  color: #64748b;
-}
-
-.login-form__quick-button-title {
-  font-size: 0.94rem;
+.quick-panel__button-title {
+  font-size: 0.88rem;
   font-weight: 700;
   line-height: 1.35;
-}
-
-.login-form__quick-button-meta {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #0f766e;
-  opacity: 0.86;
 }
 
 .login-form__spinner {
@@ -540,6 +550,86 @@ const handleQuickLogin = async (nextEmail, nextPassword) => {
 
 .login-card__footer-link:hover {
   text-decoration: underline;
+}
+
+/* ── Careers panel (right side) ── */
+.careers-panel {
+  width: 16rem;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.85rem;
+  padding: 2.2rem 1.5rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.75rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.careers-panel__icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 1rem;
+  background: var(--login-accent-soft);
+  color: var(--login-accent-strong);
+}
+
+.careers-panel__icon {
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+.careers-panel__title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--login-text);
+  line-height: 1.3;
+}
+
+.careers-panel__desc {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--login-muted);
+}
+
+.careers-panel__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.98), rgba(204, 251, 241, 0.6));
+  color: var(--login-accent-strong);
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.careers-panel__btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(13, 148, 136, 0.38);
+  background: linear-gradient(180deg, rgba(236, 253, 245, 1), rgba(153, 246, 228, 0.5));
+  box-shadow: 0 8px 20px rgba(13, 148, 136, 0.14);
+}
+
+.careers-panel__btn-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
 }
 
 @keyframes login-spin {
