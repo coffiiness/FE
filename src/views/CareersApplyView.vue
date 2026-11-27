@@ -423,7 +423,7 @@ const getValueLength = (value) => (value ? String(value).length : 0)
       </div>
     </header>
 
-    <div v-if="loading" class="max-w-2xl mx-auto px-6 py-12 text-center text-gray-500">로딩 중...</div>
+    <div v-if="loading" class="min-h-[60vh] bg-white"></div>
 
     <main v-else-if="!applyForm && errorMsg" class="max-w-2xl mx-auto px-6 py-12">
       <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">

@@ -162,9 +162,7 @@ const handleAuthAction = () => {
       </div>
     </header>
 
-    <div v-if="loading" class="flex justify-center py-20">
-      <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-600"></div>
-    </div>
+    <div v-if="loading" class="min-h-[60vh] bg-white"></div>
 
     <div v-else-if="error" class="max-w-6xl mx-auto px-6 py-20 text-center text-gray-500">{{ error }}</div>
 

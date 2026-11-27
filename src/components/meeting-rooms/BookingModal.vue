@@ -33,6 +33,14 @@ const selectedParticipantUserIds = computed(() =>
       .filter((userId) => Number.isFinite(userId) && userId > 0)
   )]
 )
+const availabilityTargetUserIds = computed(() =>
+  [...new Set(
+    [
+      organizerUserId.value,
+      ...selectedParticipantUserIds.value
+    ].filter((userId) => Number.isFinite(userId) && userId > 0)
+  )]
+)
 const currentRoom = computed(() => {
   if (selectedRoomId.value) {
     const matchedRoom = props.rooms.find((room) => String(room.id) === String(selectedRoomId.value))
@@ -597,7 +605,7 @@ const handleSubmit = () => {
           <AttendeeAvailabilityPanel
             :is-open="open"
             :date="state.date"
-            :attendee-ids="selectedParticipantUserIds"
+            :attendee-ids="availabilityTargetUserIds"
             :start-time="state.startTime"
             :end-time="state.endTime"
           />
