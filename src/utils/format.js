@@ -43,5 +43,16 @@ export const getInitials = (name) => {
  * getApiError(e, '저장에 실패했습니다.')
  */
 export const getApiError = (error, fallback = '오류가 발생했습니다.') => {
-  return error?.response?.data?.error?.message || fallback
+  const payload = error?.response?.data?.error
+  const messages = {
+    WORKSPACE_ALREADY_JOINED: '이미 이 워크스페이스에 가입되어 있습니다.',
+    ACTIVE_WORKSPACE_EXISTS: '이미 워크스페이스에 소속되어 있습니다. 기존 소속 해제 후 가입해 주세요.',
+    MULTIPLE_ACTIVE_MEMBERSHIPS: '활성 소속 정보가 중복되어 있습니다. 관리자에게 문의해 주세요.',
+    TENANT_MISMATCH: '현재 소속과 요청한 워크스페이스가 다릅니다. 화면을 새로고침해 주세요.',
+    ACTIVE_MEMBERSHIP_REQUIRED: '워크스페이스를 생성하거나 초대를 수락해 주세요.',
+    INVITATION_UNAVAILABLE: '만료되었거나 이미 처리된 초대입니다.',
+    GOOGLE_OAUTH_STATE_INVALID: '인증 요청이 만료되었거나 계정/워크스페이스가 변경되었습니다. 연동을 다시 시작해 주세요.'
+  }
+  return messages[payload?.customCode] || (typeof payload?.data === 'string' ? payload.data : payload?.data?.message)
+    || payload?.message || error?.message || fallback
 }

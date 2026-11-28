@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import router from '@/router'
 import { ensureWorkspaceId } from '@/utils/workspaceSession'
+import { clearGoogleCalendarCache } from '@/utils/googleCalendarSession'
 
 const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
 const isAuthenticated = computed(() => !!user.value)
@@ -10,6 +11,9 @@ export function useAuth() {
   const login = async (email, password) => {
     const response = await authApi.login({ email, password })
     const { accessToken, refreshToken, user: userData, workspaceId } = response.data.data
+
+    clearGoogleCalendarCache()
+    localStorage.removeItem('workspaceId')
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('refreshToken', refreshToken)
@@ -35,6 +39,7 @@ export function useAuth() {
   }
 
   const logout = () => {
+    clearGoogleCalendarCache()
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
