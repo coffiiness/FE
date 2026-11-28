@@ -1,5 +1,6 @@
 import axios from 'axios'
 import router from '@/router'
+import { clearGoogleCalendarCache } from '@/utils/googleCalendarSession'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1',
@@ -7,39 +8,6 @@ const api = axios.create({
     'Content-Type': 'application/json'
   }
 })
-
-let workspaceRefreshPromise = null
-let workspaceRefreshDisabled = false
-
-const refreshWorkspaceId = async () => {
-  if (workspaceRefreshDisabled) return null
-  const token = localStorage.getItem('accessToken')
-  if (!token) return null
-
-  if (!workspaceRefreshPromise) {
-    workspaceRefreshPromise = axios
-      .get(`${api.defaults.baseURL}/users/me/workspace`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      .then((res) => res?.data?.data?.workspaceId || null)
-      .catch(() => {
-        workspaceRefreshDisabled = true
-        return null
-      })
-      .finally(() => {
-        workspaceRefreshPromise = null
-      })
-  }
-
-  const workspaceId = await workspaceRefreshPromise
-  if (workspaceId) {
-    localStorage.setItem('workspaceId', workspaceId)
-  }
-  return workspaceId
-}
 
 api.interceptors.request.use(
   (config) => {
@@ -49,7 +17,9 @@ api.interceptors.request.use(
     }
 
     const workspaceId = localStorage.getItem('workspaceId')
-    if (workspaceId) {
+    // This global, authenticated self lookup resolves membership independently of stale tenant cache.
+    const isMembershipLookup = config.method === 'get' && config.url === '/users/me/workspace'
+    if (workspaceId && !isMembershipLookup) {
       config.headers['X-Tenant-ID'] = workspaceId
     }
 
@@ -62,60 +32,18 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     const status = error.response?.status
-    const originalRequest = error.config || {}
-    const requestUrl = String(originalRequest.url || '')
 
-    const isAuthRoute =
-      requestUrl.includes('/users/login') ||
-      requestUrl.includes('/users/signup')
-
-    const isWorkspaceDiscoveryRoute = requestUrl.includes('/users/me/workspace')
-    const isInterviewAvailabilityRoute = requestUrl.includes('/interviews/availability')
-
-    if (
-      status === 400 &&
-      !isAuthRoute &&
-      !isWorkspaceDiscoveryRoute &&
-      !isInterviewAvailabilityRoute &&
-      !originalRequest._workspaceRetried &&
-      localStorage.getItem('accessToken')
-    ) {
-      const refreshedWorkspaceId = await refreshWorkspaceId()
-      if (refreshedWorkspaceId) {
-        originalRequest._workspaceRetried = true
-        originalRequest.headers = originalRequest.headers || {}
-        originalRequest.headers['X-Tenant-ID'] = refreshedWorkspaceId
-        return api.request(originalRequest)
-      }
-    }
-
-    if (status === 400 && !isAuthRoute && !isWorkspaceDiscoveryRoute && !isInterviewAvailabilityRoute) {
-      const message = String(error.response?.data?.error?.message || '')
-      const workspaceContextError = /workspace|tenant|member/i.test(message)
-
-      if (workspaceContextError) {
-        localStorage.removeItem('workspaceId')
-
-        let user = {}
-        try {
-          user = JSON.parse(localStorage.getItem('user') || '{}')
-        } catch (_) {
-          user = {}
-        }
-
-        if (user.role !== 'ADMIN' && router.currentRoute.value?.path !== '/workspace/create') {
-          router.push('/workspace/create')
-        }
-      }
-    }
+    // Mutating requests and one-time OAuth codes must never be replayed here.
+    // Membership conflicts are handled explicitly by each screen.
 
     if (status === 401) {
       localStorage.removeItem('accessToken')
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
       localStorage.removeItem('workspaceId')
+      clearGoogleCalendarCache()
       router.push('/login')
     }
 

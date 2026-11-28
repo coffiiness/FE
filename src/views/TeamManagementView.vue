@@ -7,6 +7,7 @@ import { groupApi } from '@/api/group'
 import { invitationApi } from '@/api/invitation'
 import { useModal } from '@/composables/useModal'
 import { formatDate, getInitials, getApiError } from '@/utils/format'
+import { clearGoogleCalendarCache } from '@/utils/googleCalendarSession'
 
 // ── 공통 모달 ─────────────────────────────────────────────────────────────────
 const router = useRouter()
@@ -197,6 +198,7 @@ const leaveWorkspace = () => {
     onConfirm: async () => {
       try {
         await memberApi.leaveWorkspace()
+        clearGoogleCalendarCache()
         localStorage.removeItem('workspaceId')
         openModal({
           title: '탈퇴 완료',

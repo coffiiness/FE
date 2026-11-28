@@ -3,6 +3,7 @@ import axios from 'axios'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 
 let workspaceResolvePromise = null
+let workspaceResolveToken = null
 
 export const readStoredUser = () => {
   const rawUser = localStorage.getItem('user')
@@ -41,16 +42,15 @@ export const getStoredWorkspaceId = () => {
 }
 
 export const ensureWorkspaceId = async (accessToken = localStorage.getItem('accessToken')) => {
+  if (!accessToken || accessToken !== localStorage.getItem('accessToken')) return null
   const storedWorkspaceId = getStoredWorkspaceId()
   if (storedWorkspaceId) {
     return storedWorkspaceId
   }
 
-  if (!accessToken) {
-    return null
-  }
-
-  if (!workspaceResolvePromise) {
+  if (!workspaceResolvePromise || workspaceResolveToken !== accessToken) {
+    const requestToken = accessToken
+    workspaceResolveToken = requestToken
     workspaceResolvePromise = axios
       .get(`${API_BASE_URL}/users/me/workspace`, {
         headers: {
@@ -61,11 +61,16 @@ export const ensureWorkspaceId = async (accessToken = localStorage.getItem('acce
       .then((response) => response?.data?.data?.workspaceId || null)
       .catch(() => null)
       .finally(() => {
-        workspaceResolvePromise = null
+        if (workspaceResolveToken === requestToken) {
+          workspaceResolvePromise = null
+          workspaceResolveToken = null
+        }
       })
   }
 
   const workspaceId = await workspaceResolvePromise
+  // A previous login's delayed response must not replace the current account's tenant.
+  if (accessToken !== localStorage.getItem('accessToken')) return null
   if (workspaceId) {
     const normalizedWorkspaceId = String(workspaceId)
     localStorage.setItem('workspaceId', normalizedWorkspaceId)

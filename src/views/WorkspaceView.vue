@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { workspaceApi } from '@/api/workspace'
 import AuthShell from '@/components/auth/AuthShell.vue'
+import { getApiError } from '@/utils/format'
 
 const router = useRouter()
 
@@ -10,13 +11,31 @@ const teamName = ref('')
 const contact = ref('')
 const employeeCount = ref('1 ~ 10명')
 const error = ref('')
-const loading = ref(false)
+const loading = ref(true)
+const canCreate = ref(false)
+
+onMounted(async () => {
+  try {
+    const response = await workspaceApi.getMyWorkspace()
+    if (response.data?.data?.workspaceId) {
+      localStorage.setItem('workspaceId', response.data.data.workspaceId)
+      await router.replace('/dashboard')
+      return
+    }
+    canCreate.value = true
+  } catch (e) {
+    error.value = getApiError(e, '현재 소속 정보를 확인하지 못했습니다. 다시 시도해 주세요.')
+  } finally {
+    loading.value = false
+  }
+})
 
 const goBack = () => {
   router.back()
 }
 
 const handleStart = async () => {
+  if (loading.value || !canCreate.value) return
   error.value = ''
   loading.value = true
 
@@ -32,7 +51,7 @@ const handleStart = async () => {
     }
     router.push({ name: 'Dashboard' })
   } catch (e) {
-    error.value = e.response?.data?.error?.message || '워크스페이스 생성에 실패했습니다.'
+    error.value = getApiError(e, '워크스페이스 생성에 실패했습니다.')
   } finally {
     loading.value = false
   }
@@ -105,7 +124,7 @@ const handleStart = async () => {
 
       <button
         type="submit"
-        :disabled="loading"
+        :disabled="loading || !canCreate"
         class="auth-submit"
       >
         <span v-if="loading" class="inline-flex items-center justify-center gap-2">
