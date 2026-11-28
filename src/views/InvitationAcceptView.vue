@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { invitationApi } from '@/api/invitation'
+import { workspaceApi } from '@/api/workspace'
+import { getApiError } from '@/utils/format'
+import { clearGoogleCalendarCache } from '@/utils/googleCalendarSession'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,14 +30,21 @@ onMounted(async () => {
   try {
     const res = await invitationApi.getInvitation(token)
     invitation.value = res.data.data
+    if (isLoggedIn.value) {
+      const membership = await workspaceApi.getMyWorkspace()
+      if (membership.data?.data?.workspaceId) {
+        errorMessage.value = '이미 워크스페이스에 소속되어 있습니다. 기존 소속 해제 후 초대를 수락해 주세요.'
+      }
+    }
   } catch (e) {
-    errorMessage.value = e.response?.data?.error?.message || '유효하지 않거나 만료된 초대 링크입니다.'
+    errorMessage.value = getApiError(e, '유효하지 않거나 만료된 초대 링크입니다.')
   } finally {
     isLoading.value = false
   }
 })
 
 const handleAccept = async () => {
+  if (isAccepting.value || errorMessage.value) return
   if (!isLoggedIn.value) {
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
@@ -43,6 +53,7 @@ const handleAccept = async () => {
   isAccepting.value = true
   try {
     const res = await invitationApi.acceptInvitation(token)
+    clearGoogleCalendarCache()
     const workspaceId = res.data?.data?.workspaceId
     if (workspaceId) {
       localStorage.setItem('workspaceId', workspaceId)
@@ -56,11 +67,7 @@ const handleAccept = async () => {
       router.push({ path: '/login', query: { redirect: route.fullPath } })
       return
     }
-    const errorData = e.response?.data?.error
-    const msg = (typeof errorData?.data === 'string' ? errorData.data : null)
-      || errorData?.message
-      || '초대 수락에 실패했습니다.'
-    errorMessage.value = msg
+    errorMessage.value = getApiError(e, '초대 수락에 실패했습니다.')
   } finally {
     isAccepting.value = false
   }

@@ -10,6 +10,9 @@ import { useScheduleStore } from '@/stores/schedule'
 import { storeToRefs } from 'pinia'
 import { meetingRoomApi } from '@/api/meetingRoom'
 import { useModal } from '@/composables/useModal'
+import { googleCalendarApi } from '@/api/googleCalendar'
+import { clearGoogleCalendarCache } from '@/utils/googleCalendarSession'
+import { getApiError } from '@/utils/format'
 
 // 1. 상태 및 상수 정의
 const currentView = ref('MONTH')
@@ -575,7 +578,7 @@ onMounted(async () => {
     selectedDate.value = queryDate
   }
 
-  await Promise.all([loadSchedules(), loadMeetingRooms(), loadMeetingRoomReservations()])
+  await Promise.all([loadSchedules(), loadMeetingRooms(), loadMeetingRoomReservations(), refreshGoogleConnectionStatus()])
   await openScheduleFromRouteQuery()
 })
 
@@ -807,18 +810,32 @@ const getRoomInfo = (schedule) => {
   }
 }
 
-// Google Calendar 연동
-const isGoogleConnected = ref(localStorage.getItem('isGoogleCalendarConnected') === 'true')
-const googleConnectedEmail = ref(localStorage.getItem('googleCalendarEmail') || '')
+// Google Calendar 연동: persisted browser flags are never authoritative.
+const isGoogleConnected = ref(false)
+const googleConnectedEmail = ref('')
+const isGoogleConnecting = ref(false)
 
-const connectGoogleCalendar = () => {
-  const clientId = '553048700196-ojj8o5cgbq8d76q18khbkfh4t191mvoc.apps.googleusercontent.com'
-  const redirectUri = window.location.origin + '/auth/callback'
-  const scope = 'https://www.googleapis.com/auth/calendar openid email profile'
-  
-  const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`
-  
-  window.location.href = googleAuthUrl
+const refreshGoogleConnectionStatus = async () => {
+  try {
+    const response = await googleCalendarApi.status()
+    isGoogleConnected.value = response.data?.data?.connected === true
+    googleConnectedEmail.value = isGoogleConnected.value ? 'Google Calendar 연결됨' : ''
+  } catch (_) {
+    isGoogleConnected.value = false
+    googleConnectedEmail.value = ''
+  }
+}
+
+const connectGoogleCalendar = async () => {
+  if (isGoogleConnecting.value) return
+  isGoogleConnecting.value = true
+  try {
+    const url = await googleCalendarApi.beginAuthorization()
+    window.location.href = url
+  } catch (error) {
+    openAlertModal({ title: '연동 실패', message: getApiError(error, '인증 요청을 시작하지 못했습니다.'), type: 'warning' })
+    isGoogleConnecting.value = false
+  }
 }
 
 const disconnectGoogleCalendar = () => {
@@ -833,17 +850,15 @@ const disconnectGoogleCalendar = () => {
   })
 }
 
-const confirmDisconnectGoogleCalendar = () => {
-  localStorage.removeItem('isGoogleCalendarConnected')
-  localStorage.removeItem('googleCalendarEmail')
-  isGoogleConnected.value = false
-  googleConnectedEmail.value = ''
-
-  openAlertModal({
-    title: '해제 완료',
-    message: '구글 캘린더 연동이 성공적으로 해제되었습니다.',
-    type: 'success'
-  })
+const confirmDisconnectGoogleCalendar = async () => {
+  try {
+    await googleCalendarApi.disconnect()
+    clearGoogleCalendarCache()
+    await refreshGoogleConnectionStatus()
+    openAlertModal({ title: '해제 완료', message: '구글 캘린더 동기화가 중지되었습니다.', type: 'success' })
+  } catch (error) {
+    openAlertModal({ title: '해제 실패', message: getApiError(error, '연동을 해제하지 못했습니다.'), type: 'warning' })
+  }
 }
 
 </script>

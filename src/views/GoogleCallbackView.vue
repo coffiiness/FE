@@ -1,7 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import api from '@/api'
+import { googleCalendarApi } from '@/api/googleCalendar'
+import { GOOGLE_OAUTH_PENDING } from '@/utils/googleCalendarSession'
+import { getApiError } from '@/utils/format'
+import { readStoredUser } from '@/utils/workspaceSession'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 
 const route = useRoute()
@@ -45,32 +48,40 @@ const handleModalConfirm = () => {
 
 onMounted(async () => {
   const code = route.query.code
-  if (!code) {
+  const state = route.query.state
+  let pending = null
+  try { pending = JSON.parse(sessionStorage.getItem(GOOGLE_OAUTH_PENDING) || 'null') } catch (_) { /* invalid local cache */ }
+  const user = readStoredUser() || {}
+  if (typeof code !== 'string' || typeof state !== 'string' || !pending || pending.state !== state
+    || pending.userId !== (user.id ?? user.userId) || pending.workspaceId !== localStorage.getItem('workspaceId')
+    || pending.expiresAt <= Date.now()) {
     localStorage.removeItem('isGoogleCalendarConnected')
     localStorage.removeItem('googleCalendarEmail')
-    errorMessage.value = '구글 로그인 코드가 없습니다.'
+    sessionStorage.removeItem(GOOGLE_OAUTH_PENDING)
+    errorMessage.value = '인증 요청이 만료되었거나 계정/워크스페이스가 변경되었습니다. 연동을 다시 시작해 주세요.'
     isErrorModalOpen.value = true
     return
   }
 
   try {
-    const response = await api.post('/calendars/google/connect', {
-      authCode: code,
-      redirectUri: `${window.location.origin}/auth/callback`
-    })
-
-    const connectedEmail = response.data?.data || '이메일 정보를 불러오지 못했습니다.'
-
-    localStorage.setItem('isGoogleCalendarConnected', 'true')
-    localStorage.setItem('googleCalendarEmail', connectedEmail)
+    await googleCalendarApi.connect(code, state)
+    const currentUser = readStoredUser() || {}
+    if (pending.userId !== (currentUser.id ?? currentUser.userId)
+      || pending.workspaceId !== localStorage.getItem('workspaceId')) {
+      errorMessage.value = '계정 또는 워크스페이스가 변경되었습니다. 현재 계정에서 연결 상태를 다시 확인해 주세요.'
+      isErrorModalOpen.value = true
+      return
+    }
     isSuccessModalOpen.value = true
   } catch (error) {
     localStorage.removeItem('isGoogleCalendarConnected')
     localStorage.removeItem('googleCalendarEmail')
 
-    console.error('구글 캘린더 연동 실패:', error)
-    errorMessage.value = toGoogleConnectErrorMessage(error)
+    errorMessage.value = error.response?.data?.error?.customCode === 'GOOGLE_OAUTH_STATE_INVALID'
+      ? getApiError(error) : toGoogleConnectErrorMessage(error)
     isErrorModalOpen.value = true
+  } finally {
+    sessionStorage.removeItem(GOOGLE_OAUTH_PENDING)
   }
 })
 </script>

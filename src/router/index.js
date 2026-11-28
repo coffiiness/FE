@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { ensureWorkspaceId, getStoredWorkspaceId } from '@/utils/workspaceSession'
+import { workspaceApi } from '@/api/workspace'
 
 const routes = [
   {
@@ -277,6 +278,22 @@ router.beforeEach(async (to) => {
   }
 
   const hasWorkspace = Boolean(workspaceId)
+
+  if (to.name === 'WorkspaceCreate') {
+    if (!token) return '/login'
+    if (isAdmin) return '/admin/dashboard'
+    try {
+      const response = await workspaceApi.getMyWorkspace()
+      const canonical = response.data?.data?.workspaceId
+      if (canonical) {
+        localStorage.setItem('workspaceId', canonical)
+        return '/dashboard'
+      }
+      localStorage.removeItem('workspaceId')
+    } catch (_) {
+      // The existing create screen displays the server error and keeps submission disabled.
+    }
+  }
 
   if (to.meta.requiresAuth && !token) {
     return '/login'
